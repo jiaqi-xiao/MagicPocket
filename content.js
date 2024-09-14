@@ -92,9 +92,12 @@ function saveSelection() {
       console.error("Error sending message:", chrome.runtime.lastError);
     } else {
       console.log("Save response:", response);
+      removeContextMenu();
+      // 清除选中状态
+      window.getSelection().removeAllRanges();
     }
   });
-  removeContextMenu();
+  
 }
 
 function removeContextMenu() {
@@ -107,7 +110,7 @@ function removeContextMenu() {
 
 function showRecordedItems() {
   console.log("Showing recorded items");
-  chrome.storage.sync.get("mp_mark_records", (data) => {
+  chrome.storage.sync.get("records", (data) => {
     const records = data.records || [];
     console.log("Recorded items:", records);
   });

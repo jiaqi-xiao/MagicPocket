@@ -1,7 +1,7 @@
 // popup.js
 
 function displayRecords() {
-    chrome.storage.sync.get("mp_mark_records", (data) => {
+    chrome.storage.sync.get("records", (data) => {
         const records = data.records || [];
         const recordsList = document.getElementById("recordsList");
         recordsList.innerHTML = "";
@@ -25,7 +25,7 @@ function displayRecords() {
 }
 
 function deleteRecord(index) {
-    chrome.storage.sync.get("mp_mark_records", (data) => {
+    chrome.storage.sync.get("records", (data) => {
         const records = data.records || [];
         records.splice(index, 1);
         chrome.storage.sync.set({ records: records }, () => {
