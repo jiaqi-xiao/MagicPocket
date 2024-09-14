@@ -19,6 +19,7 @@
       "js": [
         "content.js"
       ],
+      "type": "module",
       "css": [
         "styles.css"
       ]
