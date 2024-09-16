@@ -159,6 +159,12 @@ function showRecordedItems() {
           <small>${new Date(record.timestamp).toLocaleString()}</small>
           <button class="delete-btn" data-index="${index}">Delete</button>
         `;
+        item.addEventListener("click", (e) => {
+          if (!e.target.classList.contains("delete-btn")) {
+            const url = chrome.runtime.getURL(`records.html?index=${index}`);
+            window.location.href = url;
+          }
+        });
         recordsContainer.appendChild(item);
       });
 
