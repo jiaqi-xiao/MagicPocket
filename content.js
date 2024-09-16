@@ -134,52 +134,80 @@ function showRecordedItems() {
     recordsContainer.addEventListener("mouseleave", () => {
       recordsContainer.style.display = "none";
     });
-
   }
 
-    // 显示记录容器和浮动窗口
-    recordsContainer.style.display = "block";
-    floatingWindow.style.display = "block";
-  
-    // 清空容器内容
-    recordsContainer.innerHTML = "";
-  
-    // 获取记录并显示
-    chrome.storage.sync.get("records", (data) => {
-      const records = data.records || [];
-  
-      if (records.length === 0) {
-        recordsContainer.innerHTML = "<p>No items saved yet.</p>";
-      } else {
-        records.forEach((record, index) => {
-          const item = document.createElement("div");
-          item.className = "record-item";
-          item.innerHTML = `
-            <strong>${record.type === "text" ? "Text" : "Screenshot"}</strong>
-            <p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>
-            <small>${new Date(record.timestamp).toLocaleString()}</small>
-          `;
-          recordsContainer.appendChild(item);
+  // 显示记录容器和浮动窗口
+  recordsContainer.style.display = "block";
+  floatingWindow.style.display = "block";
+
+  // 清空容器内容
+  recordsContainer.innerHTML = "";
+
+  // 获取记录并显示
+  chrome.storage.sync.get("records", (data) => {
+    const records = data.records || [];
+
+    if (records.length === 0) {
+      recordsContainer.innerHTML = "<p>No items saved yet.</p>";
+    } else {
+      records.forEach((record, index) => {
+        const item = document.createElement("div");
+        item.className = "record-item";
+        item.innerHTML = `
+          <strong>${record.type === "text" ? "Text" : "Screenshot"}</strong>
+          <p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>
+          <small>${new Date(record.timestamp).toLocaleString()}</small>
+          <button class="delete-btn" data-index="${index}">Delete</button>
+        `;
+        recordsContainer.appendChild(item);
+      });
+
+      const clearAllBtn = document.createElement("button");
+      clearAllBtn.id = "clearAllBtn";
+      clearAllBtn.textContent = "Clear All";
+      recordsContainer.appendChild(clearAllBtn);
+
+      clearAllBtn.addEventListener("click", () => {
+        chrome.storage.sync.set({ records: [] }, () => {
+          showRecordedItems();
         });
-      }
+      });
+
+      recordsContainer.addEventListener("click", (e) => {
+        if (e.target.classList.contains("delete-btn")) {
+          const index = parseInt(e.target.getAttribute("data-index"));
+          deleteRecord(index);
+        }
+      });
+    }
+  });
+
+  // 添加鼠标移开事件监听器
+  let hideTimeout;
+  const hideContainers = () => {
+    hideTimeout = setTimeout(() => {
+      recordsContainer.style.display = "none";
+    }, 200);
+  };
+
+  const cancelHide = () => {
+    clearTimeout(hideTimeout);
+  };
+
+  recordsContainer.addEventListener("mouseleave", hideContainers);
+  floatingWindow.addEventListener("mouseleave", hideContainers);
+  recordsContainer.addEventListener("mouseenter", cancelHide);
+  floatingWindow.addEventListener("mouseenter", cancelHide);
+}
+
+function deleteRecord(index) {
+  chrome.storage.sync.get("records", (data) => {
+    const records = data.records || [];
+    records.splice(index, 1);
+    chrome.storage.sync.set({ records: records }, () => {
+      showRecordedItems();
     });
-  
-    // 添加鼠标移开事件监听器
-    let hideTimeout;
-    const hideContainers = () => {
-      hideTimeout = setTimeout(() => {
-        recordsContainer.style.display = "none";
-      }, 200);
-    };
-  
-    const cancelHide = () => {
-      clearTimeout(hideTimeout);
-    };
-  
-    recordsContainer.addEventListener("mouseleave", hideContainers);
-    floatingWindow.addEventListener("mouseleave", hideContainers);
-    recordsContainer.addEventListener("mouseenter", cancelHide);
-    floatingWindow.addEventListener("mouseenter", cancelHide);
+  });
 }
 
 function toggleLists() {
