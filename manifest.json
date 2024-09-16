@@ -30,7 +30,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["records.html", "records.js"],
+      "resources": ["records.html", "records.js", "start_generation.html"],
       "matches": ["<all_urls>"]
     }
   ]

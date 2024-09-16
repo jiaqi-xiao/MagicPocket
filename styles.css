@@ -84,8 +84,18 @@ body {
 }
 
 #clearAllBtn {
-    margin-top: 10px;
+    margin: 10px;
     background-color: #ff4444;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#startGenerateBtn {
+    margin: 10px;
+    background-color: #2a639d;
     color: white;
     border: none;
     padding: 5px 10px;
@@ -121,4 +131,17 @@ body {
     margin: 0;
     padding: 5%;
     font-family: Arial, sans-serif;
+}
+
+.txtarea {
+    width: 100%;
+    height: 300px;
+    margin-bottom: 10px;
+}
+
+#user-prompt-input {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 1%;
 }

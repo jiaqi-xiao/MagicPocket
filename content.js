@@ -162,16 +162,29 @@ function showRecordedItems() {
         item.addEventListener("click", (e) => {
           if (!e.target.classList.contains("delete-btn")) {
             const url = chrome.runtime.getURL(`records.html?index=${index}`);
-            window.location.href = url;
+            // window.location.href = url;
+            window.open(url, "_blank");
           }
         });
         recordsContainer.appendChild(item);
       });
 
+      // clearAllBtn
       const clearAllBtn = document.createElement("button");
       clearAllBtn.id = "clearAllBtn";
       clearAllBtn.textContent = "Clear All";
       recordsContainer.appendChild(clearAllBtn);
+
+      // startGenerateBtn
+      const startGenerateBtn = document.createElement("button");
+      startGenerateBtn.id = "startGenerateBtn";
+      startGenerateBtn.textContent = "Start Generation";
+      recordsContainer.appendChild(startGenerateBtn);
+
+      startGenerateBtn.addEventListener("click", () => {
+          const url = chrome.runtime.getURL(`start_generation.html`);
+          window.open(url, "_blank");
+      });
 
       clearAllBtn.addEventListener("click", () => {
         chrome.storage.sync.set({ records: [] }, () => {
