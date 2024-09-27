@@ -30,7 +30,15 @@ function handleMouseUp(e) {
   selectedText = window.getSelection().toString().trim();
   if (selectedText) {
     console.log("Text selected:", selectedText);
-    setTimeout(() => showContextMenu(e.pageX, e.pageY), 0);
+    // setTimeout(() => showContextMenu(e.pageX, e.pageY), 0);
+    const selection = window.getSelection();
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    
+    const x = rect.left + window.scrollX;
+    const y = rect.top + window.scrollY - 50; // 30px above the selection
+    
+    setTimeout(() => showContextMenu(x, y), 0);
   } else {
     removeContextMenu();
   }
@@ -52,10 +60,48 @@ function showContextMenu(x, y) {
   saveButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>';
   saveButton.title = "Save Selection";
 
+  const commentButton = document.createElement("button");
+  commentButton.className = "wcr-comment-button";
+  commentButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+  commentButton.title = "Add Comment to Selection";
+
   contextMenu.appendChild(saveButton);
+  contextMenu.appendChild(commentButton);
   document.body.appendChild(contextMenu);
 
   console.log("Context menu created and added to DOM");
+
+  commentButton.addEventListener("click", () => {
+    const comment = prompt("Enter your comment:");
+    if (comment !== null) {
+      saveSelectionWithComment(comment);
+    }
+  });
+}
+
+function saveSelectionWithComment(comment) {
+  console.log("Saving selection with comment:", selectedText, comment);
+  const paragraph = window.getSelection().anchorNode.parentElement;
+  const data = {
+    type: "text",
+    content: selectedText,
+    comment: comment,
+    paragraph: paragraph.textContent,
+    url: window.location.href,
+    timestamp: new Date().toISOString()
+  };
+  console.log("Data to save:", data);
+
+  chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error("Error sending message:", chrome.runtime.lastError);
+    } else {
+      console.log("Save response:", response);
+      removeContextMenu();
+      // 清除选中状态
+      window.getSelection().removeAllRanges();
+    }
+  });
 }
 
 function handleGlobalMouseDown(e) {
