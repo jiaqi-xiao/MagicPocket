@@ -1,30 +1,64 @@
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics.pairwise import pairwise_distances
 import numpy as np
+from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import pdist, squareform
+import json
 
 
 def hierarcy_clustering(recordsList):
     # 提取vectors
-    vectors = np.array(list(map(lambda record: record.vector, recordsList)))
+    vectors = np.array([record.vector for record in recordsList])
+    print(vectors.shape)
 
     # 计算余弦距离矩阵
-    distance_matrix = pairwise_distances(vectors, metric='cosine')
+    distance_matrix = pdist(vectors, metric='cosine')
+    # 转换为方阵
+    distance_squareform = squareform(distance_matrix)
 
     # 使用 precomputed 模式，传递距离矩阵
     clustering = AgglomerativeClustering(n_clusters=2, metric='precomputed', linkage='average')
 
     # 拟合模型
-    clusters = clustering.fit_predict(distance_matrix)
+    clusters = clustering.fit_predict(distance_squareform)
 
-    # # 打印每个向量的聚类标签
-    # for i, cluster_label in enumerate(clusters):
-    #     print(f"向量 {i} 被分配到聚类 {cluster_label}")
-
-    # 打印每个文本所属的聚类
+    # 打印每个record所属的聚类
     for i, record in enumerate(recordsList):
         print(
             f"comment: {record.comment}, context: {record.context}, 聚类标签: {clusters[i]}"
         )
+
+    # 使用 scipy 的 linkage 函数计算层次聚类的树状结构
+    Z = linkage(distance_squareform, method='average')  # 'ward', 'single', 'complete', or 'average' 方法都可以
+
+    tree_structure = build_tree(Z)
+    # 打印树状结构
+    print(json.dumps(tree_structure, indent=4))
+
+
+# 构建一个递归函数来创建树结构
+def build_tree(Z):
+    # 获取数据点的数量
+    n_samples = Z.shape[0] + 1
+    clusters = {}
+
+    # 创建基础节点
+    def get_cluster(idx):
+        if idx < n_samples:
+            return {'id': int(idx)}
+        else:
+            return clusters[int(idx)]
+
+    # 遍历Z的每一行
+    for i, (c1, c2, dist, _) in enumerate(Z):
+        cluster_id = i + n_samples  # 聚类新簇的id
+        clusters[cluster_id] = {
+            'id': cluster_id,
+            'child': [get_cluster(c1), get_cluster(c2)]
+        }
+
+    # 最后的聚类树是最后一个合并出来的簇
+    return clusters[len(Z) + n_samples - 1]
+
 
 
 if __name__ == "__main__":
