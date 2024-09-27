@@ -200,10 +200,11 @@ function showRecordedItems() {
         const item = document.createElement("div");
         item.className = "record-item";
         item.innerHTML = `
-          <strong>${record.type === "text" ? "Text" : "Screenshot"}</strong>
+          <strong>${record.type === "text" ? "Text" : "Image"}</strong>
           <p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>
+          ${record.comment ? `<p class="comment" style="font-size: 0.9em; color: #666;">Comment: ${record.comment}</p>` : ''}
           <small>${new Date(record.timestamp).toLocaleString()}</small>
-          <button class="delete-btn" data-index="${index}">Delete</button>
+          <button class="delete-btn" data-index="${index}">删除</button>
         `;
         item.addEventListener("click", (e) => {
           if (!e.target.classList.contains("delete-btn")) {
