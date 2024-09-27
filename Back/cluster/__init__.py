@@ -15,24 +15,21 @@ def hierarcy_clustering(recordsList):
     # 转换为方阵
     distance_squareform = squareform(distance_matrix)
 
-    # 使用 precomputed 模式，传递距离矩阵
-    clustering = AgglomerativeClustering(n_clusters=2, metric='precomputed', linkage='average')
+    # # 使用 precomputed 模式，传递距离矩阵
+    # clustering = AgglomerativeClustering(n_clusters=2, metric='precomputed', linkage='average')
+    # # 拟合模型
+    # # clusters = clustering.fit_predict(distance_squareform)
 
-    # 拟合模型
-    clusters = clustering.fit_predict(distance_squareform)
-
-    # 打印每个record所属的聚类
-    for i, record in enumerate(recordsList):
-        print(
-            f"comment: {record.comment}, context: {record.context}, 聚类标签: {clusters[i]}"
-        )
+    # # 打印每个record所属的聚类
+    # for i, record in enumerate(recordsList):
+    #     print(
+    #         f"comment: {record.comment}, context: {record.context}, 聚类标签: {clusters[i]}"
+    #     )
 
     # 使用 scipy 的 linkage 函数计算层次聚类的树状结构
     Z = linkage(distance_squareform, method='average')  # 'ward', 'single', 'complete', or 'average' 方法都可以
 
-    tree_structure = build_tree(Z)
-    # 打印树状结构
-    print(json.dumps(tree_structure, indent=4))
+    return build_tree(Z)
 
 
 # 构建一个递归函数来创建树结构

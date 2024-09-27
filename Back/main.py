@@ -74,4 +74,5 @@ class RecordsListWithVector(BaseModel):
 
 @app.post("/cluster/")
 async def hierarcy_cluster(recordsList: RecordsListWithVector):
-    cluster.hierarcy_clustering(recordsList.data)
+    cluster_tree = cluster.hierarcy_clustering(recordsList.data)
+    return cluster_tree
