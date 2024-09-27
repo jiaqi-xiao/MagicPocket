@@ -3,7 +3,7 @@
     display: flex; /* 设置为横向排列 */
     gap: 10px; /* 设置按钮之间的间距 */
     position: absolute;
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.843);
     border: 1px solid #ccc;
     border-radius: 4px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
