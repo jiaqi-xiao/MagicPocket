@@ -243,8 +243,6 @@ function showRecordedItems() {
         showUserIntent();
       });
 
-
-
       clearAllBtn.addEventListener("click", () => {
         chrome.storage.sync.set({ records: [] }, () => {
           showRecordedItems();
@@ -299,7 +297,14 @@ if (document.readyState === 'loading') {
 }
 
 function showUserIntent() {
-  console.log("显示用户意图");
+  // if current intentContainer is not null, then delete it
+  if (document.getElementById("intentVisualizationContainer")) {
+    document.getElementById("intentVisualizationContainer").remove();
+    showIntentBtn.textContent = "Show Intent";
+    console.log("disappear intentContainer");
+    return;
+  }
+  console.log("show intentContainer");
   
   const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#97C8EB'];
 
@@ -480,21 +485,24 @@ function showUserIntent() {
 
   renderIntentBars();
 
-  // 添加关闭按钮
-  const closeButton = document.createElement("button");
-  closeButton.textContent = "关闭";
-  closeButton.style.marginTop = "10px";
-  closeButton.style.padding = "5px 10px";
-  closeButton.style.backgroundColor = "#4A4A4A";
-  closeButton.style.color = "#FFFFFF";
-  closeButton.style.border = "none";
-  closeButton.style.borderRadius = "4px";
-  closeButton.style.cursor = "pointer";
-  closeButton.addEventListener("click", () => {
-    intentContainer.style.display = "none";
-  });
-  intentContainer.appendChild(closeButton);
+  // // 添加关闭按钮
+  // const closeButton = document.createElement("button");
+  // closeButton.textContent = "关闭";
+  // closeButton.style.marginTop = "10px";
+  // closeButton.style.padding = "5px 10px";
+  // closeButton.style.backgroundColor = "#4A4A4A";
+  // closeButton.style.color = "#FFFFFF";
+  // closeButton.style.border = "none";
+  // closeButton.style.borderRadius = "4px";
+  // closeButton.style.cursor = "pointer";
+  // closeButton.addEventListener("click", () => {
+  //   intentContainer.style.display = "none";
+  // });
+  // intentContainer.appendChild(closeButton);
 
   // 显示意图容器
   intentContainer.style.display = "block";
+
+  // 修改showIntentBtn文字内容为 Hide Intent
+  showIntentBtn.textContent = "Hide Intent";
 }
