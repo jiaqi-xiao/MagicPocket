@@ -233,6 +233,18 @@ function showRecordedItems() {
           window.open(url, "_blank");
       });
 
+      // showIntentBtn
+      const showIntentBtn = document.createElement("button");
+      showIntentBtn.id = "showIntentBtn";
+      showIntentBtn.textContent = "Show Intent";
+      recordsContainer.appendChild(showIntentBtn);
+
+      showIntentBtn.addEventListener("click", () => {
+        showUserIntent();
+      });
+
+
+
       clearAllBtn.addEventListener("click", () => {
         chrome.storage.sync.set({ records: [] }, () => {
           showRecordedItems();
@@ -284,4 +296,103 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeExtension);
 } else {
   initializeExtension();
+}
+
+function showUserIntent() {
+  console.log("显示用户意图");
+  
+  // 模拟的用户意图数据
+  const userIntent = {
+    "文化体验": {
+      value: 5,
+      subIntents: {
+        "打卡景点": 3,
+        "建筑欣赏": 2
+      }
+    },
+    "自然探索": {
+      value: 3,
+      subIntents: {
+        "漫步日落": 2,
+        "浪漫时光": 1
+      }
+    },
+    "美食品尝": {
+      value: 2,
+      subIntents: {
+        "品尝美酒": 2
+      }
+    },
+    "放松身心": {
+      value: 2,
+      subIntents: {
+        "拍照留念": 1,
+        "悠闲午后": 1
+      }
+    }
+  };
+
+  // get floatingRecordsContainer
+  let floatingRecordsContainer = document.getElementById("floatingRecordsContainer");
+  if (!floatingRecordsContainer) {
+    console.error("浮动记录容器不存在");
+    return;
+  }
+  let floatingRecordsContainerHeight = floatingRecordsContainer.offsetHeight;
+
+
+  // 创建或获取意图可视化容器
+  let intentContainer = floatingWindow.querySelector("#intentVisualizationContainer");
+  if (!intentContainer) {
+    intentContainer = document.createElement("div");
+    intentContainer.id = "intentVisualizationContainer";
+    intentContainer.style.position = "absolute";
+    intentContainer.style.left = "-270px";  // 将容器放置在浮动窗口的左侧
+    intentContainer.style.top = "0";
+    intentContainer.style.width = "250px";
+    intentContainer.style.backgroundColor = "#fff";
+    intentContainer.style.color = "#333";
+    intentContainer.style.border = "1px solid #ccc";
+    intentContainer.style.padding = "10px";
+    intentContainer.style.borderRadius = "4px";
+    intentContainer.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+    intentContainer.style.maxHeight = floatingRecordsContainerHeight;
+    intentContainer.style.overflowY = "auto";
+    floatingRecordsContainer.appendChild(intentContainer);
+  }
+
+  // 清空容器内容
+  intentContainer.innerHTML = "<h3>用户意图分析</h3>";
+
+  // 创建树状结构
+  for (const [intent, data] of Object.entries(userIntent)) {
+    const intentElement = document.createElement("div");
+    intentElement.innerHTML = `<strong>${intent}: ${data.value}</strong>`;
+    intentElement.style.marginBottom = "10px";
+
+    const subIntentsList = document.createElement("ul");
+    subIntentsList.style.paddingLeft = "20px";
+    subIntentsList.style.margin = "5px 0";
+
+    for (const [subIntent, value] of Object.entries(data.subIntents)) {
+      const subIntentItem = document.createElement("li");
+      subIntentItem.textContent = `${subIntent}: ${value}`;
+      subIntentsList.appendChild(subIntentItem);
+    }
+
+    intentElement.appendChild(subIntentsList);
+    intentContainer.appendChild(intentElement);
+  }
+
+  // 添加关闭按钮
+  const closeButton = document.createElement("button");
+  closeButton.textContent = "关闭";
+  closeButton.style.marginTop = "10px";
+  closeButton.addEventListener("click", () => {
+    intentContainer.style.display = "none";
+  });
+  intentContainer.appendChild(closeButton);
+
+  // 显示意图容器
+  intentContainer.style.display = "block";
 }
