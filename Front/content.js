@@ -1,6 +1,7 @@
 let selectedText = "";
 let contextMenu = null;
 let floatingWindow = null;
+let isIntentVisible = false;
 
 function initializeExtension() {
   console.log("Initializing extension");
@@ -240,7 +241,7 @@ function showRecordedItems() {
       recordsContainer.appendChild(showIntentBtn);
 
       showIntentBtn.addEventListener("click", () => {
-        showUserIntent();
+        clickUserIntentBtn();
       });
 
       clearAllBtn.addEventListener("click", () => {
@@ -255,6 +256,10 @@ function showRecordedItems() {
           deleteRecord(index);
         }
       });
+    }
+
+    if (isIntentVisible) {
+      showUserIntentVisualization();
     }
   });
 
@@ -296,7 +301,7 @@ if (document.readyState === 'loading') {
   initializeExtension();
 }
 
-function showUserIntent() {
+function clickUserIntentBtn() {
   // if current intentContainer is not null, then delete it
   if (document.getElementById("intentVisualizationContainer")) {
     document.getElementById("intentVisualizationContainer").remove();
@@ -306,6 +311,23 @@ function showUserIntent() {
   }
   console.log("show intentContainer");
   
+  showUserIntentVisualization();
+
+  // 修改showIntentBtn文字内容为 Hide Intent
+  showIntentBtn.textContent = "Hide Intent";
+  isIntentVisible = true;
+}
+
+function showUserIntentVisualization() {
+  let intentContainer = document.getElementById("intentVisualizationContainer");
+  if (intentContainer) {
+    intentContainer.style.display = "block";
+  } else {
+    createUserIntentVisualization();
+  }
+}
+
+function createUserIntentVisualization() {
   const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#97C8EB'];
 
   // 模拟的用户意图数据
@@ -378,16 +400,16 @@ function showUserIntent() {
     intentContainer.style.backgroundColor = "#2A2A2A";
     intentContainer.style.color = "#E0E0E0";
     intentContainer.style.border = "1px solid #ccc";
-    intentContainer.style.padding = "15px";
+    intentContainer.style.padding = "10px";
     intentContainer.style.borderRadius = "8px";
     intentContainer.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-    intentContainer.style.maxHeight = floatingRecordsContainerHeight+"px";
+    intentContainer.style.height = floatingRecordsContainerHeight+"px";
     intentContainer.style.overflowY = "auto";
     floatingRecordsContainer.appendChild(intentContainer);
   }
 
   // 清空容器内容
-  intentContainer.innerHTML = "<h2 style='text-align: center; color: #FFFFFF; margin-bottom: 20px;'>旅行意图可视化</h2>";
+  intentContainer.innerHTML = "<h2 style='text-align: center; color: #FFFFFF; margin-bottom: 20px;'>Itent Visualization</h2>";
 
   function createIntentBar(item, color, maxScore, level = 0) {
     const barContainer = document.createElement("div");
@@ -477,7 +499,7 @@ function showUserIntent() {
       ...intentData.flatMap(item => item.children.map(child => child.score))
     );
 
-    intentContainer.innerHTML = "<h2 style='text-align: center; color: #FFFFFF; margin-bottom: 20px;'>旅行意图可视化</h2>";
+    intentContainer.innerHTML = "<h2 style='text-align: center; color: #FFFFFF; margin-bottom: 20px;'>User Intent Visualization</h2>";
     intentData.forEach((item, index) => {
       intentContainer.appendChild(createIntentBar(item, COLORS[index], maxScore));
     });
@@ -485,24 +507,6 @@ function showUserIntent() {
 
   renderIntentBars();
 
-  // // 添加关闭按钮
-  // const closeButton = document.createElement("button");
-  // closeButton.textContent = "关闭";
-  // closeButton.style.marginTop = "10px";
-  // closeButton.style.padding = "5px 10px";
-  // closeButton.style.backgroundColor = "#4A4A4A";
-  // closeButton.style.color = "#FFFFFF";
-  // closeButton.style.border = "none";
-  // closeButton.style.borderRadius = "4px";
-  // closeButton.style.cursor = "pointer";
-  // closeButton.addEventListener("click", () => {
-  //   intentContainer.style.display = "none";
-  // });
-  // intentContainer.appendChild(closeButton);
-
   // 显示意图容器
   intentContainer.style.display = "block";
-
-  // 修改showIntentBtn文字内容为 Hide Intent
-  showIntentBtn.textContent = "Hide Intent";
 }
