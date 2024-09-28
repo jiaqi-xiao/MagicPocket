@@ -1,7 +1,9 @@
 /* styles.css */
 .wcr-context-menu {
+    display: flex; /* 设置为横向排列 */
+    gap: 10px; /* 设置按钮之间的间距 */
     position: absolute;
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.843);
     border: 1px solid #ccc;
     border-radius: 4px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -10,7 +12,7 @@
 }
 
 .wcr-save-button {
-    background-color: #f0f0f0;
+    background-color: #f0f0f09a;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -23,6 +25,23 @@
 }
 
 .wcr-save-button svg {
+    display: block;
+}
+
+.wcr-comment-button {
+    background-color: #f0f0f09a;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 5px;
+    transition: background-color 0.2s;
+}
+
+.wcr-comment-button:hover {
+    background-color: #e0e0e0;
+}
+
+.wcr-comment-button svg {
     display: block;
 }
 
@@ -96,6 +115,16 @@ body {
 #startGenerateBtn {
     margin: 10px;
     background-color: #2a639d;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#showIntentBtn {
+    margin: 10px;
+    background-color: #288924;
     color: white;
     border: none;
     padding: 5px 10px;
