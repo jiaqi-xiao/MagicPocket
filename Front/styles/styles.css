@@ -1,7 +1,9 @@
 /* styles.css */
 .wcr-context-menu {
-    display: flex; /* 设置为横向排列 */
-    gap: 12px; /* 设置按钮之间的间距 */
+    display: flex;
+    /* 设置为横向排列 */
+    gap: 12px;
+    /* 设置按钮之间的间距 */
     position: absolute;
     background-color: rgba(245, 245, 245, 0.95);
     border: none;
