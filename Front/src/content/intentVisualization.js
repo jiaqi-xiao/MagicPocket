@@ -105,8 +105,20 @@ function createUserIntentVisualization() {
         floatingRecordsContainer.appendChild(intentContainer);
     }
 
-    // 清空容器内容
-    intentContainer.innerHTML = "<h2 style='text-align: center; color: #FFFFFF; margin-bottom: 20px;'>Itent Visualization</h2>";
+    // 清空容器内容并添加标题和刷新按钮
+    intentContainer.innerHTML = `
+        <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
+            <h2 style="color: #FFFFFF; margin: 0;">Intent Visualization</h2>
+            <button id="manualRefreshIntentBtn" style="margin-left: 10px; background: none; border: none; cursor: pointer; color: #FFFFFF;">🔄</button>
+        </div>
+    `;
+
+    // 添加刷新按钮的点击事件
+    const manualRefreshIntentBtn = intentContainer.querySelector("#manualRefreshIntentBtn");
+    manualRefreshIntentBtn.addEventListener("click", () => {
+        console.log("刷新Intent可视化内容");
+        renderIntentBars();
+    });
 
     function createIntentBar(item, color, maxScore, level = 0) {
         const barContainer = document.createElement("div");
@@ -196,7 +208,11 @@ function createUserIntentVisualization() {
             ...intentData.flatMap(item => item.children.map(child => child.score))
         );
 
-        intentContainer.innerHTML = "<h2 style='text-align: center; color: #FFFFFF; margin-bottom: 20px;'>User Intent Visualization</h2>";
+        // 保留标题和刷新按钮，只清除意图条
+        const titleAndButton = intentContainer.querySelector("div");
+        intentContainer.innerHTML = "";
+        intentContainer.appendChild(titleAndButton);
+
         intentData.forEach((item, index) => {
             intentContainer.appendChild(createIntentBar(item, COLORS[index], maxScore));
         });

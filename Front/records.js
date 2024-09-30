@@ -34,5 +34,6 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("recordParagraph").textContent = record.paragraph;
         document.getElementById("recordComment").textContent = record.comment || "--";
         document.getElementById("recordUrl").textContent = record.url;
+        document.getElementById("recordId").textContent = record.id;
     }
 });
