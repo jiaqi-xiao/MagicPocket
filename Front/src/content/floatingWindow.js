@@ -120,6 +120,9 @@ function showRecordedItems() {
                     }
                 });
             }
+            if (isIntentVisible) {
+                showUserIntentVisualization();
+            }
 
         };
 
