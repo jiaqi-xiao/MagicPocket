@@ -10,7 +10,9 @@ document.addEventListener("DOMContentLoaded", () => {
         recordsList.innerHTML = "";
         records.forEach((record, i) => {
             const item = document.createElement("li");
-            item.textContent = `${record.type === "text" ? "Text" : "Screenshot"} - ${new Date(record.timestamp).toLocaleString()}`;
+            const date = new Date(record.timestamp);
+            const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+            item.textContent = `${record.type === "text" ? "Text" : "Image"} - ${formattedDate}`;
             item.addEventListener("click", () => {
                 displayRecordDetails(record, item);
             });
@@ -23,16 +25,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function displayRecordDetails(record, selectedItem) {
-        // Clear background color of all items
         const items = document.querySelectorAll("#recordsList li");
-        items.forEach(item => item.style.backgroundColor = "");
-
-        // Set background color of the selected item
-        selectedItem.style.backgroundColor = "gray";
+        items.forEach(item => item.classList.remove("selected"));
+        selectedItem.classList.add("selected");
 
         document.getElementById("recordTime").textContent = new Date(record.timestamp).toLocaleString();
         document.getElementById("recordText").textContent = record.content;
         document.getElementById("recordParagraph").textContent = record.paragraph;
         document.getElementById("recordComment").textContent = record.comment || "--";
+        document.getElementById("recordUrl").textContent = record.url;
     }
 });
