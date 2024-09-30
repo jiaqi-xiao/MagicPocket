@@ -13,13 +13,24 @@
 层次聚类的树结构
 {
     id: 1,
+    intent: str,
+    priority: int,
     child: [
         {
             id: 2,
-            child: [...],
+            intent: str,
+            priority: int,
+            child: [
+                id: 1,
+                comment: XXXXX,
+                context: XXXXXXXXXXXX,
+                vector: [[]],
+            ],
         },
         {
             id: 3,
+            intent: str,
+            priority: int,
             child: [...]
         }
     ]
