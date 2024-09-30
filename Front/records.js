@@ -33,5 +33,6 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("recordTime").textContent = new Date(record.timestamp).toLocaleString();
         document.getElementById("recordText").textContent = record.content;
         document.getElementById("recordParagraph").textContent = record.paragraph;
+        document.getElementById("recordComment").textContent = record.comment || "--";
     }
 });
