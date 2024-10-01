@@ -278,84 +278,103 @@ function fetchIntentDataFromBackend() {
         setTimeout(() => {
             getAllRecords()
                 .then(records => {
-                    // 构造请求体
-                    const requestBody = {
-                        records: records
-                    };
-
-                    // 发送POST请求到后端
-                    return fetch(`${backendDomain}/analyze_intent`, {
+                    // Execute embed_all API
+                    return fetch(`${backendDomain}/embed_all`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(requestBody)
-                    }).catch(
-                        console.warn('Failed to fetch intent data from backend')
-                    );
+                        body: JSON.stringify({ records: records })
+                    });
                 })
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error('Network response was not ok');
+                        console.warn('Embed_all API request failed');
+                        return response.json();
                     }
                     return response.json();
                 })
-                .then(data => {
-                    if (!data || !data.intent_tree) {
-                        throw new Error('Invalid data format');
+                .then(embeddedData => {
+                    // Execute cluster API
+                    return fetch(`${backendDomain}/cluster`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(embeddedData)
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.warn('Cluster API request failed');
+                        return response.json();
                     }
-                    resolve([data.intent_tree]);
+                    return response.json();
+                })
+                .then(intentData => {
+                    if (!intentData || !intentData.intent_tree) {
+                        console.warn('Invalid intent data format');
+                        return [getFallbackData()];
+                    }
+                    return [intentData.intent_tree];
                 })
                 .catch(error => {
                     console.warn('Failed to fetch intent data, using fallback test data', error);
-                    resolve([{
-                        id: 1,
-                        intent: "根意图",
-                        priority: 8,
-                        child_num: 3,
-                        child: [
-                            {
-                                id: 2,
-                                intent: "子意图1",
-                                priority: 7,
-                                child_num: 2,
-                                child: [
-                                    {
-                                        id: 4,
-                                        intent: "孙意图1",
-                                        priority: 6,
-                                        child_num: 0,
-                                        child: []
-                                    },
-                                    {
-                                        id: 5,
-                                        intent: "孙意图2",
-                                        priority: 5,
-                                        child_num: 0,
-                                        child: []
-                                    }
-                                ]
-                            },
-                            {
-                                id: 3,
-                                intent: "子意图2",
-                                priority: 6,
-                                child_num: 1,
-                                child: [
-                                    {
-                                        id: 6,
-                                        comment: "评论内容",
-                                        context: "上下文内容",
-                                        vector: [[0.1, 0.2, 0.3]]
-                                    }
-                                ]
-                            }
-                        ]
-                    }]);
+                    return [getFallbackData()];
+                })
+                .then(resolve)
+                .finally(() => {
+                    isAnalysisIntent = false;
                 });
-                isAnalysisIntent = false;
-        }, 3000); // 延迟10秒
+        }, 3000); // 3 seconds delay
     });
+}
+
+function getFallbackData() {
+    return {
+        id: 1,
+        intent: "Root Intent",
+        priority: 8,
+        child_num: 3,
+        child: [
+            {
+                id: 2,
+                intent: "Child Intent 1",
+                priority: 7,
+                child_num: 2,
+                child: [
+                    {
+                        id: 4,
+                        intent: "Grandchild Intent 1",
+                        priority: 6,
+                        child_num: 0,
+                        child: []
+                    },
+                    {
+                        id: 5,
+                        intent: "Grandchild Intent 2",
+                        priority: 5,
+                        child_num: 0,
+                        child: []
+                    }
+                ]
+            },
+            {
+                id: 3,
+                intent: "Child Intent 2",
+                priority: 6,
+                child_num: 1,
+                child: [
+                    {
+                        id: 6,
+                        comment: "Comment content",
+                        context: "Context content",
+                        vector: [[0.1, 0.2, 0.3]]
+                    }
+                ]
+            }
+        ]
+    };
 }
 
 function getAllRecords() {
