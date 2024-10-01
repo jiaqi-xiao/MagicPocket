@@ -35,10 +35,10 @@ function showRecordedItems() {
 
         let floatingWindow = document.getElementById("floatingWindow");
 
-        // 添加鼠标移开事件监听器
-        recordsContainer.addEventListener("mouseleave", () => {
-            recordsContainer.style.display = "none";
-        });
+        // // 添加鼠标移开事件监听器
+        // recordsContainer.addEventListener("mouseleave", () => {
+        //     recordsContainer.style.display = "none";
+        // });
     }
 
     // 显示记录容器和浮动窗口
@@ -121,7 +121,8 @@ function showRecordedItems() {
                 });
             }
             if (isIntentVisible) {
-                showUserIntentVisualization();
+                // showUserIntentVisualization();
+                renderIntentVisualization(gIntentDataList);
             }
 
         };
@@ -133,7 +134,11 @@ function showRecordedItems() {
     let hideTimeout;
     const hideContainers = () => {
         hideTimeout = setTimeout(() => {
-            recordsContainer.style.display = "none";
+            // recordsContainer.style.display = "none";
+            if (!isAnalysisIntent) {
+                console.log("isAnalysisIntent", isAnalysisIntent);
+                recordsContainer.style.display = "none";
+            }
         }, 200);
     };
 
