@@ -149,33 +149,73 @@
 
 .records-manage-container {
     display: flex;
-    flex-direction: row;
-    padding: 5px;
-    width: 100%;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .wrc-sidebar {
     width: 30%;
-    padding: 10px;
-    border-right: 1px solid #ccc;
+    padding: 20px;
+    border-right: 1px solid #e5e5ea;
+    background-color: #f9f9f9;
 }
 
 .wrc-content {
     width: 70%;
-    padding: 10px;
+    padding: 20px;
+}
+
+#recordsList {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#recordsList li {
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center; /* 添加此行以使文字内容居中显示 */
+}
+
+#recordsList li:hover {
+    background-color: #e5e5ea;
 }
 
 #recordsList li.selected {
-    background-color: #f0f0f0;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background-color: #007aff;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 122, 255, 0.3);
+}
+
+#recordDetails p {
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+
+#recordDetails strong {
+    font-weight: 600;
+    color: #007aff;
 }
 
 .inde-page-body {
-    width: 100%;
-    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    background-color: #f2f2f7;
+    color: #1c1c1e;
     margin: 0;
-    padding: 5%;
-    font-family: Arial, sans-serif;
+    padding: 20px;
+    line-height: 1.5;
 }
 
 .wrc-txtarea {

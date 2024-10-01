@@ -2,11 +2,15 @@
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "saveData") {
-        console.log("Received data to save:", request.data);
-        // 这里处理数据保存逻辑
         chrome.storage.sync.get("records", (result) => {
             let records = result.records || [];
-            records.push(request.data);
+            // 添加唯一id字段
+            const newRecord = {
+                id: Date.now().toString(),
+                ...request.data
+            };
+            // console.log("Save New record:", newRecord);
+            records.push(newRecord);
             chrome.storage.sync.set({ records: records }, () => {
                 console.log("Data saved successfully");
                 sendResponse({ status: "success" });
