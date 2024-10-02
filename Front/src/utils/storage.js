@@ -1,9 +1,9 @@
 function saveData(data) {
     return new Promise((resolve, reject) => {
-        chrome.storage.sync.get("records", (result) => {
+        chrome.storage.local.get("records", (result) => {
             let records = result.records || [];
             records.push(data);
-            chrome.storage.sync.set({ records: records }, () => {
+            chrome.storage.local.set({ records: records }, () => {
                 if (chrome.runtime.lastError) {
                     reject(chrome.runtime.lastError);
                 } else {
@@ -16,7 +16,7 @@ function saveData(data) {
 
 function getRecords() {
     return new Promise((resolve) => {
-        chrome.storage.sync.get("records", (data) => {
+        chrome.storage.local.get("records", (data) => {
             resolve(data.records || []);
         });
     });
@@ -24,10 +24,10 @@ function getRecords() {
 
 function deleteRecord(index) {
     return new Promise((resolve) => {
-        chrome.storage.sync.get("records", (data) => {
+        chrome.storage.local.get("records", (data) => {
             const records = data.records || [];
             records.splice(index, 1);
-            chrome.storage.sync.set({ records: records }, resolve);
+            chrome.storage.local.set({ records: records }, resolve);
         });
     });
 }
