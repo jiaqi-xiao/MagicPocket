@@ -6,6 +6,7 @@
 {
     id: 1,
     comment: XXXXX,
+    content: XXXXX,
     context: XXXXXXXXXXXX.
     vector: [[]],
 }
@@ -66,12 +67,14 @@ model = e.Model()
 class Record(BaseModel):
     id: int
     comment: str | None = None
+    content: str
     context: str
 
 
 class RecordwithVector(BaseModel):
     id: int
     comment: str | None = None
+    content: str
     context: str
     vector: list[float]
 
@@ -80,13 +83,16 @@ class RecordwithVector(BaseModel):
 async def embed_single_record(record: Record):
     # 对记录数据生成嵌入，并获取生成的嵌入向量
     vector = model.embedding(
-        record.model_dump(), ["context", "comment"], vector_operation_mode="add"
+        record.model_dump(),
+        ["context", "content", "comment"],
+        vector_operation_mode="add",
     )
 
     # 返回带有向量的记录列表
     return RecordwithVector(
         id=record.id,
         comment=record.comment,
+        content=record.content,
         context=record.context,
         vector=vector,
     )
@@ -106,12 +112,15 @@ async def embed_all_records(recordsList: RecordsList):
     for record in recordsList.data:
         # 对记录数据生成嵌入，并获取生成的嵌入向量
         vector = model.embedding(
-            record.model_dump(), ["context", "comment"], vector_operation_mode="add"
+            record.model_dump(),
+            ["context", "content", "comment"],
+            vector_operation_mode="add",
         )
         recordWithVector = RecordwithVector(
             id=record.id,
             comment=record.comment,
             context=record.context,
+            content=record.content,
             vector=vector,
         )
         recordsListWithVector.data.append(recordWithVector)
@@ -138,8 +147,8 @@ async def hierarcy_cluster(
     hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
     for key, c in hc_tree.items():
         recordsCluster = [
-            "Comment: {}, Context: {}".format(
-                root[index]["comment"], root[index]["context"]
+            "Comment: {}, Content: {}, Context: {}".format(
+                root[index]["comment"], root[index]["content"], root[index]["context"]
             )
             for index in c
         ]
