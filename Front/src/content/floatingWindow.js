@@ -49,8 +49,10 @@ function showRecordedItems() {
     recordsContainer.innerHTML = "";
 
     // 获取记录并显示
-    chrome.storage.sync.get("records", (data) => {
+    chrome.storage.local.get("records", (data) => {
         const records = data.records || [];
+
+        console.log("records numbers: ", records.length);
 
         const renderRecords = () => {
             recordsContainer.innerHTML = "";
@@ -105,8 +107,12 @@ function showRecordedItems() {
                 });
 
                 clearAllBtn.addEventListener("click", () => {
-                    chrome.storage.sync.set({ records: [] }, () => {
+                    // chrome.storage.local.set({ records: [] }, () => {
+                    //     showRecordedItems();
+                    // });
+                    chrome.storage.local.clear(() => {
                         showRecordedItems();
+                        console.log("Storage cleared");
                     });
                 });
 

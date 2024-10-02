@@ -1,4 +1,4 @@
-const backendDomain = "https://your-backend-domain.com/"
+const backendDomain = "http://127.0.0.1:8000"
 let gIntentDataList = []
 let isAnalysisIntent = false
 
@@ -147,11 +147,11 @@ function renderIntentVisualization(intentData) {
     });
 }
 
-function createIntentTree(intentData, container, level = 0) {
+function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
     const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#97C8EB'];
-    const maxPriority = findMaxPriority(intentData);
+    const minPriority = findMinPriority(intentData);
 
-    // validate intentData
+    // 验证 intentData
     if (!(!intentData.id || !intentData.intent || !intentData.priority)) {
         const item = document.createElement('div');
         item.style.marginBottom = '15px';
@@ -171,7 +171,7 @@ function createIntentTree(intentData, container, level = 0) {
         barWrapper.addEventListener('drop', handleDrop);
 
         const bar = document.createElement('div');
-        const width = (intentData.priority / maxPriority) * 100;
+        const width = (minPriority / intentData.priority) * parentWidth;
         bar.style.width = `${width}%`;
         bar.style.height = '30px';
         bar.style.backgroundColor = COLORS[level % COLORS.length];
@@ -199,12 +199,10 @@ function createIntentTree(intentData, container, level = 0) {
             item.appendChild(childContainer);
 
             intentData.child.forEach(childIntent => {
-                createIntentTree(childIntent, childContainer, level + 1);
+                createIntentTree(childIntent, childContainer, level + 1, width);
             });
         }
     }
-
-    
 }
 
 function handleDragStart(e) {
@@ -238,7 +236,7 @@ function updateIntentOrder(draggedId, targetId) {
             
             // 更新优先级
             items.forEach((item, index) => {
-                item.priority = items.length - index;
+                item.priority = index + 1;
             });
             
             return true;
@@ -256,14 +254,14 @@ function updateIntentOrder(draggedId, targetId) {
     updateOrder(gIntentDataList);
 }
 
-function findMaxPriority(item) {
-    let max = item.priority || 0;
+function findMinPriority(item) {
+    let min = item.priority || Infinity;
     if (item.child) {
         for (let child of item.child) {
-            max = Math.max(max, findMaxPriority(child));
+            min = Math.min(min, findMinPriority(child));
         }
     }
-    return max;
+    return min;
 }
 
 function fetchIntentDataFromBackend() {
@@ -278,13 +276,14 @@ function fetchIntentDataFromBackend() {
         setTimeout(() => {
             getAllRecords()
                 .then(records => {
-                    // Execute embed_all API
+                    const formattedData = { data: records };
+                    console.log("Data send to /embed_all:", JSON.stringify(formattedData));
                     return fetch(`${backendDomain}/embed_all`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ records: records })
+                        body: JSON.stringify(formattedData)
                     });
                 })
                 .then(response => {
@@ -295,28 +294,33 @@ function fetchIntentDataFromBackend() {
                     return response.json();
                 })
                 .then(embeddedData => {
-                    // Execute cluster API
-                    return fetch(`${backendDomain}/cluster`, {
+                    console.log("Received from /embed_all:", JSON.stringify(embeddedData));
+                    const recordsList = embeddedData;
+                    const distance_threshold = 0.5; // 设置适当的阈值
+                    const level = 3;
+                    const intent_num = 2;
+                    console.log("Data send to /cluster/:", JSON.stringify(recordsList));
+                    return fetch(`${backendDomain}/cluster/?distance_threshold=${distance_threshold}&level=${level}&intent_num=${intent_num}`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(embeddedData)
+                        body: JSON.stringify(recordsList)
                     });
                 })
                 .then(response => {
                     if (!response.ok) {
                         console.warn('Cluster API request failed');
-                        return response.json();
+                        return response.json().then(errorData => {
+                            console.error("Cluster Error detail:", errorData);
+                            throw new Error("Cluster failed");
+                        });
                     }
                     return response.json();
                 })
                 .then(intentData => {
-                    if (!intentData || !intentData.intent_tree) {
-                        console.warn('Invalid intent data format');
-                        return [getFallbackData()];
-                    }
-                    return [intentData.intent_tree];
+                    console.log("Received from /cluster:", JSON.stringify(intentData));
+                    return processClusterData(intentData);
                 })
                 .catch(error => {
                     console.warn('Failed to fetch intent data, using fallback test data', error);
@@ -326,8 +330,41 @@ function fetchIntentDataFromBackend() {
                 .finally(() => {
                     isAnalysisIntent = false;
                 });
-        }, 3000); // 3 seconds delay
+        }, 0);
     });
+}
+
+function processClusterData(clusterData) {
+    // 处理集群数据，将其转换为所需的格式
+    function processNode(node) {
+        let processedNode = {
+            id: node.id,
+            intent: node.intent,
+            priority: 1, // 默认值为1
+            child_num: node.child ? node.child.length : 0,
+            child: []
+        };
+
+        if (node.child) {
+            processedNode.child = node.child.map(childNode => {
+                if (childNode.intent) {
+                    // 这是一个中间节点
+                    return processNode(childNode);
+                } else {
+                    // 这是一个叶子节点（原始记录）
+                    return {
+                        id: childNode.id,
+                        comment: childNode.comment,
+                        context: childNode.context
+                    };
+                }
+            });
+        }
+
+        return processedNode;
+    }
+
+    return clusterData.map(processNode);
 }
 
 function getFallbackData() {
@@ -379,15 +416,15 @@ function getFallbackData() {
 
 function getAllRecords() {
     return new Promise((resolve) => {
-        chrome.storage.sync.get("records", (data) => {
+        chrome.storage.local.get("records", (data) => {
             const records = data.records || [];
 
             // 格式化记录以适应后端需求
             let formattedRecords = records.map((record) => {
                 return {
                     id: record.id,
-                    comment: record.comment,
-                    context: record.context,
+                    comment: record.comment || null, // 确保 comment 可以为 null
+                    context: record.paragraph,
                 }
             });
 
