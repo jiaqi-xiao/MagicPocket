@@ -64,6 +64,7 @@ class Record(BaseModel):
 class RecordwithVector(BaseModel):
     id: int
     comment: str | None = None
+    content: str
     context: str
     vector: list[float]
 
