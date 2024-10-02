@@ -425,6 +425,7 @@ function getAllRecords() {
                     id: record.id,
                     comment: record.comment || null, // 确保 comment 可以为 null
                     context: record.paragraph,
+                    content: record.content
                 }
             });
 
