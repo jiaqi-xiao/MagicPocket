@@ -37,8 +37,8 @@
     ]
 }
 """
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Query
+from pydantic import BaseModel, field_validator
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -105,6 +105,13 @@ class RecordsList(BaseModel):
 class RecordsListWithVector(BaseModel):
     data: list[RecordwithVector]
 
+    # @field_validator("data")
+    # def validate__length(cls, data):
+    #     min_length = 2
+    #     if len(data) < min_length:
+    #         raise ValueError(f"Record list should be more than {min_length} elements")
+    #     return data
+
 
 @app.post("/embed_all/", response_model=RecordsListWithVector)
 async def embed_all_records(recordsList: RecordsList):
@@ -139,14 +146,33 @@ extractModel = extractModule.ExtractModel()
 @app.post("/cluster/")
 async def hierarcy_cluster(
     recordsList: RecordsListWithVector,
-    distance_threshold: float,
-    level: int | None = 3,
-    intent_num: int | None = 2,
+    distance_threshold: float = 0.5,
+    level: int | None = Query(ge=1),
+    intent_num: int | None = Query(ge=1),
 ):
     root = [record.model_dump() for record in recordsList.data]
     count = len(root)
 
     newRoot = []
+    if count < 2:
+        recordsCluster = [
+            "Comment: {}, Content: {}, Context: {}".format(
+                root[0]["comment"], root[0]["content"], root[0]["context"]
+            )
+        ]
+        intent = await extractModel.invoke(recordsCluster)
+        intent_v = model.embedding({"intent": intent}, ["intent"])
+        return [
+            {
+                "id": 0,
+                "intent": intent,
+                "vector": intent_v,
+                "child": [
+                    {key: root[index][key] for key in root[index] if key != "vector"}
+                    for index in c
+                ],
+            }
+        ]
     hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
     for key, c in hc_tree.items():
         recordsCluster = [
@@ -174,17 +200,17 @@ async def hierarcy_cluster(
     i = 0
     while i < level:
         i += 1
-        if len(root) == intent_num:
+        if len(root) <= intent_num:
             return root
         newRoot = []
         hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
         for key, c in hc_tree.items():
             if len(c) == 1:
-                newRoot.append(
-                    root[c[0]]
-                )
+                newRoot.append(root[c[0]])
             else:
-                intentsCluster = ["Intent: {}".format(root[index]["intent"]) for index in c]
+                intentsCluster = [
+                    "Intent: {}".format(root[index]["intent"]) for index in c
+                ]
                 intent = await extractModel.invoke(intentsCluster)
                 intent_v = model.embedding({"intent": intent}, ["intent"])
                 newRoot.append(
@@ -205,4 +231,4 @@ async def hierarcy_cluster(
         root = [*newRoot]
         count += len(root)
 
-    return root
+    return [{key: node[key] for key in node if key != "vector"} for node in root]
