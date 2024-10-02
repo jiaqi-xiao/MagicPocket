@@ -5,7 +5,7 @@ import numpy as np
 from typing import Literal, Optional
 
 
-class Model:
+class EmbedModel:
     def __init__(self):
         self.index = None
         # 创建 Hugging Face 嵌入模型实例
@@ -53,7 +53,7 @@ class Model:
 if __name__ == "__main__":
     intent = {"intent": "想去拍照"}
 
-    model = Model()
+    model = EmbedModel()
     vector = model.embedding(intent, ['intent'])
 
     print(vector)
