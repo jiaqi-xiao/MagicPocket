@@ -283,7 +283,8 @@ function fetchIntentDataFromBackend() {
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(formattedData)
+                        body: JSON.stringify(formattedData),
+                        mode: 'cors' // 添加这一行
                     });
                 })
                 .then(response => {
@@ -425,6 +426,7 @@ function getAllRecords() {
                     id: record.id,
                     comment: record.comment || null, // 确保 comment 可以为 null
                     context: record.paragraph,
+                    content: record.content
                 }
             });
 
