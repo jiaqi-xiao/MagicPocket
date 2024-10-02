@@ -4,9 +4,9 @@ import os
 from langchain_openai import ChatOpenAI
 
 # openai api key
-# os.environ["OPENAI_API_KEY"] = (
-#     "MyOpenAIAPIKey"
-# )
+os.environ["OPENAI_API_KEY"] = (
+    "MyOpenAIAPIKey"
+)
 
 
 model = ChatOpenAI(model="gpt-4")
