@@ -58,10 +58,10 @@ async def root():
     return "Hello World!"
 
 
-import embedModule as e
+import embedModule
 
-# 初始化大模型
-model = e.Model()
+# 初始化嵌入模型
+model = embedModule.EmbedModel()
 
 
 class Record(BaseModel):
@@ -130,7 +130,10 @@ async def embed_all_records(recordsList: RecordsList):
 
 
 import clusterGenerator
-import extractModlue
+import extractModule
+
+# 初始化意图提取模型
+extractModel = extractModule.ExtractModel()
 
 
 @app.post("/cluster/")
@@ -152,7 +155,7 @@ async def hierarcy_cluster(
             )
             for index in c
         ]
-        intent = extractModlue.invoke(recordsCluster)
+        intent = await extractModel.invoke(recordsCluster)
         intent_v = model.embedding({"intent": intent}, ["intent"])
         newRoot.append(
             {
@@ -176,24 +179,29 @@ async def hierarcy_cluster(
         newRoot = []
         hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
         for key, c in hc_tree.items():
-            intentsCluster = ["Intent: {}".format(root[index]["intent"]) for index in c]
-            intent = extractModlue.invoke(intentsCluster)
-            intent_v = model.embedding({"intent": intent}, ["intent"])
-            newRoot.append(
-                {
-                    "id": count + int(key),
-                    "intent": intent,
-                    "vector": intent_v,
-                    "child": [
-                        {
-                            key: root[index][key]
-                            for key in root[index]
-                            if key != "vector"
-                        }
-                        for index in c
-                    ],
-                }
-            )
+            if len(c) == 1:
+                newRoot.append(
+                    root[c[0]]
+                )
+            else:
+                intentsCluster = ["Intent: {}".format(root[index]["intent"]) for index in c]
+                intent = await extractModel.invoke(intentsCluster)
+                intent_v = model.embedding({"intent": intent}, ["intent"])
+                newRoot.append(
+                    {
+                        "id": count + int(key),
+                        "intent": intent,
+                        "vector": intent_v,
+                        "child": [
+                            {
+                                key: root[index][key]
+                                for key in root[index]
+                                if key != "vector"
+                            }
+                            for index in c
+                        ],
+                    }
+                )
         root = [*newRoot]
         count += len(root)
 
