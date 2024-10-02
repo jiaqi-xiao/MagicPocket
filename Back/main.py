@@ -161,12 +161,12 @@ async def hierarcy_cluster(
             )
         ]
         intent = await extractModel.invoke(recordsCluster)
-        intent_v = model.embedding({"intent": intent}, ["intent"])
         return [
             {
                 "id": 0,
                 "intent": intent,
-                "vector": intent_v,
+                "priority": 5,
+                "child_num": len(c),
                 "child": [
                     {key: root[index][key] for key in root[index] if key != "vector"}
                     for index in c
