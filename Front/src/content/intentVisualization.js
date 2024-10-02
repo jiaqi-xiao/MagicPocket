@@ -283,7 +283,8 @@ function fetchIntentDataFromBackend() {
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(formattedData)
+                        body: JSON.stringify(formattedData),
+                        mode: 'cors' // 添加这一行
                     });
                 })
                 .then(response => {
