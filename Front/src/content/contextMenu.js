@@ -113,6 +113,14 @@ function saveSelection() {
             removeContextMenu();
             // 清除选中状态
             window.getSelection().removeAllRanges();
+            // 输出当前已经保存的记录数
+            chrome.storage.local.get("records", (data) => {
+                if (data && data.records) {
+                    console.log("[After save]Current records number:", data.records.length);
+                } else {
+                    console.log("[After save]No records");
+                }
+            });
         }
     });
 
