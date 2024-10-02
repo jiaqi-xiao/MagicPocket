@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     const index = parseInt(urlParams.get("index"));
 
-    chrome.storage.sync.get("records", (data) => {
+    chrome.storage.local.get("records", (data) => {
         const records = data.records || [];
         const recordsList = document.getElementById("recordsList");
         const recordDetails = document.getElementById("recordDetails");

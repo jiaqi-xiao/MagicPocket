@@ -1,7 +1,7 @@
 // popup.js
 
 function displayRecords() {
-    chrome.storage.sync.get("records", (data) => {
+    chrome.storage.local.get("records", (data) => {
         const records = data.records || [];
         const recordsList = document.getElementById("recordsList");
         recordsList.innerHTML = "";
@@ -25,10 +25,10 @@ function displayRecords() {
 }
 
 function deleteRecord(index) {
-    chrome.storage.sync.get("records", (data) => {
+    chrome.storage.local.get("records", (data) => {
         const records = data.records || [];
         records.splice(index, 1);
-        chrome.storage.sync.set({ records: records }, () => {
+        chrome.storage.local.set({ records: records }, () => {
             displayRecords();
         });
     });
@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 document.getElementById("clearAllBtn").addEventListener("click", () => {
-    chrome.storage.sync.set({ records: [] }, () => {
+    chrome.storage.local.set({ records: [] }, () => {
         displayRecords();
     });
 });
