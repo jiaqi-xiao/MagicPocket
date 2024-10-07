@@ -139,7 +139,6 @@ async def embed_all_records(recordsList: RecordsList):
 import clusterGenerator
 import extractModule
 
-# 初始化意图提取模型
 extractModel = extractModule.ExtractModel()
 
 
@@ -155,12 +154,10 @@ async def hierarcy_cluster(
 
     newRoot = []
     if count < 2:
-        recordsCluster = [
-            "Comment: {}, Content: {}, Context: {}".format(
-                root[0]["comment"], root[0]["content"], root[0]["context"]
-            )
-        ]
-        intent = await extractModel.invoke(recordsCluster)
+        recordsCluster = "**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+            root[0]["content"], root[0]["context"], root[0]["comment"]
+        )
+        intent = await extractModel.invoke(recordsCluster, mode="l")
         return [
             {
                 "id": 0,
@@ -175,13 +172,19 @@ async def hierarcy_cluster(
         ]
     hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
     for key, c in hc_tree.items():
-        recordsCluster = [
-            "Comment: {}, Content: {}, Context: {}".format(
-                root[index]["comment"], root[index]["content"], root[index]["context"]
-            )
-            for index in c
-        ]
-        intent = await extractModel.invoke(recordsCluster)
+        recordsCluster = "\n\n".join(
+            [
+                "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+                    index + 1,
+                    root[index]["comment"],
+                    root[index]["content"],
+                    root[index]["context"],
+                )
+                for index in c
+            ]
+        )
+        intent = await extractModel.invoke(recordsCluster, mode="l")
+        print(intent)
         intent_v = model.embedding({"intent": intent}, ["intent"])
         newRoot.append(
             {
@@ -210,10 +213,10 @@ async def hierarcy_cluster(
             if len(c) == 1:
                 newRoot.append(root[c[0]])
             else:
-                intentsCluster = [
-                    "Intent: {}".format(root[index]["intent"]) for index in c
-                ]
-                intent = await extractModel.invoke(intentsCluster)
+                intentsCluster = "- 低级意图: {}".format(
+                    [root[index]["intent"] for index in c]
+                )
+                intent = await extractModel.invoke(intentsCluster, mode="h")
                 intent_v = model.embedding({"intent": intent}, ["intent"])
                 newRoot.append(
                     {
