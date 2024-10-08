@@ -92,6 +92,9 @@ function showRecordedItems() {
                     scrollArea.appendChild(item);
                 });
 
+                // 清空按钮区域
+                buttonArea.innerHTML = "";
+
                 // 添加按钮到按钮区域
                 const clearAllBtn = createButton("Clear All", "clearAllBtn");
                 const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
@@ -133,6 +136,17 @@ function showRecordedItems() {
         };
 
         renderRecords();
+
+        // 添加删除单条记录的事件监听器
+        scrollArea.addEventListener("click", (e) => {
+            if (e.target.classList.contains("delete-btn")) {
+                const index = parseInt(e.target.getAttribute("data-index"));
+                deleteRecord(index).then(() => {
+                    records.splice(index, 1);
+                    renderRecords();
+                });
+            }
+        });
     });
 
     // 添加鼠标移开事件监听器
