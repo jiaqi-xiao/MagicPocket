@@ -188,17 +188,22 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100, g
         bar.style.fontWeight = 'bold';
         bar.style.borderRadius = '4px';
         bar.style.transition = 'width 0.3s ease-in-out';
+        bar.style.overflow = 'hidden';  // 添加这行以防止文字溢出
 
         const nameSpan = document.createElement('span');
         // format intentData.intent drop special character
         intentData.intent = intentData.intent.replace(/[`~!@#$%^&*()_\-+=\[\]{};:'"\\|<>\/?]/g, ' ');
         nameSpan.textContent = `${intentData.intent} [${intentData.priority}]`;
+        nameSpan.style.whiteSpace = 'nowrap';  // 确保文本不换行
         bar.appendChild(nameSpan);
 
         barWrapper.appendChild(bar);
         item.appendChild(barWrapper);
 
         container.appendChild(item);
+
+        // 动态调整文字大小
+        adjustFontSize(bar, nameSpan);
 
         if (intentData.child && intentData.child.length > 0) {
             const childContainer = document.createElement('div');
@@ -209,6 +214,19 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100, g
                 createIntentTree(childIntent, childContainer, level + 1, width, globalMinPriority);
             });
         }
+    }
+}
+
+function adjustFontSize(container, textElement) {
+    const maxSize = 14;  // 最大字体大小
+    const minSize = 4;   // 最小字体大小，可以根据需要调整
+    let size = maxSize;
+
+    textElement.style.fontSize = `${size}px`;
+
+    while (textElement.scrollWidth > container.clientWidth && size > minSize) {
+        size--;
+        textElement.style.fontSize = `${size}px`;
     }
 }
 
