@@ -184,6 +184,8 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
         bar.style.transition = 'width 0.3s ease-in-out';
 
         const nameSpan = document.createElement('span');
+        // format intentData.intent drop special character
+        intentData.intent = intentData.intent.replace(/[`~!@#$%^&*()_\-+=\[\]{};:'"\\|<>\/?]/g, ' ');
         nameSpan.textContent = `${intentData.intent} [${intentData.priority}]`;
         bar.appendChild(nameSpan);
 
@@ -294,12 +296,12 @@ function fetchIntentDataFromBackend() {
                     return response.json();
                 })
                 .then(embeddedData => {
-                    console.log("Received from /embed_all:", JSON.stringify(embeddedData));
+                    // console.log("Received from /embed_all:", JSON.stringify(embeddedData));
                     const recordsList = embeddedData;
                     const distance_threshold = 0.5; // 设置适当的阈值
                     const level = 3;
                     const intent_num = 2;
-                    console.log("Data send to /cluster/:", JSON.stringify(recordsList));
+                    // console.log("Data send to /cluster/:", JSON.stringify(recordsList));
                     return fetch(`${backendDomain}/cluster/?distance_threshold=${distance_threshold}&level=${level}&intent_num=${intent_num}`, {
                         method: 'POST',
                         headers: {
