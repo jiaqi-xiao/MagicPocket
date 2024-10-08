@@ -27,26 +27,40 @@ function showRecordedItems() {
         recordsContainer.style.backgroundColor = "#fff";
         recordsContainer.style.color = "#333";
         recordsContainer.style.border = "1px solid #ccc";
-        recordsContainer.style.padding = "10px";
         recordsContainer.style.borderRadius = "4px";
         recordsContainer.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
         recordsContainer.style.zIndex = "1000";
+        recordsContainer.style.height = "70vh";
+        recordsContainer.style.maxWidth = "50vh";
+        recordsContainer.style.display = "flex";
+        recordsContainer.style.flexDirection = "column";
         document.body.appendChild(recordsContainer);
 
         let floatingWindow = document.getElementById("floatingWindow");
-
-        // // 添加鼠标移开事件监听器
-        // recordsContainer.addEventListener("mouseleave", () => {
-        //     recordsContainer.style.display = "none";
-        // });
     }
 
     // 显示记录容器和浮动窗口
-    recordsContainer.style.display = "block";
+    recordsContainer.style.display = "flex";
     floatingWindow.style.display = "block";
 
     // 清空容器内容
     recordsContainer.innerHTML = "";
+
+    // 创建滚动区域
+    const scrollArea = document.createElement("div");
+    scrollArea.style.overflowY = "auto";
+    scrollArea.style.flex = "1";
+    scrollArea.style.padding = "10px";
+
+    // 创建按钮区域
+    const buttonArea = document.createElement("div");
+    buttonArea.style.padding = "10px";
+    buttonArea.style.borderTop = "1px solid #ccc";
+    buttonArea.style.display = "flex";
+    buttonArea.style.justifyContent = "space-between";
+
+    recordsContainer.appendChild(scrollArea);
+    recordsContainer.appendChild(buttonArea);
 
     // 获取记录并显示
     chrome.storage.local.get("records", (data) => {
@@ -55,68 +69,55 @@ function showRecordedItems() {
         console.log("records numbers: ", records.length);
 
         const renderRecords = () => {
-            recordsContainer.innerHTML = "";
+            scrollArea.innerHTML = "";
             if (records.length === 0) {
-                recordsContainer.innerHTML = "<p>No records</p>";
+                scrollArea.innerHTML = "<p>No records</p>";
             } else {
                 records.forEach((record, index) => {
                     const item = document.createElement("div");
                     item.className = "record-item";
                     item.innerHTML = `
-              <strong>${record.type === "text" ? "Text" : "Image"}</strong>
-              <p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>
-              ${record.comment ? `<p class="comment" style="font-size: 0.9em; color: #666;">Comment: ${record.comment}</p>` : ''}
-              <small>${new Date(record.timestamp).toLocaleString()}</small>
-              <button class="delete-btn" data-index="${index}">Delete</button>
-            `;
+                        <strong>${record.type === "text" ? "Text" : "Image"}</strong>
+                        <p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>
+                        ${record.comment ? `<p class="comment" style="font-size: 0.9em; color: #666;">Comment: ${record.comment}</p>` : ''}
+                        <small>${new Date(record.timestamp).toLocaleString()}</small>
+                        <button class="delete-btn" data-index="${index}">Delete</button>
+                    `;
                     item.addEventListener("click", (e) => {
                         if (!e.target.classList.contains("delete-btn")) {
                             const url = chrome.runtime.getURL(`records.html?index=${index}`);
-                            // window.location.href = url;
                             window.open(url, "_blank");
                         }
                     });
-                    recordsContainer.appendChild(item);
+                    scrollArea.appendChild(item);
                 });
 
-                // clearAllBtn
-                const clearAllBtn = document.createElement("button");
-                clearAllBtn.id = "clearAllBtn";
-                clearAllBtn.textContent = "Clear All";
-                recordsContainer.appendChild(clearAllBtn);
+                // 添加按钮到按钮区域
+                const clearAllBtn = createButton("Clear All", "clearAllBtn");
+                const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
+                const showIntentBtn = createButton("Show Intent", "showIntentBtn");
 
-                // startGenerateBtn
-                const startGenerateBtn = document.createElement("button");
-                startGenerateBtn.id = "startGenerateBtn";
-                startGenerateBtn.textContent = "Start Generation";
-                recordsContainer.appendChild(startGenerateBtn);
+                buttonArea.appendChild(clearAllBtn);
+                buttonArea.appendChild(startGenerateBtn);
+                buttonArea.appendChild(showIntentBtn);
 
                 startGenerateBtn.addEventListener("click", () => {
                     const url = chrome.runtime.getURL(`start_generation.html`);
                     window.open(url, "_blank");
                 });
 
-                // showIntentBtn
-                const showIntentBtn = document.createElement("button");
-                showIntentBtn.id = "showIntentBtn";
-                showIntentBtn.textContent = "Show Intent";
-                recordsContainer.appendChild(showIntentBtn);
-
                 showIntentBtn.addEventListener("click", () => {
                     clickUserIntentBtn();
                 });
 
                 clearAllBtn.addEventListener("click", () => {
-                    // chrome.storage.local.set({ records: [] }, () => {
-                    //     showRecordedItems();
-                    // });
                     chrome.storage.local.clear(() => {
                         showRecordedItems();
                         console.log("Storage cleared");
                     });
                 });
 
-                recordsContainer.addEventListener("click", (e) => {
+                scrollArea.addEventListener("click", (e) => {
                     if (e.target.classList.contains("delete-btn")) {
                         const index = parseInt(e.target.getAttribute("data-index"));
                         deleteRecord(index).then(() => {
@@ -127,10 +128,8 @@ function showRecordedItems() {
                 });
             }
             if (isIntentVisible) {
-                // showUserIntentVisualization();
                 renderIntentVisualization(gIntentDataList);
             }
-
         };
 
         renderRecords();
@@ -140,7 +139,6 @@ function showRecordedItems() {
     let hideTimeout;
     const hideContainers = () => {
         hideTimeout = setTimeout(() => {
-            // recordsContainer.style.display = "none";
             if (!isAnalysisIntent) {
                 console.log("isAnalysisIntent", isAnalysisIntent);
                 recordsContainer.style.display = "none";
@@ -156,4 +154,11 @@ function showRecordedItems() {
     floatingWindow.addEventListener("mouseleave", hideContainers);
     recordsContainer.addEventListener("mouseenter", cancelHide);
     floatingWindow.addEventListener("mouseenter", cancelHide);
+}
+
+function createButton(text, id) {
+    const button = document.createElement("button");
+    button.id = id;
+    button.textContent = text;
+    return button;
 }

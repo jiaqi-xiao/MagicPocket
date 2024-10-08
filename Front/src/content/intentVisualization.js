@@ -41,15 +41,12 @@ function showUserIntentVisualization() {
 }
 
 function createIntentContainer() {
-    // 获取 floatingRecordsContainer
     let floatingRecordsContainer = document.getElementById("floatingRecordsContainer");
     if (!floatingRecordsContainer) {
         console.error("No floatingRecordsContainer found");
         return;
     }
-    let floatingRecordsContainerHeight = floatingRecordsContainer.offsetHeight;
 
-    // 创建意图可视化容器
     let intentContainer = document.createElement("div");
     intentContainer.id = "intentVisualizationContainer";
     intentContainer.style.position = "absolute";
@@ -59,22 +56,34 @@ function createIntentContainer() {
     intentContainer.style.backgroundColor = "#2A2A2A";
     intentContainer.style.color = "#E0E0E0";
     intentContainer.style.border = "1px solid #ccc";
-    intentContainer.style.padding = "10px";
     intentContainer.style.borderRadius = "8px";
     intentContainer.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-    intentContainer.style.height = floatingRecordsContainerHeight + "px";
+    intentContainer.style.height = "70vh";
     intentContainer.style.overflowY = "auto";
+    intentContainer.style.display = "flex";
+    intentContainer.style.flexDirection = "column";
 
-    // 添加标题和刷新按钮
-    intentContainer.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: #FFFFFF; margin: 0;">User Intent</h2>
-            <button id="refreshIntentBtn" style="background: none; border: none; cursor: pointer; color: #FFFFFF;">🔄</button>
-        </div>
+    const header = document.createElement("div");
+    header.style.padding = "10px";
+    header.style.borderBottom = "1px solid #ccc";
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+
+    header.innerHTML = `
+        <h2 style="color: #FFFFFF; margin: 0;">User Intent</h2>
+        <button id="refreshIntentBtn" style="background: none; border: none; cursor: pointer; color: #FFFFFF;">🔄</button>
     `;
 
-    // 添加刷新按钮的点击事件
-    const refreshBtn = intentContainer.querySelector("#refreshIntentBtn");
+    const content = document.createElement("div");
+    content.style.flex = "1";
+    content.style.overflowY = "auto";
+    content.style.padding = "10px";
+
+    intentContainer.appendChild(header);
+    intentContainer.appendChild(content);
+
+    const refreshBtn = header.querySelector("#refreshIntentBtn");
     refreshBtn.addEventListener("click", () => {
         console.log("刷新Intent可视化内容");
         showLoadingAnimation();
@@ -90,7 +99,6 @@ function createIntentContainer() {
             });
     });
 
-    // 将意图容器添加到浮动列表容器中
     floatingRecordsContainer.appendChild(intentContainer);
 
     return intentContainer;
@@ -130,20 +138,11 @@ function renderIntentVisualization(intentData) {
         intentContainer = createIntentContainer();
     }
 
-    // 清除现有的树结构
-    const existingTree = document.getElementById('intentTreeContainer');
-    if (existingTree) {
-        existingTree.remove();
-    }
+    const content = intentContainer.querySelector("div:last-child");
+    content.innerHTML = "";
 
-    // 创建意图树
-    const treeContainer = document.createElement('div');
-    treeContainer.id = 'intentTreeContainer';
-    intentContainer.appendChild(treeContainer);
-
-    // 遍历intentData数组并为每个元素创建树
     intentData.forEach(intentItem => {
-        createIntentTree(intentItem, treeContainer);
+        createIntentTree(intentItem, content);
     });
 }
 
