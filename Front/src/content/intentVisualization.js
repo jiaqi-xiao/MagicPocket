@@ -141,14 +141,15 @@ function renderIntentVisualization(intentData) {
     const content = intentContainer.querySelector("div:last-child");
     content.innerHTML = "";
 
+    const globalMinPriority = findMinPriority(intentData);
+
     intentData.forEach(intentItem => {
-        createIntentTree(intentItem, content);
+        createIntentTree(intentItem, content, 0, 100, globalMinPriority);
     });
 }
 
-function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
+function createIntentTree(intentData, container, level = 0, parentWidth = 100, globalMinPriority) {
     const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#97C8EB'];
-    const minPriority = findMinPriority(intentData);
 
     // 验证 intentData
     if (!(!intentData.id || !intentData.intent || !intentData.priority)) {
@@ -170,7 +171,12 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
         barWrapper.addEventListener('drop', handleDrop);
 
         const bar = document.createElement('div');
-        const width = (minPriority / intentData.priority) * parentWidth;
+        // 新的宽度计算方法
+        const minWidth = 60; // 最小宽度百分比
+        const scaleFactor = 0.6; // 缩放因子,用于减小宽度跨度
+        const priorityRatio = globalMinPriority / intentData.priority;
+        const scaledWidth = minWidth + (100 - minWidth) * (priorityRatio ** scaleFactor);
+        const width = Math.min(scaledWidth, parentWidth);
         bar.style.width = `${width}%`;
         bar.style.height = '30px';
         bar.style.backgroundColor = COLORS[level % COLORS.length];
@@ -200,7 +206,7 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
             item.appendChild(childContainer);
 
             intentData.child.forEach(childIntent => {
-                createIntentTree(childIntent, childContainer, level + 1, width);
+                createIntentTree(childIntent, childContainer, level + 1, width, globalMinPriority);
             });
         }
     }
@@ -255,13 +261,19 @@ function updateIntentOrder(draggedId, targetId) {
     updateOrder(gIntentDataList);
 }
 
-function findMinPriority(item) {
-    let min = item.priority || Infinity;
-    if (item.child) {
-        for (let child of item.child) {
-            min = Math.min(min, findMinPriority(child));
+function findMinPriority(intentData) {
+    let min = Infinity;
+    
+    function traverse(item) {
+        if (item.priority) {
+            min = Math.min(min, item.priority);
+        }
+        if (item.child) {
+            item.child.forEach(traverse);
         }
     }
+    
+    intentData.forEach(traverse);
     return min;
 }
 
