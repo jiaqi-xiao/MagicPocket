@@ -43,17 +43,21 @@ class ExtractModelDirect:
             - 将所有意图分组，确保组间差异尽可能大。
             - 从每个组中提炼出一个更高级的意图。
             - 推理出用户对每组意图的优先级（数字越大代表优先级越低，用整数表示）
+            
+        # Definition of Intention
+            - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process [14, 70] of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
         
         # Steps
-        1. **Analyze Each Record:** 
+        1. **Understand the definition of intention**
+        2.. **Analyze Each Record:** 
             - Review each record individually, noting the selected text, context, and user's comment.
-        2. **Extract Intent:**
+        3. **Extract Intent:**
             - Summarize the user's intent from each record in a concise manner, ensuring each intent description is no longer than 7 words and maintains a uniform style.
-        3. **Group Intents:**
+        4. **Group Intents:**
             - Organize the extracted intents into distinct groups where the differences between the groups are maximized.
-        4. **Derive High-level Intents:**
+        5. **Derive High-level Intents:**
             - For each group, derive a higher-level intent that encompasses the primary theme or objective of that group.
-        5. **Deduce the user's priority:**
+        6. **Deduce the user's priority:**
             - Consider all groups and deduce the user's priority for each group and rank them according to the priority
             
         # Output Format
@@ -98,12 +102,16 @@ class ExtractModelCluster:
             - 从这些records中提取和总结一个且仅有一个意图，这个意图不超过7个词。
             - 当用户提供intent列表时，提炼出一个更高级别的意图。
         
+        # Definition of Intention
+            - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process [14, 70] of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
+        
         # Steps
-            1. **Record列表处理**:
+            1. **理解意图定义**
+            2. **Record列表处理**:
                 - 阅读每个record内的选中文本、上下文及注释。
                 - 理解这些record的共同意图。
                 - 提取并用不超过7个词总结这个共同意图。
-            2. **Intent列表处理**:
+            3. **Intent列表处理**:
                 - 为每个intent组提炼出一个更高级别的意图。
         
         # Output Format

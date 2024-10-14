@@ -105,13 +105,6 @@ class RecordsList(BaseModel):
 class RecordsListWithVector(BaseModel):
     data: list[RecordwithVector]
 
-    # @field_validator("data")
-    # def validate__length(cls, data):
-    #     min_length = 2
-    #     if len(data) < min_length:
-    #         raise ValueError(f"Record list should be more than {min_length} elements")
-    #     return data
-
 
 @app.post("/embed_all/", response_model=RecordsListWithVector)
 async def embed_all_records(recordsList: RecordsList):
