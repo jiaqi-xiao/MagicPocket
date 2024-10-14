@@ -141,19 +141,19 @@ import extractModule
 
 extractModelCluster = extractModule.ExtractModelCluster()
 
-@app.post("/cluster/")
+@app.post("/extract/cluster/")
 async def hierarcy_cluster(
     recordsList: RecordsListWithVector,
     distance_threshold: float = 0.5,
-    level: int | None = Query(ge=1),
-    intent_num: int | None = Query(ge=1),
+    level: int = Query(ge=1),
+    intent_num: int = Query(ge=1),
 ):
     root = [record.model_dump() for record in recordsList.data]
     count = len(root)
 
     newRoot = []
     if count < 2:
-        recordsCluster = "**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+        recordsCluster = "[**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}]".format(
             root[0]["content"], root[0]["context"], root[0]["comment"]
         )
         intent = await extractModelCluster.invoke(recordsCluster)
@@ -171,8 +171,7 @@ async def hierarcy_cluster(
         ]
     hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
     for key, c in hc_tree.items():
-        recordsCluster = "\n\n".join(
-            [
+        recordsCluster = [
                 "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
                     index + 1,
                     root[index]["comment"],
@@ -181,13 +180,12 @@ async def hierarcy_cluster(
                 )
                 for index in c
             ]
-        )
         intent = await extractModelCluster.invoke(recordsCluster)
-        intent_v = model.embedding({"intent": intent}, ["intent"])
+        intent_v = model.embedding(intent, ["intent"])
         newRoot.append(
             {
                 "id": count + int(key),
-                "intent": intent,
+                "intent": intent['intent'],
                 "vector": intent_v,
                 "priority": 5,
                 "child_num": len(c),
@@ -204,24 +202,22 @@ async def hierarcy_cluster(
     while i < level:
         i += 1
         if len(root) <= intent_num:
-            return root
+            return [{key: node[key] for key in node if key != "vector"} for node in root]
         newRoot = []
         hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
         for key, c in hc_tree.items():
             if len(c) == 1:
                 newRoot.append(root[c[0]])
             else:
-                intentsCluster = "- 意图: {}".format(
-                    [root[index]["intent"] for index in c]
-                )
+                intentsCluster = [root[index]["intent"] for index in c]
                 intent = await extractModelCluster.invoke(intentsCluster)
-                intent_v = model.embedding({"intent": intent}, ["intent"])
+                intent_v = model.embedding(intent, ["intent"])
                 newRoot.append(
                     {
                         "id": count + int(key),
-                        "intent": intent,
+                        "intent": intent['intent'],
                         "vector": intent_v,
-                        "priority": 5,
+                        "priority": 1,
                         "child_num": len(c),
                         "child": [
                             {
@@ -240,10 +236,10 @@ async def hierarcy_cluster(
 
 extractModelDirect = extractModule.ExtractModelDirect()
 
-@app.post("/extract_direct/")
+@app.post("/extract/direct/")
 async def direct_extract_intent(
     recordsList: RecordsList,
-):
+):  
     root = [record.model_dump() for record in recordsList.data]
 
     recordsCluster = "\n\n".join(
@@ -257,5 +253,120 @@ async def direct_extract_intent(
                 for index in range(len(root))
             ]
         )
-    
-    return await extractModelDirect.invoke(recordsCluster)
+    groupedIntents = await extractModelDirect.invoke(recordsCluster)
+    return groupedIntents["groupedIntents"]
+
+@app.post("/cluster/")
+# async def direct_extract_intent(
+#     recordsList: RecordsListWithVector,
+#     distance_threshold: float = 0.5,
+#     level: int = Query(ge=1),
+#     intent_num: int = Query(ge=1),
+# ):  
+#     root = [record.model_dump() for record in recordsList.data]
+
+#     recordsCluster = "\n\n".join(
+#             [
+#                 "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+#                     index + 1,
+#                     root[index]["content"],
+#                     root[index]["content"],
+#                     root[index]["comment"],
+#                 )
+#                 for index in range(len(root))
+#             ]
+#         )
+#     groupedIntents = await extractModelDirect.invoke(recordsCluster)
+#     return groupedIntents["groupedIntents"]
+
+async def hierarcy_cluster(
+    recordsList: RecordsListWithVector,
+    distance_threshold: float = 0.5,
+    level: int = Query(ge=1),
+    intent_num: int = Query(ge=1),
+):
+    root = [record.model_dump() for record in recordsList.data]
+    count = len(root)
+
+    newRoot = []
+    if count < 2:
+        recordsCluster = "[**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}]".format(
+            root[0]["content"], root[0]["context"], root[0]["comment"]
+        )
+        intent = await extractModelCluster.invoke(recordsCluster)
+        return [
+            {
+                "id": 0,
+                "intent": intent,
+                "priority": 5,
+                "child_num": len(c),
+                "child": [
+                    {key: root[index][key] for key in root[index] if key != "vector"}
+                    for index in c
+                ],
+            }
+        ]
+    hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
+    for key, c in hc_tree.items():
+        recordsCluster = [
+                "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+                    index + 1,
+                    root[index]["comment"],
+                    root[index]["content"],
+                    root[index]["context"],
+                )
+                for index in c
+            ]
+        intent = await extractModelCluster.invoke(recordsCluster)
+        intent_v = model.embedding(intent, ["intent"])
+        newRoot.append(
+            {
+                "id": count + int(key),
+                "intent": intent['intent'],
+                "vector": intent_v,
+                "priority": 5,
+                "child_num": len(c),
+                "child": [
+                    {key: root[index][key] for key in root[index] if key != "vector"}
+                    for index in c
+                ],
+            }
+        )
+    root = [*newRoot]
+    count += len(root)
+
+    i = 0
+    while i < level:
+        i += 1
+        if len(root) <= intent_num:
+            return [{key: node[key] for key in node if key != "vector"} for node in root]
+        newRoot = []
+        hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
+        for key, c in hc_tree.items():
+            if len(c) == 1:
+                newRoot.append(root[c[0]])
+            else:
+                intentsCluster = [root[index]["intent"] for index in c]
+                intent = await extractModelCluster.invoke(intentsCluster)
+                intent_v = model.embedding(intent, ["intent"])
+                newRoot.append(
+                    {
+                        "id": count + int(key),
+                        "intent": intent['intent'],
+                        "vector": intent_v,
+                        "priority": 1,
+                        "child_num": len(c),
+                        "child": [
+                            {
+                                key: root[index][key]
+                                for key in root[index]
+                                if key != "vector"
+                            }
+                            for index in c
+                        ],
+                    }
+                )
+        root = [*newRoot]
+        count += len(root)
+
+    return [{key: node[key] for key in node if key != "vector"} for node in root]
