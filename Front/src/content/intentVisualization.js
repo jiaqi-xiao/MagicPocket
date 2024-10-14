@@ -308,6 +308,53 @@ function fetchIntentDataFromBackend() {
             getAllRecords()
                 .then(records => {
                     const formattedData = { data: records };
+                    console.log("Data send to /extract/direct:", JSON.stringify(formattedData));
+                    return fetch(`${backendDomain}/extract/direct`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formattedData),
+                        mode: 'cors' // 添加这一行
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.warn('Embed_all API request failed');
+                        return response.json();
+                    }
+                    return response.json();
+                })
+                .then(intentData => {
+                    console.log("Received from /cluster:", JSON.stringify(intentData));
+                    return processClusterData(intentData);
+                })
+                .catch(error => {
+                    console.warn('Failed to fetch intent data, using fallback test data', error);
+                    return [getFallbackData()];
+                })
+                .then(resolve)
+                .finally(() => {
+                    isAnalysisIntent = false;
+                });
+        }, 0);
+    });
+}
+
+// 
+function fetchClusterIntentDataFromBackend() {
+    if (isAnalysisIntent) {
+        return;
+    }
+    
+    isAnalysisIntent = true;
+    console.log("fetchIntentDataFromBackend isAnalysisIntent", isAnalysisIntent);
+
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            getAllRecords()
+                .then(records => {
+                    const formattedData = { data: records };
                     console.log("Data send to /embed_all:", JSON.stringify(formattedData));
                     return fetch(`${backendDomain}/embed_all`, {
                         method: 'POST',
