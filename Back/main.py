@@ -258,5 +258,4 @@ async def direct_extract_intent(
             ]
         )
     
-    intent = await extractModelDirect.invoke(recordsCluster)
-    return intent
+    return await extractModelDirect.invoke(recordsCluster)

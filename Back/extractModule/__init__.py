@@ -1,5 +1,5 @@
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 import os
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
@@ -28,16 +28,46 @@ class GroupedIntents(BaseModel):
 class ExtractIntents(BaseModel):
     extractedIntents: list[Intent]
     groupedIntents: list[GroupedIntents]
-    
 
 # direct
 class ExtractModelDirect:
     def __init__(self):
-        self.instruction = "根据提供的record列表，提取并总结用户的意图。\n\n- 提取每个record中的意图，保证表述风格统一，每个意图不超过7个词。\n- 将所有意图分组，确保组间差异尽可能大。\n- 从每个组中提炼出一个更高级的意图。\n\n# Steps\n\n1. **Analyze Each Record:** \n   - Review each record individually, noting the selected text, context, and user's comment.\n   \n2. **Extract Intent:**\n   - Summarize the user's intent from each record in a concise manner, ensuring each intent description is no longer than 7 words and maintains a uniform style.\n\n3. **Group Intents:**\n   - Organize the extracted intents into distinct groups where the differences between the groups are maximized.\n\n4. **Derive High-level Intents:**\n   - For each group, derive a higher-level intent that encompasses the primary theme or objective of that group.\n\n# Output Format\n\n- The output should be structured in JSON format."
+        self.instruction = '''
+        ## System:
+        根据提供的record列表，提取并总结用户的意图。
+        
+        - 提取每个record中的意图，保证表述风格统一，每个意图不超过7个词。
+        - 将所有意图分组，确保组间差异尽可能大。
+        - 从每个组中提炼出一个更高级的意图。
+        
+        # Steps
+        1. **Analyze Each Record:** 
+            - Review each record individually, noting the selected text, context, and user's comment.
+        2. **Extract Intent:**
+            - Summarize the user's intent from each record in a concise manner, ensuring each intent description is no longer than 7 words and maintains a uniform style.
+        3. **Group Intents:**
+            - Organize the extracted intents into distinct groups where the differences between the groups are maximized.
+        4. **Derive High-level Intents:**
+            - For each group, derive a higher-level intent that encompasses the primary theme or objective of that group.
+            
+        # Output Format
+            - The output should be structured in JSON format as following {format_instructions}.
+        
+        # Notes
+            - Ensure clarity and brevity in the intent extraction.
+            - Maintain a unified style across all extracted intents and high-level summaries.
+            - Consider edge cases where intents might not initially seem distinct and work to identify distinct themes.
+        
+        ## User:
+        {records}
+        '''
+
         self.model = ChatOpenAI(model=model)
         self.parser = JsonOutputParser(pydantic_object=ExtractIntents)
-        self.prompt_template = ChatPromptTemplate.from_messages(
-            [("system", self.instruction), ('user', "{records}")]
+        self.prompt_template = PromptTemplate(
+            template=self.instruction,
+            input_variables=['records'],
+            partial_variables={"format_instructions": self.parser.get_format_instructions()},
         )
 
         self.chain_direct = (
