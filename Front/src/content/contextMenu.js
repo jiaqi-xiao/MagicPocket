@@ -54,7 +54,7 @@ function showContextMenu(x, y) {
 function saveSelectionWithComment(comment) {
     console.log("Saving selection with comment:", selectedText, comment);
     const paragraph = window.getSelection().anchorNode.parentElement;
-    const data = {
+    let data = {
         type: "text",
         content: selectedText,
         comment: comment,
@@ -62,17 +62,20 @@ function saveSelectionWithComment(comment) {
         url: window.location.href,
         timestamp: new Date().toISOString()
     };
-    console.log("Data to save:", data);
 
-    chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
-        if (chrome.runtime.lastError) {
-            console.error("Error sending message:", chrome.runtime.lastError);
-        } else {
-            console.log("Save response:", response);
-            removeContextMenu();
-            // 清除选中状态
-            window.getSelection().removeAllRanges();
-        }
+    loadExtraContextFromGoogleMaps(data)
+    .then(data => {
+        console.log("Data to save:", data);
+        chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("Error sending message:", chrome.runtime.lastError);
+            } else {
+                console.log("Save response:", response);
+                removeContextMenu();
+                // 清除选中状态
+                window.getSelection().removeAllRanges();
+            }
+        });
     });
 }
 
@@ -96,33 +99,50 @@ function handleGlobalMouseDown(e) {
 function saveSelection() {
     console.log("Saving selection:", selectedText);
     const paragraph = window.getSelection().anchorNode.parentElement;
-    const data = {
+    let data = {
         type: "text",
         content: selectedText,
         paragraph: paragraph.textContent,
         url: window.location.href,
         timestamp: new Date().toISOString()
     };
-    console.log("Data to save:", data);
 
-    chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
-        if (chrome.runtime.lastError) {
-            console.error("Error sending message:", chrome.runtime.lastError);
-        } else {
-            console.log("Save response:", response);
-            removeContextMenu();
-            // 清除选中状态
-            window.getSelection().removeAllRanges();
-            // 输出当前已经保存的记录数
-            chrome.storage.local.get("records", (data) => {
-                if (data && data.records) {
-                    console.log("[After save]Current records number:", data.records.length);
-                } else {
-                    console.log("[After save]No records");
-                }
-            });
-        }
+    loadExtraContextFromGoogleMaps(data) 
+    .then(data => {
+        console.log("Data to save:", data);
+
+        chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("Error sending message:", chrome.runtime.lastError);
+            } else {
+                console.log("Save response:", response);
+                removeContextMenu();
+                // 清除选中状态
+                window.getSelection().removeAllRanges();
+            }
+        });
     });
+
+    // console.log("Data to save:", data);
+
+    // chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
+    //     if (chrome.runtime.lastError) {
+    //         console.error("Error sending message:", chrome.runtime.lastError);
+    //     } else {
+    //         console.log("Save response:", response);
+    //         removeContextMenu();
+    //         // 清除选中状态
+    //         window.getSelection().removeAllRanges();
+    //         // 输出当前已经保存的记录数
+    //         chrome.storage.local.get("records", (data) => {
+    //             if (data && data.records) {
+    //                 console.log("[After save]Current records number:", data.records.length);
+    //             } else {
+    //                 console.log("[After save]No records");
+    //             }
+    //         });
+    //     }
+    // });
 
 }
 
@@ -133,3 +153,103 @@ function removeContextMenu() {
         contextMenu = null;
     }
 }
+
+async function loadExtraContextFromGoogleMaps(data) {
+    const url = window.location.href;
+
+    if (!url.startsWith("https://www.google.com/maps/place/")) {
+        return data;
+    }
+
+    // https://www.google.com/maps/place/Bas%C3%ADlica+de+la+Sagrada+Fam%C3%ADlia/@41.3909016,2.1316527,14z/data=!4m6!3m5!1s0x12a4a2dcd83dfb93:0x9bd8aac21bc3c950!8m2!3d41.4036299!4d2.1743558!16zL20vMGc2bjM?entry=ttu&g_ep=EgoyMDI0MTAwOS4wIKXMDSoASAFQAw%3D%3D
+    const textQuery = decodeURIComponent(url.match(/place\/([^/@]+)/)?.[1] || '');
+    const [latitude, longitude] = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/i)?.slice(1).map(Number) || [null, null];
+
+    // console.log("textQuery: ", textQuery);
+    // console.log("latitude: ", latitude);
+    // console.log("longitude: ", longitude);  
+
+    const res = await placeInfoWithLocation(textQuery, latitude, longitude)
+
+    if (res) {
+        data.extraGMLocationContext = {
+            PlaceDisplayName: res.PlaceDisplayName,
+            PlaceFormattedAddress: res.PlaceFormattedAddress,
+            PlaceID: res.PlaceID,
+            PlaceEditorialSummary: res.PlaceEditorialSummary
+        };
+    }   
+    return data;
+
+}
+
+async function placeInfoWithLocation(textQuery, longitude, latitude) {
+    try {
+        const apiKey = await getGoogleAPIKey();
+        // console.log("Google API Key: ", apiKey);
+
+        let res = {};
+        
+        if (!apiKey) {
+            throw new Error("Google API Key 未设置");
+        }
+        // DOC: https://developers.google.com/maps/documentation/places/web-service/text-search
+        const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': apiKey,
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id,places.editorialSummary'
+                // 'X-Goog-FieldMask': '*'
+            },
+            body: JSON.stringify({
+                textQuery: textQuery,
+                openNow: true,
+                pageSize: 1,
+                languageCode: 'en',
+                locationBias: {
+                    circle: {
+                        center: {latitude: latitude, longitude: longitude},
+                        radius: 500.0
+                    }
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Google Maps API Return Info:", data);
+
+        if (data.places && data.places.length > 0) {
+            // data.places.forEach((place, index) => {
+            //     console.log(`地点 ${index + 1}:`);
+            //     console.log(`名称: ${place.displayName}`);
+            //     console.log(`地址: ${place.formattedAddress}`);
+            //     console.log("ID: ", place.id);
+            //     console.log('---');
+            // });
+
+            res.PlaceDisplayName = data.places[0].displayName;
+            res.PlaceFormattedAddress = data.places[0].formattedAddress;
+            res.PlaceID = data.places[0].placeID;
+            res.PlaceEditorialSummary = data.places[0].editorialSummary.text;
+
+            console.log(`Name: ${res.PlaceDisplayName}`);
+            console.log(`Address: ${res.PlaceFormattedAddress}`);
+            console.log("PlaceID: ", res.PlaceID);
+            console.log("PlaceEditorialSummary: ", res.PlaceEditorialSummary);
+            console.log('---');
+
+        } else {
+            console.log("没有找到符合条件的地点");
+        }
+        return res;
+    } catch (error) {
+        console.error("获取地点信息时出错:", error);
+        return null;
+    }
+}
+

@@ -35,5 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("recordComment").textContent = record.comment || "--";
         document.getElementById("recordUrl").textContent = record.url;
         document.getElementById("recordId").textContent = record.id;
+        document.getElementById("placeFormattedAddress").textContent = record.extraGMLocationContext.PlaceFormattedAddress || "--";
+        document.getElementById("placeEditorialSummary").textContent = record.extraGMLocationContext.PlaceEditorialSummary || "--";
     }
 });
