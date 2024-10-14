@@ -139,8 +139,7 @@ async def embed_all_records(recordsList: RecordsList):
 import clusterGenerator
 import extractModule
 
-extractModel = extractModule.ExtractModel()
-
+extractModelCluster = extractModule.ExtractModelCluster()
 
 @app.post("/cluster/")
 async def hierarcy_cluster(
@@ -157,7 +156,7 @@ async def hierarcy_cluster(
         recordsCluster = "**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
             root[0]["content"], root[0]["context"], root[0]["comment"]
         )
-        intent = await extractModel.invoke(recordsCluster, mode="l")
+        intent = await extractModelCluster.invoke(recordsCluster)
         return [
             {
                 "id": 0,
@@ -183,8 +182,7 @@ async def hierarcy_cluster(
                 for index in c
             ]
         )
-        intent = await extractModel.invoke(recordsCluster, mode="l")
-        print(intent)
+        intent = await extractModelCluster.invoke(recordsCluster)
         intent_v = model.embedding({"intent": intent}, ["intent"])
         newRoot.append(
             {
@@ -213,10 +211,10 @@ async def hierarcy_cluster(
             if len(c) == 1:
                 newRoot.append(root[c[0]])
             else:
-                intentsCluster = "- 低级意图: {}".format(
+                intentsCluster = "- 意图: {}".format(
                     [root[index]["intent"] for index in c]
                 )
-                intent = await extractModel.invoke(intentsCluster, mode="h")
+                intent = await extractModelCluster.invoke(intentsCluster)
                 intent_v = model.embedding({"intent": intent}, ["intent"])
                 newRoot.append(
                     {
@@ -239,3 +237,26 @@ async def hierarcy_cluster(
         count += len(root)
 
     return [{key: node[key] for key in node if key != "vector"} for node in root]
+
+extractModelDirect = extractModule.ExtractModelDirect()
+
+@app.post("/extract_direct/")
+async def direct_extract_intent(
+    recordsList: RecordsList,
+):
+    root = [record.model_dump() for record in recordsList.data]
+
+    recordsCluster = "\n\n".join(
+            [
+                "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+                    index + 1,
+                    root[index]["content"],
+                    root[index]["content"],
+                    root[index]["comment"],
+                )
+                for index in range(len(root))
+            ]
+        )
+    
+    intent = await extractModelDirect.invoke(recordsCluster)
+    return intent
