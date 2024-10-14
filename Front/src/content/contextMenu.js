@@ -232,7 +232,7 @@ async function placeInfoWithLocation(textQuery, longitude, latitude) {
             //     console.log('---');
             // });
 
-            res.PlaceDisplayName = data.places[0].displayName;
+            res.PlaceDisplayName = data.places[0].displayName.text;
             res.PlaceFormattedAddress = data.places[0].formattedAddress;
             res.PlaceID = data.places[0].placeID;
             res.PlaceEditorialSummary = data.places[0].editorialSummary.text;

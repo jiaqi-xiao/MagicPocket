@@ -308,6 +308,9 @@ function fetchIntentDataFromBackend() {
             getAllRecords()
                 .then(records => {
                     const formattedData = { data: records };
+                    // reorganize the data to fit the backend requirements
+                    compressExtraToContext(formattedData);
+
                     console.log("Data send to /extract/direct:", JSON.stringify(formattedData));
                     return fetch(`${backendDomain}/extract/direct`, {
                         method: 'POST',
@@ -504,11 +507,28 @@ function getAllRecords() {
                     id: record.id,
                     comment: record.comment || null, // 确保 comment 可以为 null
                     context: record.paragraph,
-                    content: record.content
+                    content: record.content,
+                    extraGMLocationContext: record.extraGMLocationContext
                 }
             });
 
             resolve(formattedRecords);
         });
+    });
+}
+
+function compressExtraToContext(formattedData) {
+    formattedData.data.forEach(record => {
+        // combine record.extraGMLocationContext and record.context in a formatted string with markdown format
+        let newContext = "";
+        if (record.extraGMLocationContext) {
+            Object.entries(record.extraGMLocationContext).forEach(([key, item]) => {
+                newContext += `## ${key} \n ${item} \n`;
+            });
+        }
+        if (record.context) {
+            newContext += `## Context \n ${record.context} \n`;
+        }
+        record.context = newContext;
     });
 }
