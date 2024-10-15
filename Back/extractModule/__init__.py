@@ -38,7 +38,7 @@ class ExtractModelDirect:
     def __init__(self):
         self.instruction = '''
         ## System:
-        根据提供的record列表，提取并总结用户的意图。  
+        根据提供的record列表，提取并总结用户用户在旅游场景下产生的意图。  
             - 提取每个record中的意图，保证表述风格统一，每个意图不超过7个词。
             - 将所有意图分组，确保组间差异尽可能大。
             - 从每个组中提炼出一个更高级的意图。
@@ -97,13 +97,13 @@ class ExtractModelCluster:
         # self.instruction_high_intent_extraction_cn = '从提供的多个低级意图中提炼出一个高级意图，限制在7个词以内。\n\n# Steps\n\n1. 理解和分析所有提供的低级意图。\n2. 识别这些低级意图之间的共同主题或目的。\n3. 将这些共有的主题或目的浓缩成一个高级意图。\n4. 确保高级意图不超过7个词。\n\n# Output Format\n\n  生成的意图应以不超过7个词的短语形式呈现，仅输出高级意图文本\n\n# Examples\n\n- 低级意图: ["购买书籍", "在线订购", "寻找最佳价格"]\n  - 高级意图: "在线购买书籍"\n\n- 低级意图: ["预约医生", "查找最近诊所", "拨打医生电话"]\n  - 高级意图: "安排医生预约"\n\n# Notes\n\n- 高级意图应尽可能涵盖所有提供的低级意图。\n- 语言应简练且易于理解。'
         self.instruction = '''
         ## System:
-        根据用户提供的数据（record列表或intent列表），提取和总结用户意图或对意图进行分组和提炼。
+        根据用户提供的数据（record列表或intent列表），提取和总结用户在旅游场景下产生的意图或对意图进行分组和提炼。
             - 当用户提供record列表时，每个record包含选中文本、上下文及注释，所有records语义相似。
             - 从这些records中提取和总结一个且仅有一个意图，这个意图不超过7个词。
             - 当用户提供intent列表时，提炼出一个更高级别的意图。
         
         # Definition of Intention
-            - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process [14, 70] of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
+            - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
         
         # Steps
             1. **理解意图定义**
