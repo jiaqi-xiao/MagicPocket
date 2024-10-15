@@ -323,13 +323,12 @@ function fetchIntentDataFromBackend() {
                 })
                 .then(response => {
                     if (!response.ok) {
-                        console.warn('Embed_all API request failed');
-                        return response.json();
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     return response.json();
                 })
                 .then(intentData => {
-                    console.log("Received from /cluster:", JSON.stringify(intentData));
+                    console.log("Received from /extract/direct:", JSON.stringify(intentData));
                     return processClusterData(intentData);
                 })
                 .catch(error => {
@@ -351,7 +350,7 @@ function fetchClusterIntentDataFromBackend() {
     }
     
     isAnalysisIntent = true;
-    console.log("fetchIntentDataFromBackend isAnalysisIntent", isAnalysisIntent);
+    console.log("fetchClusterIntentDataFromBackend isAnalysisIntent", isAnalysisIntent);
 
     return new Promise((resolve, reject) => {
         setTimeout(() => {
