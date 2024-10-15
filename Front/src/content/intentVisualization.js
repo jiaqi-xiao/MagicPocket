@@ -308,6 +308,55 @@ function fetchIntentDataFromBackend() {
             getAllRecords()
                 .then(records => {
                     const formattedData = { data: records };
+                    // reorganize the data to fit the backend requirements
+                    compressExtraToContext(formattedData);
+
+                    console.log("Data send to /extract/direct:", JSON.stringify(formattedData));
+                    return fetch(`${backendDomain}/extract/direct`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formattedData),
+                        mode: 'cors' // 添加这一行
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(intentData => {
+                    console.log("Received from /extract/direct:", JSON.stringify(intentData));
+                    return processClusterData(intentData);
+                })
+                .catch(error => {
+                    console.warn('Failed to fetch intent data, using fallback test data', error);
+                    return [getFallbackData()];
+                })
+                .then(resolve)
+                .finally(() => {
+                    isAnalysisIntent = false;
+                });
+        }, 0);
+    });
+}
+
+// 
+function fetchClusterIntentDataFromBackend() {
+    if (isAnalysisIntent) {
+        return;
+    }
+    
+    isAnalysisIntent = true;
+    console.log("fetchClusterIntentDataFromBackend isAnalysisIntent", isAnalysisIntent);
+
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            getAllRecords()
+                .then(records => {
+                    const formattedData = { data: records };
                     console.log("Data send to /embed_all:", JSON.stringify(formattedData));
                     return fetch(`${backendDomain}/embed_all`, {
                         method: 'POST',
@@ -457,11 +506,28 @@ function getAllRecords() {
                     id: record.id,
                     comment: record.comment || null, // 确保 comment 可以为 null
                     context: record.paragraph,
-                    content: record.content
+                    content: record.content,
+                    extraGMLocationContext: record.extraGMLocationContext
                 }
             });
 
             resolve(formattedRecords);
         });
+    });
+}
+
+function compressExtraToContext(formattedData) {
+    formattedData.data.forEach(record => {
+        // combine record.extraGMLocationContext and record.context in a formatted string with markdown format
+        let newContext = "";
+        if (record.extraGMLocationContext) {
+            Object.entries(record.extraGMLocationContext).forEach(([key, item]) => {
+                newContext += `## ${key} \n ${item} \n`;
+            });
+        }
+        if (record.context) {
+            newContext += `## Context \n ${record.context} \n`;
+        }
+        record.context = newContext;
     });
 }

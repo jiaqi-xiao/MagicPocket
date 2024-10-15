@@ -32,4 +32,17 @@ function deleteRecord(index) {
     });
 }
 
+function getGoogleAPIKey() {
+    return new Promise((resolve) => {
+        chrome.storage.sync.get('googleApiKey', (data) => {
+            if (data.googleApiKey) {
+                resolve(data.googleApiKey);
+            } else {
+                console.log('Google API Key is not set');
+                resolve(null);
+            }
+        });
+    });
+}
+
 // export { saveData, getRecords, deleteRecord };

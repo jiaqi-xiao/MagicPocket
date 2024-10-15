@@ -240,7 +240,7 @@ async def direct_extract_intent(
                 "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
                     index + 1,
                     root[index]["content"],
-                    root[index]["content"],
+                    root[index]["context"],
                     root[index]["comment"],
                 )
                 for index in range(len(root))
