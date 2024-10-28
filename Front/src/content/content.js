@@ -20,3 +20,9 @@ if (document.readyState === 'loading') {
 } else {
     initializeExtension();
 }
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "startScreenshot") {
+        initScreenshot();
+    }
+});

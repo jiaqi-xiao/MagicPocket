@@ -68,21 +68,71 @@ function showRecordedItems() {
 
         console.log("records numbers: ", records.length);
 
-        const renderRecords = () => {
+        const renderRecords = async () => {
             scrollArea.innerHTML = "";
             if (records.length === 0) {
                 scrollArea.innerHTML = "<p>No records</p>";
             } else {
-                records.forEach((record, index) => {
+                await Promise.all(records.map(async (record, index) => {  // 这里也需要 async
                     const item = document.createElement("div");
                     item.className = "record-item";
+                    
+                    // 根据记录类型生成不同的内容显示
+                    let contentHtml = '';
+                    if (record.type === "text") {
+                        contentHtml = `<p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>`;
+                    } else if (record.type === "image") {
+                        const imageData = await imageStorage.getImage(record.content);
+                        // 创建一个临时图片对象来获取实际尺寸
+                        const tempImg = new Image();
+                        tempImg.src = imageData;
+                        await new Promise(resolve => tempImg.onload = resolve);
+                        
+                        // 计算缩放比例，保持原始宽高比
+                        const maxWidth = 200;  // 设置最大宽度
+                        const maxHeight = 150; // 设置最大高度
+                        let width = tempImg.width;
+                        let height = tempImg.height;
+
+                    //     contentHtml = `
+                    //     <div class="image-preview" style="display: flex; justify-content: center; align-items: center; padding: 5px;">
+                    //         <img src="${imageData}" alt="Screenshot" 
+                    //             style="width: ${width}px; height: ${height}px; object-fit: contain; border: 1px solid #eee;">
+                    //     </div>
+                    // `;
+                        
+                        if (width <= maxWidth && height <= maxHeight) {
+                            // 如果图片本身较小，直接使用原始尺寸
+                            console.log("image small");
+                            contentHtml = `
+                                <div class="image-preview" style="display: flex; justify-content: center; align-items: center; padding: 5px;">
+                                    <img src="${imageData}" alt="Screenshot" 
+                                        style="width: ${width}px; height: ${height}px; object-fit: contain; border: 1px solid #eee;">
+                                </div>
+                            `;
+                        } else {
+                            // 如果图片较大，则等比例缩放
+                            console.log("image large");
+                            const ratio = Math.min(maxWidth / width, maxHeight / height);
+                            width *= ratio;
+                            height *= ratio;
+                            contentHtml = `
+                                <div class="image-preview" style="display: flex; justify-content: center; align-items: center; padding: 5px;">
+                                    <img src="${imageData}" alt="Screenshot" 
+                                        style="width: ${width}px; height: ${height}px; object-fit: contain; border: 1px solid #eee;">
+                                </div>
+                            `;
+                        }
+                    }
+
                     item.innerHTML = `
                         <strong>${record.type === "text" ? "Text" : "Image"}</strong>
-                        <p>${record.content.substring(0, 50)}${record.content.length > 50 ? "..." : ""}</p>
+                        ${contentHtml}
                         ${record.comment ? `<p class="comment" style="font-size: 0.9em; color: #666;">Comment: ${record.comment}</p>` : ''}
                         <small>${new Date(record.timestamp).toLocaleString()}</small>
                         <button class="delete-btn" data-index="${index}">Delete</button>
                     `;
+                    
                     item.addEventListener("click", (e) => {
                         if (!e.target.classList.contains("delete-btn")) {
                             const url = chrome.runtime.getURL(`records.html?index=${index}`);
@@ -90,7 +140,7 @@ function showRecordedItems() {
                         }
                     });
                     scrollArea.appendChild(item);
-                });
+                }));
 
                 // 清空按钮区域
                 buttonArea.innerHTML = "";

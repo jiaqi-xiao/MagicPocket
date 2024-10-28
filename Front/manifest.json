@@ -6,7 +6,9 @@
   "permissions": [
     "activeTab",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "desktopCapture",
+    "unlimitedStorage"
   ],
   "background": {
     "service_worker": "src/background/background.js"
@@ -17,13 +19,15 @@
         "<all_urls>"
       ],
       "js": [
+        "lib/html2canvas.min.js",
         "src/utils/storage.js",
+        "src/utils/imageStorage.js",
         "src/content/contextMenu.js",
         "src/content/floatingWindow.js",
+        "src/content/screenshot.js",
         "src/content/intentVisualization.js",
         "src/content/content.js"
       ],
-      "type": "module",
       "css": [
         "styles/styles.css"
       ]
@@ -34,7 +38,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["records.html", "records.js", "start_generation.html"],
+      "resources": [
+        "records.html", 
+        "records.js", 
+        "src/utils/imageStorage.js",
+        "start_generation.html"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
