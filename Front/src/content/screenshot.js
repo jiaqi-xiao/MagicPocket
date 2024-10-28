@@ -1,3 +1,4 @@
+// Global state variables
 let isCapturing = false;
 let startX, startY;
 let screenshotCanvas = null;
@@ -5,18 +6,13 @@ let ctx = null;
 let overlayDiv = null;
 let annotationLayer = null;
 let isDrawing = false;
-let drawingMode = 'rectangle'; // 'rectangle' 或 'line'
-// 添加选区信息的全局变量
+let drawingMode = 'rectangle'; // 'rectangle' or 'line'
 let selectionBounds = null;
-// 添加新的变量来存储选区矩形
 let selectionRect = null;
-// 添加新的状态变量
-let mode = 'select'; // 'select' 或 'annotate'
-let annotations = []; // 存储所有标注
-let currentAnnotation = null; // 当前正在绘制的标注
-// 在全局变量区域添加
+let mode = 'select'; // 'select' or 'annotate'
+let annotations = []; // Store all annotations
+let currentAnnotation = null;
 let originalOverflow = null;
-// 添加新的全局变量
 let wheelHandler = null;
 let touchHandler = null;
 
@@ -508,7 +504,7 @@ function updateToolbarState() {
     const buttons = document.querySelectorAll('.screenshot-tool-button');
     buttons.forEach(button => {
         // 根据当前模式更新按钮状态
-        if (mode === 'select' && ['矩形', '直线'].includes(button.textContent)) {
+        if (mode === 'select' && ['Rectangle', 'Line'].includes(button.textContent)) {
             button.disabled = true;
             button.style.opacity = '0.5';
         } else {
