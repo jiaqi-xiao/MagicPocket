@@ -71,11 +71,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-document.getElementById("clearAllBtn").addEventListener("click", () => {
-    chrome.storage.local.set({ records: [] }, () => {
-        displayRecords();
-    });
-});
+// document.getElementById("clearAllBtn").addEventListener("click", () => {
+//     chrome.storage.local.set({ records: [] }, () => {
+//         displayRecords();
+//     });
+// });
 
 document.getElementById("screenshotBtn").addEventListener("click", () => {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
