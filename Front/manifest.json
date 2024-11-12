@@ -26,10 +26,13 @@
         "src/content/floatingWindow.js",
         "src/content/screenshot.js",
         "src/content/intentVisualization.js",
-        "src/content/content.js"
+        "src/content/networkVisualization.js",
+        "src/content/content.js",
+        "lib/vis-network.js"
       ],
       "css": [
-        "styles/styles.css"
+        "styles/styles.css",
+        "lib/vis-network.css"
       ]
     }
   ],
@@ -42,7 +45,11 @@
         "records.html", 
         "records.js", 
         "src/utils/imageStorage.js",
-        "start_generation.html"
+        "start_generation.html",
+        "lib/vis-network.js",
+        "lib/vis-network.css",
+        "lib/*.js",
+        "lib/*.css"
       ],
       "matches": ["<all_urls>"]
     }

@@ -1,3 +1,5 @@
+let visJsLoaded = false;
+
 function createFloatingWindow() {
     console.log("Creating floating window");
     floatingWindow = document.createElement("div");
@@ -62,11 +64,46 @@ function showRecordedItems() {
     recordsContainer.appendChild(scrollArea);
     recordsContainer.appendChild(buttonArea);
 
+    // 在 buttonArea 后添加第二行按钮区域
+    const buttonArea2 = document.createElement("div");
+    buttonArea2.style.padding = "10px";
+    buttonArea2.style.borderTop = "1px solid #ccc";
+    buttonArea2.style.display = "flex";
+    buttonArea2.style.justifyContent = "space-between";
+
+    recordsContainer.appendChild(buttonArea2);
+
+    // 在渲染记录的部分，添加新按钮
+    const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
+    showNetworkBtn.style.backgroundColor = "#81ecec"; // 使用与网络节点相同的颜色
+    showNetworkBtn.style.color = "#333";
+    showNetworkBtn.style.border = "1px solid #ccc";
+    showNetworkBtn.style.borderRadius = "4px";
+    showNetworkBtn.style.padding = "8px 12px";
+    showNetworkBtn.style.cursor = "pointer";
+    buttonArea2.appendChild(showNetworkBtn);
+
+    showNetworkBtn.addEventListener("mouseover", () => {
+        showNetworkBtn.style.backgroundColor = "#74c8c8"; // 悬停时稍微暗一点的颜色
+    });
+
+    showNetworkBtn.addEventListener("mouseout", () => {
+        showNetworkBtn.style.backgroundColor = "#81ecec"; // 恢复原来的颜色
+    });
+
     // 获取记录并显示
     chrome.storage.local.get("records", (data) => {
         const records = data.records || [];
 
         console.log("records numbers: ", records.length);
+
+        showNetworkBtn.addEventListener("click", async () => {
+            if (!visJsLoaded) {
+                await loadVisJs();
+                visJsLoaded = true;
+            }
+            showNetworkVisualization(records);
+        });
 
         const renderRecords = async () => {
             scrollArea.innerHTML = "";
@@ -225,4 +262,28 @@ function createButton(text, id) {
     button.id = id;
     button.textContent = text;
     return button;
+}
+
+async function loadVisJs() {
+    return new Promise((resolve, reject) => {
+        // 加载 CSS
+        const cssLink = document.createElement('link');
+        cssLink.rel = 'stylesheet';
+        cssLink.type = 'text/css';
+        cssLink.href = chrome.runtime.getURL('lib/vis-network.css');
+        document.head.appendChild(cssLink);
+
+        // 加载 JS
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('lib/vis-network.js');
+        script.onload = () => {
+            console.log('Vis.js loaded successfully');
+            resolve();
+        };
+        script.onerror = (error) => {
+            console.error('Error loading Vis.js:', error);
+            reject(error);
+        };
+        document.head.appendChild(script);
+    });
 }

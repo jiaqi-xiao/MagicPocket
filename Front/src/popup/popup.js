@@ -53,14 +53,14 @@ function deleteRecord(index) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    displayRecords();
+    // displayRecords();
 
-    document.getElementById("recordsList").addEventListener("click", (e) => {
-        if (e.target.classList.contains("delete-btn")) {
-            const index = parseInt(e.target.getAttribute("data-index"));
-            deleteRecord(index);
-        }
-    });
+    // document.getElementById("recordsList").addEventListener("click", (e) => {
+    //     if (e.target.classList.contains("delete-btn")) {
+    //         const index = parseInt(e.target.getAttribute("data-index"));
+    //         deleteRecord(index);
+    //     }
+    // });
 });
 
 // Listen for updates from the background script
