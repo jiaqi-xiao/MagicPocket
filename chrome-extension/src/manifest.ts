@@ -35,7 +35,13 @@ export async function getManifest(): Promise<Manifest.WebExtensionManifest> {
     },
     permissions: ['contextMenus', 'storage'],
     optional_permissions: ['tabs'],
-    content_security_policy: {}
+    content_security_policy: {},
+    web_accessible_resources: [
+      {
+        resources: ['dist/contentStyle.css', 'assets/*'],
+        matches: ['<all_urls>']
+      }
+    ]
   }
 
   if (IS_DEV) {

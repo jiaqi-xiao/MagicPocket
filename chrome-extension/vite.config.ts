@@ -4,6 +4,7 @@ import Vue from '@vitejs/plugin-vue'
 import Icons from 'unplugin-icons/vite'
 import IconsResolver from 'unplugin-icons/resolver'
 import Components from 'unplugin-vue-components/vite'
+import crx from 'vite-plugin-crx-mv3'
 
 const port = parseInt(process.env.PORT || '') || 3309
 const r = (...args: string[]) => resolve(__dirname, ...args)
@@ -38,7 +39,9 @@ export default defineConfig(({ command }) => {
     },
     plugins: [
       Vue(),
-
+      crx({
+        manifest: './manifest.json'
+      }),
       Components({
         dirs: [r('src/components')],
         // auto import icons

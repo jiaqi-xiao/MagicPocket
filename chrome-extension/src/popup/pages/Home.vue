@@ -1,7 +1,7 @@
 <template>
   <div class="p-4">
     <!-- //  Put your own content here -->
-    <h1 class="text-base font-semibold text-slate-500">V-Extension</h1>
+    <h1 class="text-base font-semibold text-slate-500">Magic Pocket</h1>
     <p class="mt-1">A modern chrome extension starter</p>
     <hr class="my-2" />
     <p>Features</p>

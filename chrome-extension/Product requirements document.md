@@ -122,11 +122,6 @@ This Chrome Extension is designed to enhance web browsing by analyzing user desi
    - Analysis completion: < 2s
    - Visualization rendering: < 1s
 
-2. **Resource Usage**
-   - Maximum memory usage: 256MB
-   - CPU usage: < 10% during idle
-   - Storage: < 50MB local storage
-
 ## 5. Security Requirements
 1. **Data Protection**
    - End-to-end encryption for user data

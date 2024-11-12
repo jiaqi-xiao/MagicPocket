@@ -1,7 +1,7 @@
 {
-  "name": "v-extension",
-  "displayName": "VExtension",
-  "description": "Vue 3, Vite and Tailwind css Extension starter",
+  "name": "magic-pocket",
+  "displayName": "Magic Pocket",
+  "description": "Vue 3, Vite and Tailwind css Extension",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -46,6 +46,7 @@
     "unplugin-icons": "^0.15.3",
     "unplugin-vue-components": "^0.24.1",
     "vite": "^4.2.1",
+    "vite-plugin-crx-mv3": "^0.1.8",
     "vue": "^3.2.47",
     "vue-demi": "^0.13.11",
     "vue-global-api": "^0.4.1",
