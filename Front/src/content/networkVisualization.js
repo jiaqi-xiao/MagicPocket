@@ -77,71 +77,193 @@ function showNetworkVisualization(records) {
             const nodes = new vis.DataSet();
             const edges = new vis.DataSet();
 
-            // 添加中心节点
+            // 节点状态管理
+            const nodeStates = new Map(); // 存储节点状态，true 为确认，false 为待定
+
+            // 添加中心节点（默认确认状态）
             nodes.add({
                 id: 'center',
                 label: 'Main Goal',
                 color: '#ff7675',
                 shape: 'dot',
-                size: 20
+                size: 20,
+                opacity: 1
             });
+            nodeStates.set('center', true);
 
-            // 添加两层中间节点
+            // 添加两层中间节点（默认待定状态）
             const middleLayer1 = ['Planning', 'Execution', 'Feedback'];
             const middleLayer2 = ['Task Analysis', 'Resource Prep', 'Progress', 'Quality Check'];
 
             // 添加第一层节点
             middleLayer1.forEach((label, index) => {
+                const id = `l1_${index}`;
                 nodes.add({
-                    id: `l1_${index}`,
+                    id: id,
                     label: label,
                     color: { background: 'rgba(116, 185, 255, 0.5)' },
                     shape: 'dot',
-                    size: 15
+                    size: 15,
+                    opacity: 0.3
                 });
+                nodeStates.set(id, false);
+                
                 edges.add({
+                    id: `e_center_${id}`,
                     from: 'center',
-                    to: `l1_${index}`,
+                    to: id,
                     dashes: true
                 });
             });
 
             // 添加第二层节点
             middleLayer2.forEach((label, index) => {
+                const id = `l2_${index}`;
+                const fromId = `l1_${Math.floor(index/2)}`;
                 nodes.add({
-                    id: `l2_${index}`,
+                    id: id,
                     label: label,
                     color: { background: 'rgba(162, 155, 254, 0.5)' },
                     shape: 'dot',
-                    size: 12
+                    size: 12,
+                    opacity: 0.3
                 });
+                nodeStates.set(id, false);
+                
                 edges.add({
-                    from: `l1_${Math.floor(index/2)}`,
-                    to: `l2_${index}`,
+                    id: `e_${fromId}_${id}`,
+                    from: fromId,
+                    to: id,
                     dashes: true
                 });
             });
 
             // 添加记录节点
             records.forEach((record, index) => {
+                const id = `record_${index}`;
                 const content = record.type === 'text' ? 
                     record.content.substring(0, 5) + '...' : 
-                    '图片' + (index + 1);
+                    'Image ' + (index + 1);
+                const fromId = `l2_${index % 4}`;
                 
                 nodes.add({
-                    id: `record_${index}`,
+                    id: id,
                     label: content,
                     color: '#81ecec',
                     shape: 'dot',
-                    size: 10
+                    size: 10,
+                    opacity: 0.3
                 });
+                nodeStates.set(id, false);
                 
                 edges.add({
-                    from: `l2_${index % 4}`,
-                    to: `record_${index}`,
+                    id: `e_${fromId}_${id}`,
+                    from: fromId,
+                    to: id,
                     dashes: true
                 });
             });
+
+            // 更新节点状态的函数
+            function updateNodeState(nodeId, confirmed) {
+                nodeStates.set(nodeId, confirmed);
+                const node = nodes.get(nodeId);
+                nodes.update({
+                    id: nodeId,
+                    opacity: confirmed ? 1 : 0.3
+                });
+
+                // 更新相关边的样式
+                edges.forEach(edge => {
+                    if (edge.from === nodeId || edge.to === nodeId) {
+                        const fromConfirmed = nodeStates.get(edge.from);
+                        const toConfirmed = nodeStates.get(edge.to);
+                        edges.update({
+                            id: edge.id,
+                            dashes: !(fromConfirmed && toConfirmed)
+                        });
+                    }
+                });
+            }
+
+            // 将 createContextMenu 改名为 createNodeMenu，并调整菜单样式
+            function createNodeMenu(nodeId, x, y) {
+                const menu = document.createElement('div');
+                menu.id = 'nodeMenu';
+                menu.style.position = 'absolute';
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+                menu.style.backgroundColor = 'white';
+                menu.style.border = '1px solid #ccc';
+                menu.style.borderRadius = '4px';
+                menu.style.padding = '5px';
+                menu.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                menu.style.zIndex = '10001';
+
+                const toggleBtn = document.createElement('div');
+                toggleBtn.textContent = nodeStates.get(nodeId) ? 'Set as Pending' : 'Set as Confirmed';
+                toggleBtn.style.padding = '5px 10px';
+                toggleBtn.style.cursor = 'pointer';
+                toggleBtn.style.color = '#2d3436';  // 深色文字，确保可读性
+                toggleBtn.style.fontWeight = '500';  // 稍微加粗一点
+                toggleBtn.style.borderBottom = '1px solid #eee';  // 添加分隔线
+
+                const deleteBtn = document.createElement('div');
+                deleteBtn.textContent = 'Delete Node';
+                deleteBtn.style.padding = '5px 10px';
+                deleteBtn.style.cursor = 'pointer';
+                deleteBtn.style.color = '#e74c3c';  // 使用略微柔和的红色
+
+                toggleBtn.addEventListener('mouseover', () => {
+                    toggleBtn.style.backgroundColor = '#f0f0f0';
+                    toggleBtn.style.color = '#0984e3';  // 悬停时变为蓝色
+                });
+                toggleBtn.addEventListener('mouseout', () => {
+                    toggleBtn.style.backgroundColor = 'white';
+                    toggleBtn.style.color = '#2d3436';  // 恢复原色
+                });
+
+                deleteBtn.addEventListener('mouseover', () => {
+                    deleteBtn.style.backgroundColor = '#f0f0f0';
+                    deleteBtn.style.color = '#d63031';  // 悬停时变为深红色
+                });
+                deleteBtn.addEventListener('mouseout', () => {
+                    deleteBtn.style.backgroundColor = 'white';
+                    deleteBtn.style.color = '#e74c3c';  // 恢复原色
+                });
+
+                toggleBtn.onclick = () => {
+                    const newState = !nodeStates.get(nodeId);
+                    updateNodeState(nodeId, newState);
+                    menu.remove();
+                };
+
+                deleteBtn.onclick = () => {
+                    if (nodeId !== 'center') {  // 防止删除中心节点
+                        nodes.remove(nodeId);
+                        // 删除相关的边
+                        edges.forEach(edge => {
+                            if (edge.from === nodeId || edge.to === nodeId) {
+                                edges.remove(edge.id);
+                            }
+                        });
+                    }
+                    menu.remove();
+                };
+
+                menu.appendChild(toggleBtn);
+                menu.appendChild(deleteBtn);
+                document.body.appendChild(menu);
+
+                // 点击其他地方关闭菜单
+                const closeMenu = (e) => {
+                    if (!menu.contains(e.target)) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                };
+                setTimeout(() => document.addEventListener('click', closeMenu), 0);
+            }
 
             // 配置网络图选项
             const options = {
@@ -157,11 +279,25 @@ function showNetworkVisualization(records) {
                     hierarchical: {
                         enabled: false
                     }
+                },
+                interaction: {
+                    hover: true
                 }
             };
 
             // 创建网络图
             const network = new vis.Network(visContainer, {nodes, edges}, options);
+
+            // 修改点击事件中的函数名
+            network.on('click', function(params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const canvasPosition = params.pointer.canvas;
+                    const DOMPosition = network.canvasToDOM(canvasPosition);
+                    createNodeMenu(nodeId, DOMPosition.x, DOMPosition.y);  // 改为新的函数名
+                }
+            });
+
         }
     } catch (error) {
         console.error('Error in network visualization:', error);
