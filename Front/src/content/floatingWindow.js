@@ -73,23 +73,9 @@ function showRecordedItems() {
 
     recordsContainer.appendChild(buttonArea2);
 
-    // 在渲染记录的部分，添加新按钮
+    // 简化 showNetworkBtn 的创建
     const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
-    showNetworkBtn.style.backgroundColor = "#81ecec"; // 使用与网络节点相同的颜色
-    showNetworkBtn.style.color = "#333";
-    showNetworkBtn.style.border = "1px solid #ccc";
-    showNetworkBtn.style.borderRadius = "4px";
-    showNetworkBtn.style.padding = "8px 12px";
-    showNetworkBtn.style.cursor = "pointer";
     buttonArea2.appendChild(showNetworkBtn);
-
-    showNetworkBtn.addEventListener("mouseover", () => {
-        showNetworkBtn.style.backgroundColor = "#74c8c8"; // 悬停时稍微暗一点的颜色
-    });
-
-    showNetworkBtn.addEventListener("mouseout", () => {
-        showNetworkBtn.style.backgroundColor = "#81ecec"; // 恢复原来的颜色
-    });
 
     // 获取记录并显示
     chrome.storage.local.get("records", (data) => {

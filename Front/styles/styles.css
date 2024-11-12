@@ -119,7 +119,8 @@
 
 #clearAllBtn,
 #startGenerateBtn,
-#showIntentBtn {
+#showIntentBtn,
+#showNetworkBtn {
     margin: 10px;
     color: white;
     border: none;
@@ -142,11 +143,20 @@
     background-color: #34c759;
 }
 
+#showNetworkBtn {
+    background-color: #81ecec;
+}
+
 #clearAllBtn:hover,
 #startGenerateBtn:hover,
-#showIntentBtn:hover {
+#showIntentBtn:hover,
+#showNetworkBtn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+#showNetworkBtn:hover {
+    background-color: #74c8c8;
 }
 
 .records-manage-container {
