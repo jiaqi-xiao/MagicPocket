@@ -39,7 +39,7 @@ class ExtractModelDirect:
     def __init__(self):
         self.instruction = """
         ## System:
-        根据用户提供的RecordList，提炼并总结用户在指定Scenario下产生的搜索意图。将每个Record分组，确保组间差异尽可能大，组内差异尽可能小。  
+        根据用户提供的List，提炼并总结用户在指定Scenario下产生的搜索意图。将List中每个Element分组，确保组间差异尽可能大，组内差异尽可能小。  
             - 意图的表述应尽量简洁，控制在7个词以内，并保持表述风格的统一。
             - 优先级必须为整数，数字越大代表优先级越低。
             - 确保组别的差异尽可能大，防止误将无关记录归于同一组。
@@ -48,20 +48,20 @@ class ExtractModelDirect:
             - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
         
         # Steps
-        1. **Grouping Records**: 
-            - 根据每条Record的内容，将具有类似含义或相似关联的Record归类到同一组，确保组间的差异尽可能大，组内的差异尽可能小。
+        1. **Grouping Elements**: 
+            - 根据每条Element的内容，将具有类似含义或相似关联的Element归类到同一组，确保组间的差异尽可能大，组内的差异尽可能小。
         2. **Summarizing Intentions for Each Group**: 
             - 为每一组提炼出一个代表该组搜索意图的简洁表述，不超过7个词。
         3. **Prioritizing Group Intentions**:
             - 为每组搜索意图设定优先级，数字越大表示优先级越低，且优先级为整数。
         4. **Structuring Output as a JSON Tree**:
-            - 返回一个JSON对象，其中每个`Scenario`为树的根节点，`意图`为子节点，每个意图下包含所有属于该意图的Record。
+            - 返回一个JSON对象，其中每个`Scenario`为树的根节点，`意图`为子节点，每个意图下包含所有属于该意图的Element。
             
         # Output Format
             - 输出应该是一个JSON格式，结构如下：
                 - `Scenario`: 树的根节点。
                 - 包含一个或多个子节点，每个子节点为一个意图。
-                - 每个意图子节点内包含所有与之对应的Record。
+                - 每个意图子节点内包含所有与之对应的Element，Element的id需与输入时的id保持一致。
                 - {format_instructions}
         
         # Notes
@@ -71,14 +71,14 @@ class ExtractModelDirect:
         
         ## User:
         Scenario: {scenario}
-        RecordList: {records}
+        List: {list}
         """
 
         self.model = ChatOpenAI(model=model)
         self.parser = JsonOutputParser(pydantic_object=Output)
         self.prompt_template = PromptTemplate(
             template=self.instruction,
-            input_variables=["scenario","records"],
+            input_variables=["scenario","list"],
             partial_variables={
                 "format_instructions": self.parser.get_format_instructions()
             },
@@ -86,9 +86,28 @@ class ExtractModelDirect:
 
         self.chain_direct = self.prompt_template | self.model | self.parser
 
-    async def invoke(self, scenario, records):
-        return self.chain_direct.invoke({"scenario": scenario, "records": records})
+    async def invoke(self, scenario, list):
+        return self.chain_direct.invoke({"scenario": scenario, "list": list})
 
+class UpdateModelDirect:
+    def __init__(self):
+        self.instruction = """
+        """
+        
+        self.model = ChatOpenAI(model=model)
+        self.parser = JsonOutputParser(pydantic_object=Output)
+        self.prompt_template = PromptTemplate(
+            template=self.instruction,
+            input_variables=["intentTree","scenario","records"],
+            partial_variables={
+                "format_instructions": self.parser.get_format_instructions()
+            },
+        )
+
+        self.chain_direct = self.prompt_template | self.model | self.parser
+        
+    async def invoke(self, intentTree, scenario, records):
+        return self.chain_direct.invoke({"intentTree": intentTree, "scenario": scenario, "records": records})
 
 # cluster-based
 class ExtractModelCluster:

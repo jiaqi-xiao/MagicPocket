@@ -40,6 +40,7 @@
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, field_validator
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Union
 
 app = FastAPI()
 
@@ -71,6 +72,11 @@ class Record(BaseModel):
     context: str
 
 
+class Intent(BaseModel):
+    id: int
+    text: str
+
+
 class RecordwithVector(BaseModel):
     id: int
     comment: str | None = None
@@ -99,7 +105,22 @@ async def embed_single_record(record: Record):
 
 
 class RecordsList(BaseModel):
-    data: list[Record]
+    data: list[Union[Record, Intent]]
+
+    # 自定义验证器：检查列表中所有元素是否是同一类型
+    @field_validator("data")
+    def check_items_type(cls, v):
+        if not v:
+            return v
+
+        # 获取列表中的第一个元素的类型
+        first_type = type(v[0])
+
+        # 确保所有元素的类型与第一个元素相同
+        if not all(isinstance(item, first_type) for item in v):
+            raise ValueError("All items in the list must be of the same type.")
+
+        return v
 
 
 class RecordsListWithVector(BaseModel):
@@ -241,17 +262,25 @@ async def direct_extract_intent(
 ):
     root = [record.model_dump() for record in recordsList.data]
 
-    recordsCluster = "\n\n".join(
-        [
-            "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
-                index + 1,
-                root[index]["content"],
-                root[index]["context"],
-                root[index]["comment"],
-            )
-            for index in range(len(root))
-        ]
-    )
+    if isinstance(recordsList.data[0], Record):
+        recordsCluster = "\n\n".join(
+            [
+                "id: {}\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+                    index + 1,
+                    root[index]["content"],
+                    root[index]["context"],
+                    root[index]["comment"],
+                )
+                for index in range(len(root))
+            ]
+        )
+    else:
+        recordsCluster = "\n\n".join(
+            [
+                "id: {}\n- intent: {}".format(root[index]["id"], root[index]["text"])
+                for index in range(len(root))
+            ]
+        )
     output = await extractModelDirect.invoke(scenario, recordsCluster)
     return output
 
