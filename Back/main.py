@@ -38,12 +38,11 @@
 }
 """
 from fastapi import FastAPI, Query
-from pydantic import BaseModel, field_validator
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Union
 from langchain_openai import ChatOpenAI
 import os
 from utils import *
+import json
 
 app = FastAPI()
 
@@ -97,7 +96,7 @@ async def embed_single_record(record: Record):
 
 
 @app.post("/embed_all/", response_model=RecordsListWithVector)
-async def embed_all_records(recordsList: RecordsList):
+async def embed_all_records(recordsList: NodesList):
     recordsListWithVector = RecordsListWithVector(data=[])
     for record in recordsList.data:
         # 对记录数据生成嵌入，并获取生成的嵌入向量
@@ -227,7 +226,7 @@ extractModelDirect = extractModule.ExtractModelDirect(model)
 @app.post("/extract/direct/")
 async def direct_extract_intent(
     scenario: str,
-    recordsList: RecordsList,
+    recordsList: NodesList,
 ):
     root = [record.model_dump() for record in recordsList.data]
 
@@ -253,16 +252,17 @@ async def direct_extract_intent(
     output = await extractModelDirect.invoke(scenario, recordsCluster)
     return output
 
-@app.post("/update/direct/")
-async def direct_incremental_update_intent(
-    recordsList: RecordsList,
-    # intentTree: IntentTree
-):
-    # # 重新分组
-    root = [record.model_dump() for record in recordsList.data]
+chain4Grouping = extractModule.Chain4Grouping(model)
 
-    if isinstance(recordsList.data[0], Record):
-        recordsTxt = "\n\n".join(
+@app.post("/group/")
+async def group_nodes(
+    nodesList: NodesList,
+):
+    # 对nodes分组
+    root = [node.model_dump() for node in nodesList.data]
+
+    if isinstance(nodesList.data[0], Record):
+        nodesTxt = "\n\n".join(
             [
                 "id: {}\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
                     index + 1,
@@ -273,15 +273,33 @@ async def direct_incremental_update_intent(
                 for index in range(len(root))
             ]
         )
-    groupsOfRecords = await extractModule.groupingElements(recordsTxt, model) # 直接调LLM，不创建class
-    print(groupsOfRecords)
+    else:
+        nodesTxt = "\n\n".join(
+            [
+                "id: {}\n- intent: {}".format(root[index]["id"], root[index]["intent"])
+                for index in range(len(root))
+            ]
+        )
+    groupsOfNodes = await chain4Grouping.invoke(nodesTxt)
 
+    return groupsOfNodes
+
+chain4Construct = extractModule.Chain4Construct(model)
+
+@app.post("/construct/")
+async def incremental_construct_intent(
+    scenario: str,
+    groupsOfNodes: NodeGroups,
+    intentTree: IntentTree,
+    target_level: int = Query(ge=1)
+):
     # 筛选出immutable的Node
-    # immutableIntentsList = extractModule.filterNodes(intentTree, target_level=1, key='immutable', value=True)
+    immutableIntentsList = extractModule.filterNodes(intentTree, target_level, key='immutable', value=True)
     
     # # 映射group到intent，对多余的组提取新意图
-    # mapGroups2Intents(groupsOfRecords, immutableIntentsList)
-    return groupsOfRecords
+    newIntentTree = await chain4Construct.invoke(scenario, groupsOfNodes.model_dump_json(), json.dumps(immutableIntentsList))
+    return newIntentTree
+    
 
 @app.post("/cluster/")
 # async def direct_extract_intent(

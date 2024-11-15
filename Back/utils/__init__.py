@@ -9,7 +9,7 @@ class RecordRef(BaseModel):
     isLeafNode: bool = True
     
 # Define a Pydantic model for grouped intents
-class Intents(BaseModel):
+class Intent(BaseModel):
     id: int
     isLeafNode: bool = False
     immutable: bool = False
@@ -20,21 +20,19 @@ class Intents(BaseModel):
 
 
 # Define the main Pydantic model
-class Output(BaseModel):
+class IntentTree(BaseModel):
     scenario: str
-    child: list[Intents]
+    child: list[Intent]
+    
+    def __getattr__(self, name):
+        # 如果访问的属性不存在，返回一个空列表
+        return []
     
 class Record(BaseModel):
     id: int
     comment: str | None = None
     content: str
     context: str
-
-
-class Intent(BaseModel):
-    id: int
-    text: str
-
 
 class RecordwithVector(BaseModel):
     id: int
@@ -43,8 +41,11 @@ class RecordwithVector(BaseModel):
     context: str
     vector: list[float]
     
+class RecordsListWithVector(BaseModel):
+    data: list[RecordwithVector]
+    
 
-class RecordsList(BaseModel):
+class NodesList(BaseModel):
     data: list[Union[Record, Intent]]
 
     # 自定义验证器：检查列表中所有元素是否是同一类型
@@ -62,28 +63,5 @@ class RecordsList(BaseModel):
 
         return v
 
-
-class RecordsListWithVector(BaseModel):
-    data: list[RecordwithVector]
-    
-class IntentTree(BaseModel):
-    scenario: str
-    intents: list[str]
-    records: list[Union[str, Record]]
-    # 自定义验证器：检查列表中所有元素是否是同一类型
-    @field_validator("records")
-    def check_items_type(cls, v):
-        if not v:
-            return v
-
-        # 获取列表中的第一个元素的类型
-        first_type = type(v[0])
-
-        # 确保所有元素的类型与第一个元素相同
-        if not all(isinstance(item, first_type) for item in v):
-            raise ValueError("All items in the list must be of the same type.")
-
-        return v
-
-class ElementGroup(BaseModel):
-    item: list[Union[str]]
+class NodeGroups(BaseModel):
+    item: list[Union[Record, Intent]]

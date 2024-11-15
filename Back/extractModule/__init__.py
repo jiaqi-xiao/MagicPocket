@@ -3,7 +3,7 @@ from langchain_core.output_parsers import JsonOutputParser
 import os
 from pydantic import BaseModel
 
-from ..utils import *
+from utils import *
 
 # direct
 class ExtractModelDirect:
@@ -47,7 +47,7 @@ class ExtractModelDirect:
         """
 
         self.model = model
-        self.parser = JsonOutputParser(pydantic_object=Output)
+        self.parser = JsonOutputParser(pydantic_object=IntentTree)
         self.prompt_template = PromptTemplate(
             template=self.instruction,
             input_variables=["scenario", "list"],
@@ -62,27 +62,27 @@ class ExtractModelDirect:
         return self.chain_direct.invoke({"scenario": scenario, "list": list})
 
 
-class UpdateModelDirect:
-    def __init__(self, model):
-        self.instruction = """
-        """
+# class UpdateModelDirect:
+#     def __init__(self, model):
+#         self.instruction = """
+#         """
 
-        self.model = model
-        self.parser = JsonOutputParser(pydantic_object=Output)
-        self.prompt_template = PromptTemplate(
-            template=self.instruction,
-            input_variables=["intentTree", "scenario", "records"],
-            partial_variables={
-                "format_instructions": self.parser.get_format_instructions()
-            },
-        )
+#         self.model = model
+#         self.parser = JsonOutputParser(pydantic_object=Output)
+#         self.prompt_template = PromptTemplate(
+#             template=self.instruction,
+#             input_variables=["intentTree", "scenario", "records"],
+#             partial_variables={
+#                 "format_instructions": self.parser.get_format_instructions()
+#             },
+#         )
 
-        self.chain_direct = self.prompt_template | self.model | self.parser
+#         self.chain_direct = self.prompt_template | self.model | self.parser
 
-    async def invoke(self, intentTree, scenario, records):
-        return self.chain_direct.invoke(
-            {"intentTree": intentTree, "scenario": scenario, "records": records}
-        )
+#     async def invoke(self, intentTree, scenario, records):
+#         return self.chain_direct.invoke(
+#             {"intentTree": intentTree, "scenario": scenario, "records": records}
+#         )
 
 
 # cluster-based
@@ -123,7 +123,7 @@ class ExtractModelCluster:
         """
 
         self.model = model
-        self.parser = JsonOutputParser(pydantic_object=Intents)
+        self.parser = JsonOutputParser(pydantic_object=Intent)
         self.prompt_template = PromptTemplate(
             template=self.instruction,
             input_variables=["records"],
@@ -155,25 +155,75 @@ class ExtractModelCluster:
             self.chain.invoke({"records": records})
         )
 
+class Chain4Grouping:
+    def __init__(self, model):
+        self.instruction = """
+        根据用户提供的List，将List中每个Node分组，确保组间差异尽可能大，组内差异尽可能小。
+        
+        # Output Format
+        - The output should be structured in JSON format as following {format_instructions}.
+        
+        # User:
+        List: {list}
+        """
+        
+        self.model = model
+        self.parser = JsonOutputParser(pydantic_object=NodeGroups)
+        self.prompt_template = PromptTemplate(
+            input_variables=["list"],
+            template=self.instruction,
+            partial_variables={
+                "format_instructions": self.parser.get_format_instructions()
+            },
+        )
 
-async def groupingElements(elementList, model):
-    template = """
-    根据用户提供的List，将List中每个Element分组，确保组间差异尽可能大，组内差异尽可能小。
-    
-    # Output Format
-     - The output should be structured in JSON format as following {format_instructions}.
-    
-    # User:
-    List: {list}
-    """
-    parser = JsonOutputParser(pydantic_object=)
-    prompt_template = PromptTemplate(
-        input_variables=["list"],
-        template=template,
-        partial_variables={
-            "format_instructions": parser.get_format_instructions()
-        },
-    )
+        self.chain = self.prompt_template | self.model | self.parser
+        
+    async def invoke(self, nodeList):
+        return self.chain.invoke({"list": nodeList})
 
-    chain = prompt_template | model | parser
-    return chain.invoke({"list": elementList})
+class Chain4Construct:
+    def __init__(self, model):
+        self.instruction = """
+        根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents。
+            - 每个Intent和Group之间的匹配应尽可能准确。
+            - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
+            - 每个Intent的描述必须简短清晰，最多不超过7个词。
+            - 务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。
+
+        # Steps
+            1. **初步匹配**: 将IntentsList中的现有intent与Groups列表中的每个group进行匹配，找到最相似的组合。
+            2. **分析未匹配的Group**: 如果有多余的group，基于Scenario内容提炼出新的intent以确保每个group都有唯一的intent。
+            3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
+            4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
+
+        匹配IntentsList和Groups中最符合的intent和group进行一一映射。注意intent的数量可能小于group的数量。对于未匹配的group，基于Scenario提炼出其intent。确保所有intent之间差异尽可能大。
+        保持intent统一的简洁表述，不超过7个词。
+        
+        # Output Format
+        - The output should be structured in JSON format as following {format_instructions}.
+        
+        # Notes
+        - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
+        - 请注意每个生成的intent要有显著区别，避免重复以及同义描述。
+        - 生成的intent节点的immutable属性值为false，原有的intent节点为true
+        
+        # User:
+        Scenario: {scenario}
+        Groups: {groups}
+        IntentsList: {intentsList}
+        """
+        
+        self.model = model
+        self.parser = JsonOutputParser(pydantic_object=IntentTree)
+        self.prompt_template = PromptTemplate(
+            input_variables=["scenario", "groups", "intentsList"],
+            template=self.instruction,
+            partial_variables={
+                "format_instructions": self.parser.get_format_instructions()
+            },
+        )
+
+        self.chain = self.prompt_template | self.model | self.parser
+    async def invoke(self, scenario, groups, intentsList):
+        return self.chain.invoke({"scenario": scenario, "groups": groups, "intentsList": intentsList})
