@@ -1,42 +1,13 @@
-from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
-from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 import os
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
-from typing import Union
 
-# openai api key
-if "OPENAI_API_KEY" in os.environ:
-    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
-else:
-    os.environ["OPENAI_API_KEY"] = ""
-
-model = "gpt-4o-mini"
-
-
-# Define a Pydantic model for individual intents
-class RecordRef(BaseModel):
-    id: int
-
-
-# Define a Pydantic model for grouped intents
-class Intents(BaseModel):
-    id: int
-    child: list[RecordRef]
-    child_num: int
-    priority: int
-    intent: str
-
-
-# Define the main Pydantic model
-class Output(BaseModel):
-    scenario: str
-    intents: list[Intents]
-
+from ..utils import *
 
 # direct
 class ExtractModelDirect:
-    def __init__(self):
+    def __init__(self, model):
         self.instruction = """
         ## System:
         根据用户提供的List，提炼并总结用户在指定Scenario下产生的搜索意图。将List中每个Element分组，确保组间差异尽可能大，组内差异尽可能小。  
@@ -60,8 +31,9 @@ class ExtractModelDirect:
         # Output Format
             - 输出应该是一个JSON格式，结构如下：
                 - `Scenario`: 树的根节点。
-                - 包含一个或多个子节点，每个子节点为一个意图。
-                - 每个意图子节点内包含所有与之对应的Element，Element的id需与输入时的id保持一致。
+                - 包含一个或多个子节点，每个子节点为一个意图，每个子节点有两个布尔类型的属性，分别是isLeafNode和immutable，默认值是False。
+                - 每个意图子节点内包含所有与之对应的Element，Element的id需与输入时保持一致。
+                - 每个叶节点为一个Record，有一个布尔类型的属性isLeafNode，默认值为True。
                 - {format_instructions}
         
         # Notes
@@ -74,11 +46,11 @@ class ExtractModelDirect:
         List: {list}
         """
 
-        self.model = ChatOpenAI(model=model)
+        self.model = model
         self.parser = JsonOutputParser(pydantic_object=Output)
         self.prompt_template = PromptTemplate(
             template=self.instruction,
-            input_variables=["scenario","list"],
+            input_variables=["scenario", "list"],
             partial_variables={
                 "format_instructions": self.parser.get_format_instructions()
             },
@@ -89,29 +61,33 @@ class ExtractModelDirect:
     async def invoke(self, scenario, list):
         return self.chain_direct.invoke({"scenario": scenario, "list": list})
 
+
 class UpdateModelDirect:
-    def __init__(self):
+    def __init__(self, model):
         self.instruction = """
         """
-        
-        self.model = ChatOpenAI(model=model)
+
+        self.model = model
         self.parser = JsonOutputParser(pydantic_object=Output)
         self.prompt_template = PromptTemplate(
             template=self.instruction,
-            input_variables=["intentTree","scenario","records"],
+            input_variables=["intentTree", "scenario", "records"],
             partial_variables={
                 "format_instructions": self.parser.get_format_instructions()
             },
         )
 
         self.chain_direct = self.prompt_template | self.model | self.parser
-        
+
     async def invoke(self, intentTree, scenario, records):
-        return self.chain_direct.invoke({"intentTree": intentTree, "scenario": scenario, "records": records})
+        return self.chain_direct.invoke(
+            {"intentTree": intentTree, "scenario": scenario, "records": records}
+        )
+
 
 # cluster-based
 class ExtractModelCluster:
-    def __init__(self):
+    def __init__(self, model):
         # self.instruction_low_intent_extraction_cn = '从用户提供的多条记录中提取一个简明的意图，将其限制在7个词以内。每条记录包括选中的文本、对应的上下文和注释。基于这些信息，提取出最能反映意图的短语。\n\n# Steps\n\n1. 阅读并理解每条记录的选中的文本、上下文和注释。\n2. 将所有记录的主要意图归纳整理。\n3. 从归纳的结果中提取出一个简明的意图，限制在不超过7个词。\n\n# Output Format\n\n生成的意图应以不超过7个词的短语形式呈现，仅输出意图文本。\n\n# Examples\n\n**记录 1**\n- 选中文本: "请在下周五前提交报告"\n- 上下文: "公司正在收集今年的年度资料..."\n- 注释: "疑问：报告的截止日期是否可以延期？"\n\n**提取的意图**\n- "询问报告延期可能性"\n\n# Notes\n\n- 确保意图清晰明了，并能充分反映记录的核心信息。\n- 对于模棱两可的信息，请根据上下文和注释中的线索进行推测。'
         # self.instruction_high_intent_extraction_cn = '从提供的多个低级意图中提炼出一个高级意图，限制在7个词以内。\n\n# Steps\n\n1. 理解和分析所有提供的低级意图。\n2. 识别这些低级意图之间的共同主题或目的。\n3. 将这些共有的主题或目的浓缩成一个高级意图。\n4. 确保高级意图不超过7个词。\n\n# Output Format\n\n  生成的意图应以不超过7个词的短语形式呈现，仅输出高级意图文本\n\n# Examples\n\n- 低级意图: ["购买书籍", "在线订购", "寻找最佳价格"]\n  - 高级意图: "在线购买书籍"\n\n- 低级意图: ["预约医生", "查找最近诊所", "拨打医生电话"]\n  - 高级意图: "安排医生预约"\n\n# Notes\n\n- 高级意图应尽可能涵盖所有提供的低级意图。\n- 语言应简练且易于理解。'
         self.instruction = """
@@ -146,7 +122,7 @@ class ExtractModelCluster:
         {records}
         """
 
-        self.model = ChatOpenAI(model=model)
+        self.model = model
         self.parser = JsonOutputParser(pydantic_object=Intents)
         self.prompt_template = PromptTemplate(
             template=self.instruction,
@@ -178,3 +154,26 @@ class ExtractModelCluster:
             # else self.chain_high_intent.invoke({"records": records})
             self.chain.invoke({"records": records})
         )
+
+
+async def groupingElements(elementList, model):
+    template = """
+    根据用户提供的List，将List中每个Element分组，确保组间差异尽可能大，组内差异尽可能小。
+    
+    # Output Format
+     - The output should be structured in JSON format as following {format_instructions}.
+    
+    # User:
+    List: {list}
+    """
+    parser = JsonOutputParser(pydantic_object=)
+    prompt_template = PromptTemplate(
+        input_variables=["list"],
+        template=template,
+        partial_variables={
+            "format_instructions": parser.get_format_instructions()
+        },
+    )
+
+    chain = prompt_template | model | parser
+    return chain.invoke({"list": elementList})

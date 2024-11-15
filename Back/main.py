@@ -41,8 +41,20 @@ from fastapi import FastAPI, Query
 from pydantic import BaseModel, field_validator
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Union
+from langchain_openai import ChatOpenAI
+import os
+from utils import *
 
 app = FastAPI()
+
+# openai api key
+if "OPENAI_API_KEY" in os.environ:
+    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
+else:
+    os.environ["OPENAI_API_KEY"] = ""
+
+modelName = "gpt-4o-mini"
+model = ChatOpenAI(model=modelName)
 
 # Add CORS middleware
 app.add_middleware(
@@ -62,33 +74,13 @@ async def root():
 import embedModule
 
 # 初始化嵌入模型
-model = embedModule.EmbedModel()
-
-
-class Record(BaseModel):
-    id: int
-    comment: str | None = None
-    content: str
-    context: str
-
-
-class Intent(BaseModel):
-    id: int
-    text: str
-
-
-class RecordwithVector(BaseModel):
-    id: int
-    comment: str | None = None
-    content: str
-    context: str
-    vector: list[float]
+embedModel = embedModule.EmbedModel()
 
 
 @app.post("/embed_single/", response_model=RecordwithVector)
 async def embed_single_record(record: Record):
     # 对记录数据生成嵌入，并获取生成的嵌入向量
-    vector = model.embedding(
+    vector = embedModel.embedding(
         record.model_dump(),
         ["context", "content", "comment"],
         vector_operation_mode="add",
@@ -104,35 +96,12 @@ async def embed_single_record(record: Record):
     )
 
 
-class RecordsList(BaseModel):
-    data: list[Union[Record, Intent]]
-
-    # 自定义验证器：检查列表中所有元素是否是同一类型
-    @field_validator("data")
-    def check_items_type(cls, v):
-        if not v:
-            return v
-
-        # 获取列表中的第一个元素的类型
-        first_type = type(v[0])
-
-        # 确保所有元素的类型与第一个元素相同
-        if not all(isinstance(item, first_type) for item in v):
-            raise ValueError("All items in the list must be of the same type.")
-
-        return v
-
-
-class RecordsListWithVector(BaseModel):
-    data: list[RecordwithVector]
-
-
 @app.post("/embed_all/", response_model=RecordsListWithVector)
 async def embed_all_records(recordsList: RecordsList):
     recordsListWithVector = RecordsListWithVector(data=[])
     for record in recordsList.data:
         # 对记录数据生成嵌入，并获取生成的嵌入向量
-        vector = model.embedding(
+        vector = embedModel.embedding(
             record.model_dump(),
             ["context", "content", "comment"],
             vector_operation_mode="add",
@@ -153,7 +122,7 @@ async def embed_all_records(recordsList: RecordsList):
 import clusterGenerator
 import extractModule
 
-extractModelCluster = extractModule.ExtractModelCluster()
+extractModelCluster = extractModule.ExtractModelCluster(model)
 
 
 @app.post("/extract/cluster/")
@@ -252,7 +221,7 @@ async def hierarcy_cluster(
     return [{key: node[key] for key in node if key != "vector"} for node in root]
 
 
-extractModelDirect = extractModule.ExtractModelDirect()
+extractModelDirect = extractModule.ExtractModelDirect(model)
 
 
 @app.post("/extract/direct/")
@@ -284,6 +253,35 @@ async def direct_extract_intent(
     output = await extractModelDirect.invoke(scenario, recordsCluster)
     return output
 
+@app.post("/update/direct/")
+async def direct_incremental_update_intent(
+    recordsList: RecordsList,
+    # intentTree: IntentTree
+):
+    # # 重新分组
+    root = [record.model_dump() for record in recordsList.data]
+
+    if isinstance(recordsList.data[0], Record):
+        recordsTxt = "\n\n".join(
+            [
+                "id: {}\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+                    index + 1,
+                    root[index]["content"],
+                    root[index]["context"],
+                    root[index]["comment"],
+                )
+                for index in range(len(root))
+            ]
+        )
+    groupsOfRecords = await extractModule.groupingElements(recordsTxt, model) # 直接调LLM，不创建class
+    print(groupsOfRecords)
+
+    # 筛选出immutable的Node
+    # immutableIntentsList = extractModule.filterNodes(intentTree, target_level=1, key='immutable', value=True)
+    
+    # # 映射group到intent，对多余的组提取新意图
+    # mapGroups2Intents(groupsOfRecords, immutableIntentsList)
+    return groupsOfRecords
 
 @app.post("/cluster/")
 # async def direct_extract_intent(
