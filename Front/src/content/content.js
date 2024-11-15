@@ -1,6 +1,5 @@
 let selectedText = "";
 let contextMenu = null;
-let floatingWindow = null;
 let isIntentVisible = false;
 
 function initializeExtension() {
