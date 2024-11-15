@@ -6,6 +6,7 @@ class FloatingWindow {
         this.element = null;
         this.containers = new Map(); // 存储所有容器
         this.isVisible = false;
+        this.networkManager = null; // 添加 networkManager 属性
         this.init();
     }
 
@@ -67,7 +68,9 @@ class FloatingWindow {
     // 移除容器
     removeContainer(id) {
         const container = this.containers.get(id);
+        
         if (container) {
+            console.log("Removing container:", id);
             container.element.remove();
             this.containers.delete(id);
             this.updateLayout();
@@ -275,14 +278,23 @@ class FloatingContainer {
 
         // 添加点击事件
         button.addEventListener("click", async () => {
-            if (!visJsLoaded) {
-                await loadVisJs();
-                visJsLoaded = true;
+            if (isNetworkVisible) {
+                isNetworkVisible = false;
+                if (this.networkManager) {
+                    this.networkManager.cleanup(); // 使用 this.networkManager
+                }
+            } else {
+                try {
+                    await loadVisJs();
+                    chrome.storage.local.get("records", (data) => {
+                        const records = data.records || [];
+                        this.networkManager = showNetworkVisualization(records, floatingWindow.containerArea);
+                    });
+                } catch (error) {
+                    console.error('Failed to load visualization:', error);
+                    alert('Failed to load network visualization.');
+                }
             }
-            chrome.storage.local.get("records", (data) => {
-                const records = data.records || [];
-                showNetworkVisualization(records);
-            });
         });
 
         return button;
@@ -443,17 +455,23 @@ function updateRecordsList(scrollArea, buttonArea) {
         // 渲染记录
         await renderRecords(records, scrollArea);
 
-        // 设置网络可视化按钮事件
-        const showNetworkBtn = document.getElementById("showNetworkBtn");
-        if (showNetworkBtn) {
-            showNetworkBtn.addEventListener("click", async () => {
-                if (!visJsLoaded) {
-                    await loadVisJs();
-                    visJsLoaded = true;
-                }
-                showNetworkVisualization(records);
-            });
-        }
+        // // 设置网络可视化按钮事件
+        // const showNetworkBtn = document.getElementById("showNetworkBtn");
+        // if (showNetworkBtn) {
+        //     showNetworkBtn.addEventListener("click", async () => {
+        //         try {
+        //             await loadVisJs();
+        //             chrome.storage.local.get("records", (data) => {
+        //                 const records = data.records || [];
+        //                 // Use integrated mode when clicking from floating window
+        //                 showNetworkVisualization(records, floatingWindow.containerArea);
+        //             });
+        //         } catch (error) {
+        //             console.error('Failed to load visualization:', error);
+        //             alert('Failed to load network visualization.');
+        //         }
+        //     });
+        // }
     });
 }
 
@@ -575,38 +593,76 @@ function setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn) {
             console.log("Storage cleared");
         });
     });
+
+    // const showNetworkBtn = document.getElementById("showNetworkBtn");
+    // if (showNetworkBtn) {
+    //     showNetworkBtn.addEventListener("click", async () => {
+    //         try {
+    //             await loadVisJs();
+    //             chrome.storage.local.get("records", (data) => {
+    //                 const records = data.records || [];
+    //                 // Use integrated mode when clicking from floating window
+    //                 showNetworkVisualization(records, floatingWindow.containerArea);
+    //             });
+    //         } catch (error) {
+    //             console.error('Failed to load visualization:', error);
+    //             alert('Failed to load network visualization.');
+    //         }
+    //     });
+    // }
 }
 
 async function loadVisJs() {
+    if (visJsLoaded) return Promise.resolve();
+    
     return new Promise((resolve, reject) => {
-        // 加载 CSS
         const cssLink = document.createElement('link');
         cssLink.rel = 'stylesheet';
         cssLink.type = 'text/css';
         cssLink.href = chrome.runtime.getURL('lib/vis-network.css');
         document.head.appendChild(cssLink);
 
-        // 加载 JS
         const script = document.createElement('script');
         script.src = chrome.runtime.getURL('lib/vis-network.js');
         script.onload = () => {
-            console.log('Vis.js loaded successfully');
+            visJsLoaded = true;
             resolve();
         };
-        script.onerror = (error) => {
-            console.error('Error loading Vis.js:', error);
-            reject(error);
-        };
+        script.onerror = reject;
         document.head.appendChild(script);
     });
 }
 
 // 更新样式
+
+const additionalNetworkStyle = document.createElement('style');
+additionalNetworkStyle.textContent = `
+    .floating-container-area {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 4px;
+    }
+
+    #networkVisualizationContainer {
+        min-height: 400px;
+    }
+
+    .records-container {
+        flex: 1;
+        min-width: 0; // Prevent flex item from overflowing
+    }
+`;
+document.head.appendChild(additionalNetworkStyle);
+
+
 const style = document.createElement('style');
 style.textContent = `
     .floating-container {
         display: flex;
         flex-direction: column;
+        float: left;
     }
 
     .container-content {
@@ -720,6 +776,7 @@ style.textContent = `
         .floating-container-area {
             width: 90vw;
             minWidth: 320px;
+            overflow: hidden;
         }
     }
 `;

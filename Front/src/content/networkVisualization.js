@@ -1,7 +1,9 @@
 // 网络图配置和状态管理
 class NetworkManager {
-    constructor(records) {
+    constructor(records, containerArea = null, mode = 'standalone') {
         this.records = records;
+        this.containerArea = containerArea;
+        this.displayMode = mode; // 'standalone' or 'integrated'
         this.nodes = new vis.DataSet();
         this.edges = new vis.DataSet();
         this.nodeStates = new Map();
@@ -14,15 +16,102 @@ class NetworkManager {
     initContainer() {
         this.container = document.createElement("div");
         this.container.id = "networkVisualizationContainer";
-        this.setupContainerStyle();
-        this.addCloseButton();
 
+        if (this.displayMode === 'standalone') {
+            this.setupStandaloneContainer();
+        } else {
+            this.setupIntegratedContainer();
+        }
+
+        this.addCloseButton();
+        this.setupVisContainer();
+    }
+
+    setupStandaloneContainer() {
+        Object.assign(this.container.style, {
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "80vw",
+            height: "80vh",
+            backgroundColor: "white",
+            padding: "20px",
+            boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+            zIndex: "10000",
+            borderRadius: "8px"
+        });
+        document.body.appendChild(this.container);
+    }
+
+    setupIntegratedContainer() {
+        Object.assign(this.container.style, {
+            position: "relative",
+            width: "50%", // Adjust width to leave space for records
+            height: "70vh", // Match records container height
+            backgroundColor: "white",
+            padding: "20px",
+            boxShadow: "2px 0 5px rgba(0,0,0,0.1)",
+            borderRadius: "8px",
+            marginRight: "12px",
+            display: "inline-block", // Change float to inline-block
+            verticalAlign: "top" // Ensure proper vertical alignment
+        });
+
+        // Find records container
+        const recordsList = this.containerArea.querySelector(".records-container");
+        if (recordsList) {
+            // Change display style of records container
+            recordsList.style.display = "inline-block";
+            recordsList.style.width = "calc(50% - 12px)"; // Adjust width considering margin
+            recordsList.style.verticalAlign = "top";
+
+            // Insert network container before records
+            this.containerArea.insertBefore(this.container, recordsList);
+        } else {
+            this.containerArea.appendChild(this.container);
+        }
+
+        // Add container area styles
+        Object.assign(this.containerArea.style, {
+            display: "flex", // Change to flex layout
+            flexDirection: "row", // Horizontal layout
+            alignItems: "flex-start", // Align items at the top
+            justifyContent: "flex-start", // Start from left
+            width: "100%",
+            gap: "12px" // Space between containers
+        });
+    }
+    // In networkVisualization.js, add to class NetworkManager
+    // Add cleanup method to handle container removal properly
+    cleanup() {
+        if (this.container) {
+            this.container.remove();
+            if (this.containerArea) {
+                // Reset container area styles when removing network
+                const recordsList = this.containerArea.querySelector(".records-container");
+                if (recordsList) {
+                    recordsList.style.width = "100%";
+                }
+            }
+        }
+    }
+
+    setupVisContainer() {
         this.visContainer = document.createElement("div");
         this.visContainer.style.width = "100%";
         this.visContainer.style.height = "calc(100% - 40px)";
         this.container.appendChild(this.visContainer);
+    }
 
-        document.body.appendChild(this.container);
+    switchDisplayMode(newMode, containerArea = null) {
+        if (newMode === this.displayMode) return;
+
+        this.container.remove();
+        this.displayMode = newMode;
+        this.containerArea = containerArea;
+        this.initContainer();
+        this.initializeNetwork();
     }
 
     // 设置容器样式
@@ -84,15 +173,15 @@ class NetworkManager {
             closeBtn.style.backgroundColor = "#f0f0f0";
             closeBtn.style.borderColor = "#999";
         });
-
+    
         closeBtn.addEventListener("mouseout", () => {
             closeBtn.style.backgroundColor = "#fff";
             closeBtn.style.borderColor = "#ccc";
         });
-
+    
         closeBtn.onclick = (e) => {
             e.preventDefault();
-            this.container.remove();
+            this.cleanup(); // Use cleanup method instead of just removing container
         };
     }
 
@@ -359,7 +448,7 @@ class NetworkManager {
 }
 
 // 主函数
-function showNetworkVisualization(records) {
+function showNetworkVisualization(records, containerArea = null) {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -367,13 +456,18 @@ function showNetworkVisualization(records) {
             return;
         }
 
-        const networkManager = new NetworkManager(records);
+        const mode = containerArea ? 'integrated' : 'standalone';
+        console.log('networkVisualizationContainer mode: ', mode);
+        const networkManager = new NetworkManager(records, containerArea, mode);
         networkManager.initContainer();
         networkManager.initializeNodes();
         networkManager.initializeNetwork();
+
+        isNetworkVisible = true;
+        return networkManager; // Return instance for potential mode switching
 
     } catch (error) {
         console.error('Error in network visualization:', error);
         alert('An error occurred while creating the network visualization.');
     }
-} 
+}
