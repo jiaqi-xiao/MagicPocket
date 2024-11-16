@@ -260,7 +260,8 @@ chain4Grouping = extractModule.Chain4Grouping(model)
 async def group_nodes(
     nodesList: NodesList,
 ):
-    # 对nodes分组
+    ### 对nodes分组
+
     root = [node.model_dump() for node in nodesList.data]
 
     if isinstance(nodesList.data[0], Record):
@@ -283,12 +284,15 @@ async def group_nodes(
             ]
         )
     groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt)
-    groupOfNodes = []
-    for group in groupsOfNodesIndex["item"]:
-        groupNodes = [root[i - 1] for i in group]  # 将索引转换为节点，注意索引减1
-        groupOfNodes.append(groupNodes)
 
-    return {"groupOfNodesIndex": groupsOfNodesIndex, "groupOfNodes": groupOfNodes}
+    groupsOfNodes = []
+    for group in groupsOfNodesIndex["item"]:
+        for group_name, indices in group.items():
+            # 根据索引获取对应的节点
+            nodes = [root[i - 1] for i in indices]
+            # 构造输出的分组
+            groupsOfNodes.append({group_name: nodes})
+    return {"item": groupsOfNodes}
 
 
 chain4Construct = extractModule.Chain4Construct(model)
@@ -307,9 +311,15 @@ async def incremental_construct_intent(
     )
 
     # # 映射group到intent，对多余的组提取新意图
-    newIntentTree = await chain4Construct.invoke(
+    newIntentTreeIndex = await chain4Construct.invoke(
         scenario, groupsOfNodes.model_dump_json(), json.dumps(immutableIntentsList)
     )
+    newIntentTree = {}
+    for key, indices in newIntentTreeIndex["item"].items():
+        # 根据索引替换为对应的值
+        for group in groupsOfNodes.model_dump()["item"]:
+            if group.get(indices):
+                newIntentTree[key] = group[indices]
     return newIntentTree
 
 

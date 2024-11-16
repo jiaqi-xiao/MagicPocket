@@ -28,6 +28,9 @@ class IntentTree(BaseModel):
         # 如果访问的属性不存在，返回一个空列表
         return []
     
+class IntentTreeIndex(BaseModel):
+    item: dict[str, str]
+    
 class Record(BaseModel):
     id: int
     comment: str | None = None
@@ -63,5 +66,8 @@ class NodesList(BaseModel):
 
         return v
 
+class NodeGroupsIndex(BaseModel):
+    item: list[dict[str, list[int]]]
+    
 class NodeGroups(BaseModel):
-    item: list[list[int]]
+    item: list[dict[str, list[Union[Record, Intent]]]]

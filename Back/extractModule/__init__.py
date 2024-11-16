@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from utils import *
 
+
 # direct
 class ExtractModelDirect:
     def __init__(self, model):
@@ -155,6 +156,7 @@ class ExtractModelCluster:
             self.chain.invoke({"records": records})
         )
 
+
 class Chain4Grouping:
     def __init__(self, model):
         self.instruction = """
@@ -162,13 +164,14 @@ class Chain4Grouping:
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
+        - example: {{"item": [{{"group1": [0,1]}}, {{"group2": [2]}}]}}
         
         # User:
         List: {list}
         """
-        
+
         self.model = model
-        self.parser = JsonOutputParser(pydantic_object=NodeGroups)
+        self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
         self.prompt_template = PromptTemplate(
             input_variables=["list"],
             template=self.instruction,
@@ -178,13 +181,48 @@ class Chain4Grouping:
         )
 
         self.chain = self.prompt_template | self.model | self.parser
-        
+
     async def invoke(self, nodeList):
         return self.chain.invoke({"list": nodeList})
 
+
 class Chain4Construct:
     def __init__(self, model):
+        ## 对Groups中的每一组提炼一个符合Scenario语境下的意图，以字典形式返回，key为意图，value为group的索引。务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。每个Intent的描述必须简短清晰，最多不超过7个词。
+        ## 比较所有生成的意图与IntentsList中的意图，用IntentsList中的意图替换字典中最相似的意图，如果不够相似则不需要替换。如果IntentsList中还有未替换的Intent，则对每个剩余的Intent在字典中创建以该Intent为key，None为value的键值对。
         self.instruction = """
+        对Groups中的每一个字典元素提炼一个符合Scenario的意图，以字典形式返回，确保每个意图描述清晰、不重复。
+
+        # Steps
+            1. **确认group数量**: 理解Groups的结构，确认group的数量，后续提取的意图数量需与group的数量一致。一个group是以group_x为key,一个列表为value的字典。
+            2. **提取意图**: 对每个group提炼出一个相应的意图描述。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述不超过7个词，确保简短精炼。
+            3. **创建新字典**: 根据Output Format，用提取的意图作为key，对应的group字典中的键作为value。
+            4. **比较替换**:
+                - 使用`IntentsList`中的意图与提取出的字典键进行比较，寻找最相似的意图。
+                - 找到最相似意图时，将字典中的意图替换为`IntentsList`中的意图。
+                - 如果某个意图没有足够相似的替换项，则保留不变。
+            5. **补充剩余意图**: 对于`IntentsList`中未被替换的意图，向字典中添加这些意图键，其对应值为空列表`[]`。如果没未被替换的意图则跳过这一步。
+        
+        # Output Format
+            - The output should be structured in JSON format as following {format_instructions}.
+            - example: 
+                    {{'item': {{'generated_intent_1': "group1", 'generated_intent_2': "group2", 'remaining_intent_3': ''}}}}
+            - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
+            
+        # Notes
+            - 对每个group提炼唯一一个意图，不可以超过一个。
+            - 每个意图描述必须具备逻辑独立性，最大程度维持多样性, 且不超过7个词。
+            - 当进行相似度替换时，务必保证只有在相似度足够高的情况下才进行替换。
+            - 如果不存在足够相似的意图，则原意图保持不变，且`IntentsList`中的意图不会被强行替换。
+            - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
+        
+        # User:
+            Scenario: {scenario}
+            Groups: {groups}
+            IntentsList: {intentsList}
+        """
+
+        self.instruction1 = """
         根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents，。
             - 每个Intent和Group之间的匹配应尽可能准确。
             - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
@@ -199,7 +237,7 @@ class Chain4Construct:
             5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
         
         # Output Format
-        - The output should be structured in JSON format as following {format_instructions}.
+            - The output should be structured in JSON format as following {format_instructions}.
         
         # Notes
         - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
@@ -211,9 +249,9 @@ class Chain4Construct:
         Groups: {groups}
         IntentsList: {intentsList}
         """
-        
+
         self.model = model
-        self.parser = JsonOutputParser(pydantic_object=IntentTree)
+        self.parser = JsonOutputParser(pydantic_object=IntentTreeIndex)
         self.prompt_template = PromptTemplate(
             input_variables=["scenario", "groups", "intentsList"],
             template=self.instruction,
@@ -223,5 +261,8 @@ class Chain4Construct:
         )
 
         self.chain = self.prompt_template | self.model | self.parser
+
     async def invoke(self, scenario, groups, intentsList):
-        return self.chain.invoke({"scenario": scenario, "groups": groups, "intentsList": intentsList})
+        return self.chain.invoke(
+            {"scenario": scenario, "groups": groups, "intentsList": intentsList}
+        )
