@@ -252,7 +252,9 @@ async def direct_extract_intent(
     output = await extractModelDirect.invoke(scenario, recordsCluster)
     return output
 
+
 chain4Grouping = extractModule.Chain4Grouping(model)
+
 
 @app.post("/group/")
 async def group_nodes(
@@ -280,26 +282,36 @@ async def group_nodes(
                 for index in range(len(root))
             ]
         )
-    groupsOfNodes = await chain4Grouping.invoke(nodesTxt)
+    groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt)
+    groupOfNodes = []
+    for group in groupsOfNodesIndex["item"]:
+        groupNodes = [root[i - 1] for i in group]  # 将索引转换为节点，注意索引减1
+        groupOfNodes.append(groupNodes)
 
-    return groupsOfNodes
+    return {"groupOfNodesIndex": groupsOfNodesIndex, "groupOfNodes": groupOfNodes}
+
 
 chain4Construct = extractModule.Chain4Construct(model)
+
 
 @app.post("/construct/")
 async def incremental_construct_intent(
     scenario: str,
     groupsOfNodes: NodeGroups,
     intentTree: IntentTree,
-    target_level: int = Query(ge=1)
+    target_level: int = Query(ge=1),
 ):
     # 筛选出immutable的Node
-    immutableIntentsList = extractModule.filterNodes(intentTree, target_level, key='immutable', value=True)
-    
+    immutableIntentsList = extractModule.filterNodes(
+        intentTree, target_level, key="immutable", value=True
+    )
+
     # # 映射group到intent，对多余的组提取新意图
-    newIntentTree = await chain4Construct.invoke(scenario, groupsOfNodes.model_dump_json(), json.dumps(immutableIntentsList))
+    newIntentTree = await chain4Construct.invoke(
+        scenario, groupsOfNodes.model_dump_json(), json.dumps(immutableIntentsList)
+    )
     return newIntentTree
-    
+
 
 @app.post("/cluster/")
 # async def direct_extract_intent(

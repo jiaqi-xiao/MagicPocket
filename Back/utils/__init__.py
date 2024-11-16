@@ -64,4 +64,4 @@ class NodesList(BaseModel):
         return v
 
 class NodeGroups(BaseModel):
-    item: list[Union[Record, Intent]]
+    item: list[list[int]]

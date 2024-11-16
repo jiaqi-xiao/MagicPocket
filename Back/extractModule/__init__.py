@@ -158,7 +158,7 @@ class ExtractModelCluster:
 class Chain4Grouping:
     def __init__(self, model):
         self.instruction = """
-        根据用户提供的List，将List中每个Node分组，确保组间差异尽可能大，组内差异尽可能小。
+        根据用户提供的List，将List中每个Node分组，确保组间差异尽可能大，组内差异尽可能小。返回一个列表，每个元素是一个子列表，代表一个组，子列表中是Node对应的索引，。
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
@@ -185,7 +185,7 @@ class Chain4Grouping:
 class Chain4Construct:
     def __init__(self, model):
         self.instruction = """
-        根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents。
+        根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents，。
             - 每个Intent和Group之间的匹配应尽可能准确。
             - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
             - 每个Intent的描述必须简短清晰，最多不超过7个词。
@@ -196,9 +196,7 @@ class Chain4Construct:
             2. **分析未匹配的Group**: 如果有多余的group，基于Scenario内容提炼出新的intent以确保每个group都有唯一的intent。
             3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
             4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
-
-        匹配IntentsList和Groups中最符合的intent和group进行一一映射。注意intent的数量可能小于group的数量。对于未匹配的group，基于Scenario提炼出其intent。确保所有intent之间差异尽可能大。
-        保持intent统一的简洁表述，不超过7个词。
+            5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
