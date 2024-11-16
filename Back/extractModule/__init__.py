@@ -195,13 +195,13 @@ class Chain4Construct:
 
         # Steps
             1. **确认group数量**: 理解Groups的结构，确认group的数量，后续提取的意图数量需与group的数量一致。一个group是以group_x为key,一个列表为value的字典。
-            2. **提取意图**: 对每个group提炼出一个相应的意图描述。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述不超过7个词，确保简短精炼。
+            2. **提取意图**: 对每个group提炼出一个相应的意图描述，该意图需要与group中列表里所有Node的共性相符。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述不超过7个词，确保简短精炼。
             3. **创建新字典**: 根据Output Format，用提取的意图作为key，对应的group字典中的键作为value。
             4. **比较替换**:
                 - 使用`IntentsList`中的意图与提取出的字典键进行比较，寻找最相似的意图。
                 - 找到最相似意图时，将字典中的意图替换为`IntentsList`中的意图。
                 - 如果某个意图没有足够相似的替换项，则保留不变。
-            5. **补充剩余意图**: 对于`IntentsList`中未被替换的意图，向字典中添加这些意图键，其对应值为空列表`[]`。如果没未被替换的意图则跳过这一步。
+            5. **添加剩余意图**: 对于`IntentsList`中未使用的意图，视为remaining_intent。将这些剩余意图作为key添加到第四步中构建的新字典中，其对应值为空字符串。如果没未替换的意图则跳过这一步。
         
         # Output Format
             - The output should be structured in JSON format as following {format_instructions}.
@@ -210,7 +210,7 @@ class Chain4Construct:
             - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
             
         # Notes
-            - 对每个group提炼唯一一个意图，不可以超过一个。
+            - 对每个group提炼唯一一个意图，不可以超过一个。意图需要与group中列表的所有Node的共性相符。
             - 每个意图描述必须具备逻辑独立性，最大程度维持多样性, 且不超过7个词。
             - 当进行相似度替换时，务必保证只有在相似度足够高的情况下才进行替换。
             - 如果不存在足够相似的意图，则原意图保持不变，且`IntentsList`中的意图不会被强行替换。

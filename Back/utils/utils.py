@@ -13,12 +13,12 @@ def filterNodes(tree, target_level, current_level=0, result=None, key="immutable
 
     # 如果下一层是目标层，收集所有该层的 "text"
     if current_level == target_level - 1:
-        for item in tree.child:
+        for item in tree["child"]:
             if (not item["isLeafNode"]) and (item[key] == value):
                 result.append(item["intent"])
 
     # 遍历子节点，继续递归
-    for node in tree.child:
+    for node in tree["child"]:
         filterNodes(node, target_level, current_level + 1, result)
 
     return result

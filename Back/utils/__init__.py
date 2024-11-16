@@ -7,13 +7,19 @@ class RecordRef(BaseModel):
     id: int
     content: str
     isLeafNode: bool = True
-    
+
+class Record(BaseModel):
+    id: int
+    comment: str | None = None
+    content: str
+    context: str
+
 # Define a Pydantic model for grouped intents
 class Intent(BaseModel):
     id: int
     isLeafNode: bool = False
     immutable: bool = False
-    child: list[RecordRef]
+    child: list[Union[RecordRef, Record]]
     child_num: int
     priority: int
     intent: str
@@ -31,11 +37,6 @@ class IntentTree(BaseModel):
 class IntentTreeIndex(BaseModel):
     item: dict[str, str]
     
-class Record(BaseModel):
-    id: int
-    comment: str | None = None
-    content: str
-    context: str
 
 class RecordwithVector(BaseModel):
     id: int
@@ -71,3 +72,4 @@ class NodeGroupsIndex(BaseModel):
     
 class NodeGroups(BaseModel):
     item: list[dict[str, list[Union[Record, Intent]]]]
+    
