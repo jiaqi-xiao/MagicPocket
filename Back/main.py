@@ -307,20 +307,20 @@ async def incremental_construct_intent(
 ):
     # 筛选出immutable的Node
     immutableIntentsList = extractModule.filterNodes(
-        intentTree, target_level, key="immutable", value=True
+        intentTree.model_dump(), target_level, key="immutable", value=True
     )
 
     # # 映射group到intent，对多余的组提取新意图
     newIntentTreeIndex = await chain4Construct.invoke(
-        scenario, groupsOfNodes.model_dump_json(), json.dumps(immutableIntentsList)
+        scenario, groupsOfNodes.model_dump_json(), str(immutableIntentsList)
     )
-    newIntentTree = {}
+    newIntentTree = newIntentTreeIndex["item"]
     for key, indices in newIntentTreeIndex["item"].items():
         # 根据索引替换为对应的值
         for group in groupsOfNodes.model_dump()["item"]:
-            if group.get(indices):
+            if indices in group.keys():
                 newIntentTree[key] = group[indices]
-    return newIntentTree
+    return {"item": newIntentTree}
 
 
 @app.post("/cluster/")
