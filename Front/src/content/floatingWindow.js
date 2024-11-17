@@ -42,18 +42,19 @@ class FloatingWindow {
             right: "20px",
             display: "none",
             zIndex: "1000",
-            minWidth: "400px",
-            maxWidth: "600px",
+            minWidth: "360px",
+            maxWidth: "600px", // Default max-width when network is not visible
             width: "40vw",
             backgroundColor: "transparent",
-            gap: "10px",
+            gap: "2%",
             maxHeight: "80vh",
             overflowY: "auto",
             overflowX: "hidden",
             padding: "4px",
             borderRadius: "16px",
             scrollbarWidth: "thin",
-            scrollbarColor: "#CBD5E0 transparent"
+            scrollbarColor: "#CBD5E0 transparent",
+            transition: "all 0.3s ease"
         });
     }
 
@@ -96,9 +97,15 @@ class FloatingWindow {
     showContainers() {
         this.isVisible = true;
         this.containerArea.style.display = "block";
+        
+        // Add responsive checks
+        if (window.innerWidth <= 1024) {
+            this.containerArea.style.width = "95vw";
+            this.containerArea.style.right = "2.5vw";
+        }
+        
         this.containers.forEach(container => {
             container.show();
-            // 如果是主容器，更新记录列表
             if (container.id === 'main') {
                 const scrollArea = document.getElementById('recordsScrollArea');
                 if (scrollArea) {
@@ -109,6 +116,7 @@ class FloatingWindow {
             }
         });
     }
+    
 
     hideContainers() {
         this.isVisible = false;
@@ -703,29 +711,20 @@ async function loadVisJs() {
     });
 }
 
+// Add window resize event listener to handle responsive updates
+window.addEventListener('resize', () => {
+    if (floatingWindow && floatingWindow.isVisible) {
+        if (window.innerWidth <= 1024) {
+            floatingWindow.containerArea.style.width = "95vw";
+            floatingWindow.containerArea.style.right = "2.5vw";
+        } else {
+            floatingWindow.containerArea.style.width = "40vw";
+            floatingWindow.containerArea.style.right = "20px";
+        }
+    }
+});
+
 // 更新样式
-
-const additionalNetworkStyle = document.createElement('style');
-additionalNetworkStyle.textContent = `
-    .floating-container-area {
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 4px;
-    }
-
-    #networkVisualizationContainer {
-        min-height: 400px;
-    }
-
-    .records-container {
-        flex: 1;
-        min-width: 0; // Prevent flex item from overflowing
-    }
-`;
-document.head.appendChild(additionalNetworkStyle);
-
 
 const style = document.createElement('style');
 style.textContent = `
@@ -890,3 +889,60 @@ additionalStyle.textContent = `
     }
 `;
 document.head.appendChild(additionalStyle);
+
+const additionalNetworkStyle = document.createElement('style');
+additionalNetworkStyle.textContent = `
+    .floating-container-area {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 2%;
+        padding: 4px;
+        width: 100%;
+        max-width: 600px;
+        transition: all 0.3s ease;
+    }
+
+    .floating-container-area.with-network {
+        max-width: 90vw;
+    }
+
+    #networkVisualizationContainer {
+        min-height: 400px;
+        width: 100%;
+    }
+
+    .records-container {
+        flex: 1;
+        min-width: 360px;
+        transition: width 0.3s ease;
+    }
+
+    /* Responsive adjustments for smaller screens */
+    @media screen and (max-width: 1024px) {
+        .floating-container-area.with-network {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 16px;
+        }
+
+        .floating-container-area.with-network #networkVisualizationContainer,
+        .floating-container-area.with-network .records-container {
+            width: 100%;
+            min-width: 320px;
+        }
+
+        .floating-container-area.with-network .records-container {
+            margin-top: 16px;
+        }
+    }
+
+    /* Additional adjustments for mobile screens */
+    @media screen and (max-width: 768px) {
+        .floating-container-area {
+            max-width: 95vw;
+            min-width: 320px;
+        }
+    }
+`;
+document.head.appendChild(additionalNetworkStyle);

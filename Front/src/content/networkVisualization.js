@@ -47,39 +47,42 @@ class NetworkManager {
     setupIntegratedContainer() {
         Object.assign(this.container.style, {
             position: "relative",
-            width: "50%", // Adjust width to leave space for records
-            height: "70vh", // Match records container height
+            width: "40%",
+            minWidth: "320px",
+            height: "70vh",
             backgroundColor: "white",
             padding: "20px",
             boxShadow: "2px 0 5px rgba(0,0,0,0.1)",
             borderRadius: "8px",
             marginRight: "12px",
-            display: "inline-block", // Change float to inline-block
-            verticalAlign: "top" // Ensure proper vertical alignment
+            display: "inline-block",
+            verticalAlign: "top"
         });
-
+    
         // Find records container
         const recordsList = this.containerArea.querySelector(".records-container");
         if (recordsList) {
-            // Change display style of records container
+            // Keep original container style
             recordsList.style.display = "inline-block";
-            recordsList.style.width = "calc(50% - 12px)"; // Adjust width considering margin
+            recordsList.style.width = "58%";
+            recordsList.style.minWidth = "360px";
             recordsList.style.verticalAlign = "top";
-
-            // Insert network container before records
-            this.containerArea.insertBefore(this.container, recordsList);
+            
+            // Add network container as first child
+            this.containerArea.insertBefore(this.container, this.containerArea.firstChild);
         } else {
             this.containerArea.appendChild(this.container);
         }
-
-        // Add container area styles
+    
+        // Update container area styles
         Object.assign(this.containerArea.style, {
-            display: "flex", // Change to flex layout
-            flexDirection: "row", // Horizontal layout
-            alignItems: "flex-start", // Align items at the top
-            justifyContent: "flex-start", // Start from left
+            display: "flex",
+            flexDirection: "row", 
+            alignItems: "flex-start",
+            justifyContent: "flex-start",
             width: "100%",
-            gap: "12px" // Space between containers
+            maxWidth: "90vw",
+            gap: "2%"
         });
     }
     // In networkVisualization.js, add to class NetworkManager
@@ -92,9 +95,13 @@ class NetworkManager {
                 const recordsList = this.containerArea.querySelector(".records-container");
                 if (recordsList) {
                     recordsList.style.width = "100%";
+                    recordsList.style.minWidth = "360px";
                 }
+                this.containerArea.style.maxWidth = "600px";
+                this.containerArea.classList.remove('with-network');
             }
         }
+        isNetworkVisible = false;
     }
 
     setupVisContainer() {
