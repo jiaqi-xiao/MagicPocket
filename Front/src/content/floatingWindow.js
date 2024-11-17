@@ -23,6 +23,15 @@ class FloatingWindow {
         this.setupContainerAreaStyle();
         document.body.appendChild(this.containerArea);
 
+        // 添加主容器（包含任务和记录）
+        const mainContainer = this.addContainer("main", {
+            title: "Magic Pocket",
+            height: "70vh"
+        });
+        
+        // 初始化主容器内容
+        this.initializeMainContainer(mainContainer.getContent());
+
         this.setupEventListeners();
     }
 
@@ -89,11 +98,13 @@ class FloatingWindow {
         this.containerArea.style.display = "block";
         this.containers.forEach(container => {
             container.show();
-            // 如果是records容器，更新记录列表
-            if (container.id === 'records') {
-                const scrollArea = container.getContent().querySelector('div');
-                const buttonArea = scrollArea.nextElementSibling.querySelector('div');
-                updateRecordsList(scrollArea, buttonArea);
+            // 如果是主容器，更新记录列表
+            if (container.id === 'main') {
+                const scrollArea = document.getElementById('recordsScrollArea');
+                if (scrollArea) {
+                    const buttonArea = scrollArea.nextElementSibling.querySelector('div');
+                    updateRecordsList(scrollArea, buttonArea);
+                }
             }
         });
     }
@@ -121,6 +132,54 @@ class FloatingWindow {
     isAnalysisMode() {
         // 检查是否处于分析模式(可以从外部设置)
         return window.isAnalysisIntent || false;
+    }
+
+    // 初始化主容器
+    initializeMainContainer(container) {
+        // 创建任务描述区域
+        const taskArea = document.createElement("div");
+        Object.assign(taskArea.style, {
+            padding: "12px 16px",
+            borderBottom: "1px solid #edf2f7",
+            backgroundColor: "#f8fafc",
+            flexShrink: 0  // 防止任务区域被压缩
+        });
+
+        const taskDescription = document.createElement("div");
+        taskDescription.id = "currentTaskDescription";
+        Object.assign(taskDescription.style, {
+            fontSize: "14px",
+            color: "#4a5568",
+            lineHeight: "1.5"
+        });
+
+        // 从storage获取并显示当前任务描述
+        chrome.storage.local.get("currentTask", (data) => {
+            if (data.currentTask && data.currentTask.description) {
+                taskDescription.textContent = `📋 ${data.currentTask.description}`;
+            } else {
+                taskDescription.textContent = "📋 No active task";
+                taskDescription.style.color = "#a0aec0";
+                taskDescription.style.fontStyle = "italic";
+            }
+        });
+
+        taskArea.appendChild(taskDescription);
+        container.appendChild(taskArea);
+
+        // 创建记录区域，设置为flex容器并占据剩余空间
+        const recordsArea = document.createElement("div");
+        Object.assign(recordsArea.style, {
+            flex: "1",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,  // 关键：允许flex子项小于内容高度
+            height: "100%"  // 确保占据剩余空间
+        });
+        container.appendChild(recordsArea);
+
+        // 初始化记录容器
+        initializeRecordsContainer(recordsArea);
     }
 }
 
@@ -319,15 +378,6 @@ let floatingWindow = null;
 function createFloatingWindow() {
     if (!floatingWindow) {
         floatingWindow = new FloatingWindow();
-        
-        // 添加默认的Records容器
-        const recordsContainer = floatingWindow.addContainer("records", {
-            title: "Recorded Items",
-            height: "70vh"
-        });
-
-        // 初始化Records容器的内容
-        initializeRecordsContainer(recordsContainer.getContent());
     }
     return floatingWindow;
 }
@@ -336,19 +386,21 @@ function createFloatingWindow() {
 function initializeRecordsContainer(container) {
     // 创建滚动区域
     const scrollArea = document.createElement("div");
+    scrollArea.id = "recordsScrollArea";
     Object.assign(scrollArea.style, {
         flex: "1",
         overflowY: "auto",
         overflowX: "hidden",
         padding: "10px",
-        marginBottom: "10px"
+        marginBottom: "10px",
+        minHeight: 0  // 关键：允许flex子项小于内容高度
     });
     container.appendChild(scrollArea);
 
     // 创建按钮区域容器
     const buttonContainer = document.createElement("div");
     Object.assign(buttonContainer.style, {
-        flexShrink: "0",
+        flexShrink: 0,  // 防止按钮区域被压缩
         borderTop: "1px solid #eee"
     });
     container.appendChild(buttonContainer);

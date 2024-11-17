@@ -61,6 +61,11 @@ document.addEventListener("DOMContentLoaded", () => {
     //         deleteRecord(index);
     //     }
     // });
+
+    document.getElementById("newTaskBtn").addEventListener("click", () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('new_task.html') });
+        window.close(); // 关闭popup窗口
+    });
 });
 
 // Listen for updates from the background script
