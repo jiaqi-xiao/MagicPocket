@@ -105,6 +105,7 @@ class FloatingWindow {
                     const buttonArea = scrollArea.nextElementSibling.querySelector('div');
                     updateRecordsList(scrollArea, buttonArea);
                 }
+                this.updateTaskDescription();
             }
         });
     }
@@ -180,6 +181,23 @@ class FloatingWindow {
 
         // 初始化记录容器
         initializeRecordsContainer(recordsArea);
+    }
+
+    updateTaskDescription() {
+        const taskDescription = document.getElementById("currentTaskDescription");
+        if (taskDescription) {
+            chrome.storage.local.get("currentTask", (data) => {
+                if (data.currentTask && data.currentTask.description) {
+                    taskDescription.textContent = `📋 ${data.currentTask.description}`;
+                    taskDescription.style.color = "#4a5568";
+                    taskDescription.style.fontStyle = "normal";
+                } else {
+                    taskDescription.textContent = "📋 No active task";
+                    taskDescription.style.color = "#a0aec0";
+                    taskDescription.style.fontStyle = "italic";
+                }
+            });
+        }
     }
 }
 

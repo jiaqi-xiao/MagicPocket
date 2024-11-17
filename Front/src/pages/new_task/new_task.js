@@ -14,7 +14,7 @@ document.getElementById('createTaskBtn').addEventListener('click', () => {
             createdAt: new Date().toISOString()
         }
     }, () => {
-        // 关闭当前窗口并打开records页面
-        window.location.href = 'records.html';
+        // 关闭当前窗口
+        window.close();
     });
 }); 

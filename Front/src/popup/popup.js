@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // });
 
     document.getElementById("newTaskBtn").addEventListener("click", () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('new_task.html') });
+        chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
         window.close(); // 关闭popup窗口
     });
 });
