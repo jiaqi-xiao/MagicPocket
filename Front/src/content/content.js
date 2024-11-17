@@ -1,7 +1,7 @@
 let selectedText = "";
 let contextMenu = null;
-let floatingWindow = null;
 let isIntentVisible = false;
+let isNetworkVisible = false;
 
 function initializeExtension() {
     console.log("Initializing extension");

@@ -44,6 +44,8 @@
       "resources": [
         "records.html", 
         "records.js", 
+        "src/pages/new_task/new_task.html",
+        "src/pages/new_task/new_task.js",
         "src/utils/imageStorage.js",
         "start_generation.html",
         "lib/vis-network.js",

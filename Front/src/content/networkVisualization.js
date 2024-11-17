@@ -1,7 +1,9 @@
 // 网络图配置和状态管理
 class NetworkManager {
-    constructor(records) {
+    constructor(records, containerArea = null, mode = 'standalone') {
         this.records = records;
+        this.containerArea = containerArea;
+        this.displayMode = mode; // 'standalone' or 'integrated'
         this.nodes = new vis.DataSet();
         this.edges = new vis.DataSet();
         this.nodeStates = new Map();
@@ -14,15 +16,109 @@ class NetworkManager {
     initContainer() {
         this.container = document.createElement("div");
         this.container.id = "networkVisualizationContainer";
-        this.setupContainerStyle();
-        this.addCloseButton();
 
+        if (this.displayMode === 'standalone') {
+            this.setupStandaloneContainer();
+        } else {
+            this.setupIntegratedContainer();
+        }
+
+        this.addCloseButton();
+        this.setupVisContainer();
+    }
+
+    setupStandaloneContainer() {
+        Object.assign(this.container.style, {
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "80vw",
+            height: "80vh",
+            backgroundColor: "white",
+            padding: "20px",
+            boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+            zIndex: "10000",
+            borderRadius: "8px"
+        });
+        document.body.appendChild(this.container);
+    }
+
+    setupIntegratedContainer() {
+        Object.assign(this.container.style, {
+            position: "relative",
+            width: "40%",
+            minWidth: "320px",
+            height: "70vh",
+            backgroundColor: "white",
+            padding: "20px",
+            boxShadow: "2px 0 5px rgba(0,0,0,0.1)",
+            borderRadius: "8px",
+            marginRight: "12px",
+            display: "inline-block",
+            verticalAlign: "top"
+        });
+    
+        // Find records container
+        const recordsList = this.containerArea.querySelector(".records-container");
+        if (recordsList) {
+            // Keep original container style
+            recordsList.style.display = "inline-block";
+            recordsList.style.width = "58%";
+            recordsList.style.minWidth = "360px";
+            recordsList.style.verticalAlign = "top";
+            
+            // Add network container as first child
+            this.containerArea.insertBefore(this.container, this.containerArea.firstChild);
+        } else {
+            this.containerArea.appendChild(this.container);
+        }
+    
+        // Update container area styles
+        Object.assign(this.containerArea.style, {
+            display: "flex",
+            flexDirection: "row", 
+            alignItems: "flex-start",
+            justifyContent: "flex-start",
+            width: "100%",
+            maxWidth: "90vw",
+            gap: "2%"
+        });
+    }
+    // In networkVisualization.js, add to class NetworkManager
+    // Add cleanup method to handle container removal properly
+    cleanup() {
+        if (this.container) {
+            this.container.remove();
+            if (this.containerArea) {
+                // Reset container area styles when removing network
+                const recordsList = this.containerArea.querySelector(".records-container");
+                if (recordsList) {
+                    recordsList.style.width = "100%";
+                    recordsList.style.minWidth = "360px";
+                }
+                this.containerArea.style.maxWidth = "600px";
+                this.containerArea.classList.remove('with-network');
+            }
+        }
+        isNetworkVisible = false;
+    }
+
+    setupVisContainer() {
         this.visContainer = document.createElement("div");
         this.visContainer.style.width = "100%";
         this.visContainer.style.height = "calc(100% - 40px)";
         this.container.appendChild(this.visContainer);
+    }
 
-        document.body.appendChild(this.container);
+    switchDisplayMode(newMode, containerArea = null) {
+        if (newMode === this.displayMode) return;
+
+        this.container.remove();
+        this.displayMode = newMode;
+        this.containerArea = containerArea;
+        this.initContainer();
+        this.initializeNetwork();
     }
 
     // 设置容器样式
@@ -84,15 +180,15 @@ class NetworkManager {
             closeBtn.style.backgroundColor = "#f0f0f0";
             closeBtn.style.borderColor = "#999";
         });
-
+    
         closeBtn.addEventListener("mouseout", () => {
             closeBtn.style.backgroundColor = "#fff";
             closeBtn.style.borderColor = "#ccc";
         });
-
+    
         closeBtn.onclick = (e) => {
             e.preventDefault();
-            this.container.remove();
+            this.cleanup(); // Use cleanup method instead of just removing container
         };
     }
 
@@ -359,7 +455,7 @@ class NetworkManager {
 }
 
 // 主函数
-function showNetworkVisualization(records) {
+function showNetworkVisualization(records, containerArea = null) {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -367,13 +463,18 @@ function showNetworkVisualization(records) {
             return;
         }
 
-        const networkManager = new NetworkManager(records);
+        const mode = containerArea ? 'integrated' : 'standalone';
+        console.log('networkVisualizationContainer mode: ', mode);
+        const networkManager = new NetworkManager(records, containerArea, mode);
         networkManager.initContainer();
         networkManager.initializeNodes();
         networkManager.initializeNetwork();
+
+        isNetworkVisible = true;
+        return networkManager; // Return instance for potential mode switching
 
     } catch (error) {
         console.error('Error in network visualization:', error);
         alert('An error occurred while creating the network visualization.');
     }
-} 
+}
