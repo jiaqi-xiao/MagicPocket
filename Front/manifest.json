@@ -28,7 +28,8 @@
         "src/content/intentVisualization.js",
         "src/content/networkVisualization.js",
         "src/content/content.js",
-        "lib/vis-network.js"
+        "lib/vis-network.js",
+        "src/content/textHighlight.js"
       ],
       "css": [
         "styles/styles.css",

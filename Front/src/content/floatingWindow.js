@@ -446,6 +446,10 @@ function initializeRecordsContainer(container) {
     const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
     buttonArea2.appendChild(showNetworkBtn);
 
+    // 添加高亮按钮
+    const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
+    buttonArea2.appendChild(highlightBtn);
+
     // 更新记录显示
     updateRecordsList(scrollArea, buttonArea);
 }
@@ -496,7 +500,8 @@ function getButtonColor(id) {
         clearAllBtn: "#FEE2E2",
         startGenerateBtn: "#E6FFFA",
         showIntentBtn: "#EBF4FF",
-        showNetworkBtn: "#F0FFF4"
+        showNetworkBtn: "#F0FFF4",
+        highlightTextBtn: "#FFF5F7"
     };
     return colors[id] || "#EDF2F7";
 }
@@ -506,7 +511,8 @@ function getButtonTextColor(id) {
         clearAllBtn: "#E53E3E",
         startGenerateBtn: "#319795",
         showIntentBtn: "#3182CE",
-        showNetworkBtn: "#38A169"
+        showNetworkBtn: "#38A169",
+        highlightTextBtn: "#D53F8C"
     };
     return colors[id] || "#4A5568";
 }
@@ -519,7 +525,7 @@ function updateRecordsList(scrollArea, buttonArea) {
         // 清空容器内容
         scrollArea.innerHTML = "";
 
-        // 添加按钮到按钮区域
+        // 添加按钮到按钮区域，但只在按钮不存在时创建
         buttonArea.innerHTML = "";
         const clearAllBtn = createButton("Clear All", "clearAllBtn");
         const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
@@ -529,29 +535,14 @@ function updateRecordsList(scrollArea, buttonArea) {
         buttonArea.appendChild(startGenerateBtn);
         buttonArea.appendChild(showIntentBtn);
 
-        // 设置按钮事件监听器
-        setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn);
+        // 设置按钮事件监听器，但只在第一次创建时添加
+        if (!window.buttonsInitialized) {
+            setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn);
+            window.buttonsInitialized = true;
+        }
 
         // 渲染记录
         await renderRecords(records, scrollArea);
-
-        // // 设置网络可视化按钮事件
-        // const showNetworkBtn = document.getElementById("showNetworkBtn");
-        // if (showNetworkBtn) {
-        //     showNetworkBtn.addEventListener("click", async () => {
-        //         try {
-        //             await loadVisJs();
-        //             chrome.storage.local.get("records", (data) => {
-        //                 const records = data.records || [];
-        //                 // Use integrated mode when clicking from floating window
-        //                 showNetworkVisualization(records, floatingWindow.containerArea);
-        //             });
-        //         } catch (error) {
-        //             console.error('Failed to load visualization:', error);
-        //             alert('Failed to load network visualization.');
-        //         }
-        //     });
-        // }
     });
 }
 
@@ -674,22 +665,15 @@ function setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn) {
         });
     });
 
-    // const showNetworkBtn = document.getElementById("showNetworkBtn");
-    // if (showNetworkBtn) {
-    //     showNetworkBtn.addEventListener("click", async () => {
-    //         try {
-    //             await loadVisJs();
-    //             chrome.storage.local.get("records", (data) => {
-    //                 const records = data.records || [];
-    //                 // Use integrated mode when clicking from floating window
-    //                 showNetworkVisualization(records, floatingWindow.containerArea);
-    //             });
-    //         } catch (error) {
-    //             console.error('Failed to load visualization:', error);
-    //             alert('Failed to load network visualization.');
-    //         }
-    //     });
-    // }
+    // 添加高亮按钮的事件监听
+    const highlightBtn = document.getElementById("highlightTextBtn");
+    if (highlightBtn && !highlightBtn.hasListener) {
+        highlightBtn.addEventListener("click", () => {
+            console.log("Highlight button clicked");
+            toggleHighlight();
+        });
+        highlightBtn.hasListener = true;
+    }
 }
 
 async function loadVisJs() {

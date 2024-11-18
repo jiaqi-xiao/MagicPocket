@@ -198,7 +198,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-    text-align: center; /* 添加此行以使文字内容居中显示 */
+    text-align: center; /* 添加此行以使文字内容居中显�� */
 }
 
 #recordsList li:hover {
@@ -313,4 +313,24 @@
 
 .image-preview img:hover {
     transform: scale(1.02);
+}
+
+.mp-text-highlight {
+    background-color: rgba(213, 63, 140, 0.2);
+    border-radius: 2px;
+    padding: 2px 0;
+    transition: background-color 0.3s ease;
+}
+
+.mp-text-highlight:hover {
+    background-color: rgba(213, 63, 140, 0.3);
+}
+
+#highlightTextBtn {
+    transition: all 0.2s ease;
+}
+
+#highlightTextBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(213, 63, 140, 0.15);
 }
