@@ -47,7 +47,7 @@ class NetworkManager {
     setupIntegratedContainer() {
         Object.assign(this.container.style, {
             position: "relative",
-            width: "40%",
+            width: "30vw",
             minWidth: "320px",
             height: "70vh",
             backgroundColor: "white",
@@ -60,13 +60,12 @@ class NetworkManager {
         });
     
         // Find records container
-        const recordsList = this.containerArea.querySelector(".records-container");
+        const recordsList = this.containerArea.querySelector(".mp-floating-main-container");
         if (recordsList) {
-            // Keep original container style
-            recordsList.style.display = "inline-block";
-            recordsList.style.width = "58%";
+            // 保持原始容器宽度
+            recordsList.style.width = "40vw";
             recordsList.style.minWidth = "360px";
-            recordsList.style.verticalAlign = "top";
+            recordsList.style.flexShrink = "0"; // 防止容器被压缩
             
             // Add network container as first child
             this.containerArea.insertBefore(this.container, this.containerArea.firstChild);
@@ -74,16 +73,20 @@ class NetworkManager {
             this.containerArea.appendChild(this.container);
         }
     
-        // Update container area styles
+        // 更新容器区域样式
         Object.assign(this.containerArea.style, {
             display: "flex",
             flexDirection: "row", 
             alignItems: "flex-start",
             justifyContent: "flex-start",
-            width: "100%",
-            maxWidth: "90vw",
-            gap: "2%"
+            width: "calc(70vw + 60px)", // 调整总宽度
+            gap: "2px",
+            maxWidth: "100vw", // 防止溢出屏幕
+            overflowX: "auto" // 允许在需要时横向滚动
         });
+
+        // 添加 with-network 类以触发额外的样式
+        this.containerArea.classList.add('with-network');
     }
     // In networkVisualization.js, add to class NetworkManager
     // Add cleanup method to handle container removal properly
@@ -91,14 +94,19 @@ class NetworkManager {
         if (this.container) {
             this.container.remove();
             if (this.containerArea) {
-                // Reset container area styles when removing network
-                const recordsList = this.containerArea.querySelector(".records-container");
+                this.containerArea.classList.remove('with-network');
+                // 重置容器区域样式
+                Object.assign(this.containerArea.style, {
+                    width: "40vw",
+                    maxWidth: "600px"
+                });
+                
+                // 重置记录列表容器样式
+                const recordsList = this.containerArea.querySelector(".mp-floating-main-container");
                 if (recordsList) {
-                    recordsList.style.width = "100%";
+                    recordsList.style.width = "40vw";
                     recordsList.style.minWidth = "360px";
                 }
-                this.containerArea.style.maxWidth = "600px";
-                this.containerArea.classList.remove('with-network');
             }
         }
         isNetworkVisible = false;

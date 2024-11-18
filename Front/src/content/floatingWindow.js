@@ -42,8 +42,6 @@ class FloatingWindow {
             right: "20px",
             display: "none",
             zIndex: "1000",
-            minWidth: "360px",
-            maxWidth: "600px", // Default max-width when network is not visible
             width: "40vw",
             backgroundColor: "transparent",
             gap: "2%",
@@ -99,10 +97,10 @@ class FloatingWindow {
         this.containerArea.style.display = "block";
         
         // Add responsive checks
-        if (window.innerWidth <= 1024) {
-            this.containerArea.style.width = "95vw";
-            this.containerArea.style.right = "2.5vw";
-        }
+        // if (window.innerWidth <= 1024) {
+        //     this.containerArea.style.width = "95vw";
+        //     this.containerArea.style.right = "2.5vw";
+        // }
         
         this.containers.forEach(container => {
             container.show();
@@ -390,6 +388,10 @@ class FloatingContainer {
     }
 
     hide() {
+        // Notes: 临时取消networkVisualizationContainer显示
+        if (this.networkManager) {
+            this.networkManager.cleanup();
+        }
         this.element.style.display = "none";
     }
 
@@ -896,53 +898,29 @@ additionalNetworkStyle.textContent = `
         display: flex;
         flex-direction: row;
         align-items: flex-start;
-        gap: 2%;
+        gap: 12px;
         padding: 4px;
-        width: 100%;
-        max-width: 600px;
+        width: 40vw;
+        max-width: 100vw;
         transition: all 0.3s ease;
     }
 
     .floating-container-area.with-network {
-        max-width: 90vw;
+        width: calc(70vw + 30px);
+        max-width: 100vw;
     }
 
     #networkVisualizationContainer {
         min-height: 400px;
-        width: 100%;
+        width: 30vw;
+        min-width: 320px;
+        flex-shrink: 0;
     }
 
-    .records-container {
-        flex: 1;
-        min-width: 360px;
-        transition: width 0.3s ease;
-    }
-
-    /* Responsive adjustments for smaller screens */
-    @media screen and (max-width: 1024px) {
-        .floating-container-area.with-network {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 16px;
-        }
-
-        .floating-container-area.with-network #networkVisualizationContainer,
-        .floating-container-area.with-network .records-container {
-            width: 100%;
-            min-width: 320px;
-        }
-
-        .floating-container-area.with-network .records-container {
-            margin-top: 16px;
-        }
-    }
-
-    /* Additional adjustments for mobile screens */
-    @media screen and (max-width: 768px) {
-        .floating-container-area {
-            max-width: 95vw;
-            min-width: 320px;
-        }
+    .mp-floating-main-container {
+        width: 40vw !important;
+        min-width: 360px !important;
+        flex-shrink: 0 !important;
     }
 `;
 document.head.appendChild(additionalNetworkStyle);
