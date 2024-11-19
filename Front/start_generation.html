@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Start Generation</title>
-    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="/styles/styles.css">
 </head>
+
 <body class="inde-page-body">
     <div class="records-manage-container">
         <div class="wrc-sidebar">
@@ -18,6 +20,27 @@
             <button type="button">Generate</button>
         </form>
     </div>
+
+    <div id="mapContainer">
+        <div id="mapInputs">
+            <input type="text" id="origin" placeholder="Origin" value="Teknon Medical Center">
+            <input type="text" id="destination" placeholder="Destination" value="Spotify Camp Nou">
+            <input type="text" id="waypoints" placeholder="Waypoints (comma separated)" value="Bellesguard">
+            <button id="showRoute">Show Route</button>
+        </div>
+        <iframe
+            id="mapFrame"
+            width="600"
+            height="450"
+            style="border:0"
+            loading="lazy"
+            allowfullscreen
+            referrerpolicy="no-referrer-when-downgrade"
+            src="">
+        </iframe>
+    </div>
+
     <script src="records.js"></script>
 </body>
+
 </html>

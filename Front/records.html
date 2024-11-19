@@ -4,6 +4,7 @@
     <title>Recorded Items</title>
     <link rel="stylesheet" type="text/css" href="styles/styles.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <script src="src/utils/imageStorage.js"></script>
 </head>
 <body class="inde-page-body">
     <div class="records-manage-container">
@@ -16,9 +17,17 @@
             <div id="recordDetails">
                 <p><strong>Time:</strong> <span id="recordTime"></span></p>
                 <p><strong>Selected Text:</strong> <span id="recordText"></span></p>
+                <p><strong>Image:</strong></p>
+                <div class="image-preview">
+                    <img id="recordImage" 
+                        style="display: none; max-width: 100%; max-height: 300px; object-fit: contain;"
+                        alt="Recorded image">
+                </div>
                 <p><strong>Paragraph:</strong> <span id="recordParagraph"></span></p>
                 <p><strong>Comment:</strong> <span id="recordComment"></span></p>
                 <p><strong>URL:</strong> <span id="recordUrl"></span></p>
+                <p><strong>Location Address:</strong> <span id="placeFormattedAddress"></span></p>
+                <p><strong>Location Summary:</strong> <span id="placeEditorialSummary"></span></p>
                 <p><strong>ID:</strong> <span id="recordId"></span></p>
             </div>
         </div>

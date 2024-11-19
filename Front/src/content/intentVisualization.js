@@ -41,15 +41,12 @@ function showUserIntentVisualization() {
 }
 
 function createIntentContainer() {
-    // 获取 floatingRecordsContainer
     let floatingRecordsContainer = document.getElementById("floatingRecordsContainer");
     if (!floatingRecordsContainer) {
         console.error("No floatingRecordsContainer found");
         return;
     }
-    let floatingRecordsContainerHeight = floatingRecordsContainer.offsetHeight;
 
-    // 创建意图可视化容器
     let intentContainer = document.createElement("div");
     intentContainer.id = "intentVisualizationContainer";
     intentContainer.style.position = "absolute";
@@ -59,22 +56,34 @@ function createIntentContainer() {
     intentContainer.style.backgroundColor = "#2A2A2A";
     intentContainer.style.color = "#E0E0E0";
     intentContainer.style.border = "1px solid #ccc";
-    intentContainer.style.padding = "10px";
     intentContainer.style.borderRadius = "8px";
     intentContainer.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-    intentContainer.style.height = floatingRecordsContainerHeight + "px";
+    intentContainer.style.height = "70vh";
     intentContainer.style.overflowY = "auto";
+    intentContainer.style.display = "flex";
+    intentContainer.style.flexDirection = "column";
 
-    // 添加标题和刷新按钮
-    intentContainer.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: #FFFFFF; margin: 0;">User Intent</h2>
-            <button id="refreshIntentBtn" style="background: none; border: none; cursor: pointer; color: #FFFFFF;">🔄</button>
-        </div>
+    const header = document.createElement("div");
+    header.style.padding = "10px";
+    header.style.borderBottom = "1px solid #ccc";
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+
+    header.innerHTML = `
+        <h2 style="color: #FFFFFF; margin: 0;">User Intent</h2>
+        <button id="refreshIntentBtn" style="background: none; border: none; cursor: pointer; color: #FFFFFF;">🔄</button>
     `;
 
-    // 添加刷新按钮的点击事件
-    const refreshBtn = intentContainer.querySelector("#refreshIntentBtn");
+    const content = document.createElement("div");
+    content.style.flex = "1";
+    content.style.overflowY = "auto";
+    content.style.padding = "10px";
+
+    intentContainer.appendChild(header);
+    intentContainer.appendChild(content);
+
+    const refreshBtn = header.querySelector("#refreshIntentBtn");
     refreshBtn.addEventListener("click", () => {
         console.log("刷新Intent可视化内容");
         showLoadingAnimation();
@@ -90,7 +99,6 @@ function createIntentContainer() {
             });
     });
 
-    // 将意图容器添加到浮动列表容器中
     floatingRecordsContainer.appendChild(intentContainer);
 
     return intentContainer;
@@ -130,26 +138,18 @@ function renderIntentVisualization(intentData) {
         intentContainer = createIntentContainer();
     }
 
-    // 清除现有的树结构
-    const existingTree = document.getElementById('intentTreeContainer');
-    if (existingTree) {
-        existingTree.remove();
-    }
+    const content = intentContainer.querySelector("div:last-child");
+    content.innerHTML = "";
 
-    // 创建意图树
-    const treeContainer = document.createElement('div');
-    treeContainer.id = 'intentTreeContainer';
-    intentContainer.appendChild(treeContainer);
+    const globalMinPriority = findMinPriority(intentData);
 
-    // 遍历intentData数组并为每个元素创建树
     intentData.forEach(intentItem => {
-        createIntentTree(intentItem, treeContainer);
+        createIntentTree(intentItem, content, 0, 100, globalMinPriority);
     });
 }
 
-function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
+function createIntentTree(intentData, container, level = 0, parentWidth = 100, globalMinPriority) {
     const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#97C8EB'];
-    const minPriority = findMinPriority(intentData);
 
     // 验证 intentData
     if (!(!intentData.id || !intentData.intent || !intentData.priority)) {
@@ -171,7 +171,12 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
         barWrapper.addEventListener('drop', handleDrop);
 
         const bar = document.createElement('div');
-        const width = (minPriority / intentData.priority) * parentWidth;
+        // 新的宽度计算方法
+        const minWidth = 60; // 最小宽度百分比
+        const scaleFactor = 0.6; // 缩放因子,用于减小宽度跨度
+        const priorityRatio = globalMinPriority / intentData.priority;
+        const scaledWidth = minWidth + (100 - minWidth) * (priorityRatio ** scaleFactor);
+        const width = Math.min(scaledWidth, parentWidth);
         bar.style.width = `${width}%`;
         bar.style.height = '30px';
         bar.style.backgroundColor = COLORS[level % COLORS.length];
@@ -183,9 +188,13 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
         bar.style.fontWeight = 'bold';
         bar.style.borderRadius = '4px';
         bar.style.transition = 'width 0.3s ease-in-out';
+        bar.style.overflow = 'hidden';  // 添加这行以防止文字溢出
 
         const nameSpan = document.createElement('span');
+        // format intentData.intent drop special character
+        intentData.intent = intentData.intent.replace(/[`~!@#$%^&*()_\-+=\[\]{};:'"\\|<>\/?]/g, ' ');
         nameSpan.textContent = `${intentData.intent} [${intentData.priority}]`;
+        nameSpan.style.whiteSpace = 'nowrap';  // 确保文本不换行
         bar.appendChild(nameSpan);
 
         barWrapper.appendChild(bar);
@@ -193,15 +202,31 @@ function createIntentTree(intentData, container, level = 0, parentWidth = 100) {
 
         container.appendChild(item);
 
+        // 动态调整文字大小
+        adjustFontSize(bar, nameSpan);
+
         if (intentData.child && intentData.child.length > 0) {
             const childContainer = document.createElement('div');
             childContainer.style.display = 'block'; // 默认展开所有意图
             item.appendChild(childContainer);
 
             intentData.child.forEach(childIntent => {
-                createIntentTree(childIntent, childContainer, level + 1, width);
+                createIntentTree(childIntent, childContainer, level + 1, width, globalMinPriority);
             });
         }
+    }
+}
+
+function adjustFontSize(container, textElement) {
+    const maxSize = 14;  // 最大字体大小
+    const minSize = 4;   // 最小字体大小，可以根据需要调整
+    let size = maxSize;
+
+    textElement.style.fontSize = `${size}px`;
+
+    while (textElement.scrollWidth > container.clientWidth && size > minSize) {
+        size--;
+        textElement.style.fontSize = `${size}px`;
     }
 }
 
@@ -254,13 +279,19 @@ function updateIntentOrder(draggedId, targetId) {
     updateOrder(gIntentDataList);
 }
 
-function findMinPriority(item) {
-    let min = item.priority || Infinity;
-    if (item.child) {
-        for (let child of item.child) {
-            min = Math.min(min, findMinPriority(child));
+function findMinPriority(intentData) {
+    let min = Infinity;
+    
+    function traverse(item) {
+        if (item.priority) {
+            min = Math.min(min, item.priority);
+        }
+        if (item.child) {
+            item.child.forEach(traverse);
         }
     }
+    
+    intentData.forEach(traverse);
     return min;
 }
 
@@ -271,6 +302,55 @@ function fetchIntentDataFromBackend() {
     
     isAnalysisIntent = true;
     console.log("fetchIntentDataFromBackend isAnalysisIntent", isAnalysisIntent);
+
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            getAllRecords()
+                .then(records => {
+                    const formattedData = { data: records };
+                    // reorganize the data to fit the backend requirements
+                    compressExtraToContext(formattedData);
+
+                    console.log("Data send to /extract/direct:", JSON.stringify(formattedData));
+                    return fetch(`${backendDomain}/extract/direct`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formattedData),
+                        mode: 'cors' // 添加这一行
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(intentData => {
+                    console.log("Received from /extract/direct:", JSON.stringify(intentData));
+                    return processClusterData(intentData);
+                })
+                .catch(error => {
+                    console.warn('Failed to fetch intent data, using fallback test data', error);
+                    return [getFallbackData()];
+                })
+                .then(resolve)
+                .finally(() => {
+                    isAnalysisIntent = false;
+                });
+        }, 0);
+    });
+}
+
+// 
+function fetchClusterIntentDataFromBackend() {
+    if (isAnalysisIntent) {
+        return;
+    }
+    
+    isAnalysisIntent = true;
+    console.log("fetchClusterIntentDataFromBackend isAnalysisIntent", isAnalysisIntent);
 
     return new Promise((resolve, reject) => {
         setTimeout(() => {
@@ -295,12 +375,12 @@ function fetchIntentDataFromBackend() {
                     return response.json();
                 })
                 .then(embeddedData => {
-                    console.log("Received from /embed_all:", JSON.stringify(embeddedData));
+                    // console.log("Received from /embed_all:", JSON.stringify(embeddedData));
                     const recordsList = embeddedData;
                     const distance_threshold = 0.5; // 设置适当的阈值
                     const level = 3;
                     const intent_num = 2;
-                    console.log("Data send to /cluster/:", JSON.stringify(recordsList));
+                    // console.log("Data send to /cluster/:", JSON.stringify(recordsList));
                     return fetch(`${backendDomain}/cluster/?distance_threshold=${distance_threshold}&level=${level}&intent_num=${intent_num}`, {
                         method: 'POST',
                         headers: {
@@ -426,11 +506,28 @@ function getAllRecords() {
                     id: record.id,
                     comment: record.comment || null, // 确保 comment 可以为 null
                     context: record.paragraph,
-                    content: record.content
+                    content: record.content,
+                    extraGMLocationContext: record.extraGMLocationContext
                 }
             });
 
             resolve(formattedRecords);
         });
+    });
+}
+
+function compressExtraToContext(formattedData) {
+    formattedData.data.forEach(record => {
+        // combine record.extraGMLocationContext and record.context in a formatted string with markdown format
+        let newContext = "";
+        if (record.extraGMLocationContext) {
+            Object.entries(record.extraGMLocationContext).forEach(([key, item]) => {
+                newContext += `## ${key} \n ${item} \n`;
+            });
+        }
+        if (record.context) {
+            newContext += `## Context \n ${record.context} \n`;
+        }
+        record.context = newContext;
     });
 }

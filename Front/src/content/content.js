@@ -1,7 +1,7 @@
 let selectedText = "";
 let contextMenu = null;
-let floatingWindow = null;
 let isIntentVisible = false;
+let isNetworkVisible = false;
 
 function initializeExtension() {
     console.log("Initializing extension");
@@ -20,3 +20,9 @@ if (document.readyState === 'loading') {
 } else {
     initializeExtension();
 }
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "startScreenshot") {
+        initScreenshot();
+    }
+});

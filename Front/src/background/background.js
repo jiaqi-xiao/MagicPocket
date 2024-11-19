@@ -9,6 +9,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 id: Date.now().toString(),
                 ...request.data
             };
+
+            console.log("newRecord start to save: ", newRecord);
             
             // 检查数据大小
             const recordSize = JSON.stringify(newRecord).length;

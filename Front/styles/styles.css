@@ -82,6 +82,8 @@
     background-color: #ffffff;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
+    cursor: pointer;
+    padding: 15px;
 }
 
 .record-item:hover {
@@ -117,7 +119,8 @@
 
 #clearAllBtn,
 #startGenerateBtn,
-#showIntentBtn {
+#showIntentBtn,
+#showNetworkBtn {
     margin: 10px;
     color: white;
     border: none;
@@ -140,11 +143,20 @@
     background-color: #34c759;
 }
 
+#showNetworkBtn {
+    background-color: #81ecec;
+}
+
 #clearAllBtn:hover,
 #startGenerateBtn:hover,
-#showIntentBtn:hover {
+#showIntentBtn:hover,
+#showNetworkBtn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+#showNetworkBtn:hover {
+    background-color: #74c8c8;
 }
 
 .records-manage-container {
@@ -252,3 +264,53 @@
     width: 100%;
     box-sizing: border-box;
 } */
+
+.screenshot-toolbar {
+    display: flex;
+    gap: 10px;
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.screenshot-tool-button {
+    background-color: #f5f5f5;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    color: #333;
+    transition: all 0.2s ease;
+}
+
+.screenshot-tool-button:hover {
+    background-color: #e0e0e0;
+}
+
+.screenshot-tool-button.active {
+    background-color: #007aff;
+    color: white;
+}
+
+.image-preview {
+    margin: 10px 0;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+}
+
+.image-preview img {
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.image-preview img:hover {
+    transform: scale(1.02);
+}
