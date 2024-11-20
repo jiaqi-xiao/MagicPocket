@@ -13,6 +13,7 @@ class Record(BaseModel):
     comment: str | None = None
     content: str
     context: str
+    isLeafNode: bool = True
 
 # Define a Pydantic model for grouped intents
 class Intent(BaseModel):
@@ -28,11 +29,12 @@ class Intent(BaseModel):
 # Define the main Pydantic model
 class IntentTree(BaseModel):
     scenario: str
-    child: list[Intent]
+    child: list[Intent] = []
     
     def __getattr__(self, name):
-        # 如果访问的属性不存在，返回一个空列表
-        return []
+        if name not in self.__fields__:
+            return []
+        return super().__getattr__(name)
     
 class IntentTreeIndex(BaseModel):
     item: dict[str, str]
@@ -72,4 +74,26 @@ class NodeGroupsIndex(BaseModel):
     
 class NodeGroups(BaseModel):
     item: list[dict[str, list[Union[Record, Intent]]]]
+    
+    @field_validator("item")
+    def validate_item_structure(cls, v):
+        if not isinstance(v, list):
+            raise ValueError("item must be a list")
+        
+        for group in v:
+            if not isinstance(group, dict):
+                raise ValueError("Each item must be a dictionary")
+            
+            if len(group) != 1:
+                raise ValueError("Each group must have exactly one key-value pair")
+            
+            group_name, nodes = next(iter(group.items()))
+            if not isinstance(nodes, list):
+                raise ValueError(f"Value for group '{group_name}' must be a list")
+            
+            for node in nodes:
+                if not isinstance(node, (Record, Intent)):
+                    raise ValueError(f"Node in group '{group_name}' must be either Record or Intent")
+        
+        return v
     

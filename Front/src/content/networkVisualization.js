@@ -1,9 +1,9 @@
 // 网络图配置和状态管理
 class NetworkManager {
-    constructor(records, containerArea = null, mode = 'standalone') {
-        this.records = records;
+    constructor(intentTree, containerArea = null, mode = 'standalone') {
+        this.intentTree = intentTree;
         this.containerArea = containerArea;
-        this.displayMode = mode; // 'standalone' or 'integrated'
+        this.displayMode = mode;
         this.nodes = new vis.DataSet();
         this.edges = new vis.DataSet();
         this.nodeStates = new Map();
@@ -114,9 +114,24 @@ class NetworkManager {
 
     setupVisContainer() {
         this.visContainer = document.createElement("div");
-        this.visContainer.style.width = "100%";
-        this.visContainer.style.height = "calc(100% - 40px)";
+        Object.assign(this.visContainer.style, {
+            width: "100%",
+            height: "calc(100% - 40px)",
+            position: "relative",
+            overflow: "hidden"
+        });
         this.container.appendChild(this.visContainer);
+        
+        const loader = document.createElement("div");
+        loader.textContent = "Loading visualization...";
+        Object.assign(loader.style, {
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            color: "#666"
+        });
+        this.visContainer.appendChild(loader);
     }
 
     switchDisplayMode(newMode, containerArea = null) {
@@ -202,88 +217,126 @@ class NetworkManager {
 
     // 初始化网络节点
     initializeNodes() {
-        this.initializeCenterNode();
-        this.initializeMiddleLayers();
-        this.initializeRecordNodes();
+        if (!this.intentTree || !this.intentTree.item) {
+            console.warn('No valid intent tree data for visualization');
+            return;
+        }
+
+        console.log('intentTree:', JSON.stringify(this.intentTree, null, 2));
+
+        try {
+            const { nodes, edges } = this.transformIntentTreeToNetwork(this.intentTree);
+            this.nodes.add(nodes);
+            this.edges.add(edges);
+        } catch (error) {
+            console.error('Error initializing nodes:', error);
+            throw error;
+        }
     }
 
-    // 初始化中心节点
-    initializeCenterNode() {
-        this.nodes.add({
-            id: 'center',
-            label: 'Main Goal',
-            color: '#ff7675',
-            shape: 'dot',
-            size: 20,
-            opacity: 1
+    transformIntentTreeToNetwork(intentTree) {
+        const nodes = [];
+        const edges = [];
+        let nodeId = 1;
+
+        // 验证数据结构
+        if (!intentTree || !intentTree.item) {
+            console.error('Invalid intent tree structure:', intentTree);
+            throw new Error('Invalid intent tree structure');
+        }
+
+        // 添加根节点
+        const rootId = 'root';
+        nodes.push({
+            id: rootId,
+            label: intentTree.scenario || 'Current Task',
+            type: 'root',
+            color: this.getNodeColor('root'),
+            size: this.getNodeSize('root')
         });
-        this.nodeStates.set('center', true);
-    }
 
-    // 初始化中间层节点
-    initializeMiddleLayers() {
-        const middleLayer1 = ['Planning', 'Execution', 'Feedback'];
-        const middleLayer2 = ['Task Analysis', 'Resource Prep', 'Progress', 'Quality Check'];
-
-        this.createLayerNodes(middleLayer1, 1);
-        this.createLayerNodes(middleLayer2, 2);
-    }
-
-    // 创建层级节点
-    createLayerNodes(layer, level) {
-        layer.forEach((label, index) => {
-            const id = `l${level}_${index}`;
-            const fromId = level === 1 ? 'center' : `l1_${Math.floor(index / 2)}`;
-
-            this.nodes.add({
-                id: id,
-                label: label,
-                color: {
-                    background: level === 1 ?
-                        'rgba(116, 185, 255, 0.5)' :
-                        'rgba(162, 155, 254, 0.5)'
-                },
-                shape: 'dot',
-                size: level === 1 ? 15 : 12,
-                opacity: 0.3
+        // 遍历每个意图组
+        Object.entries(intentTree.item).forEach(([intentName, records], index) => {
+            // 创建意图节点
+            const intentId = `intent_${nodeId++}`;
+            nodes.push({
+                id: intentId,
+                label: intentName,
+                type: 'intent',
+                color: this.getNodeColor('intent'),
+                size: this.getNodeSize('intent')
             });
-            this.nodeStates.set(id, false);
 
-            this.edges.add({
-                id: `e_${fromId}_${id}`,
-                from: fromId,
-                to: id,
-                dashes: true
+            // 连接根节点到意图节点
+            edges.push({
+                from: rootId,
+                to: intentId,
+                arrows: 'to'
             });
+
+            // 处理该意图下的所有记录
+            if (Array.isArray(records)) {
+                records.forEach(record => {
+                    const recordId = `record_${nodeId++}`;
+                    
+                    // 添加记录节点
+                    nodes.push({
+                        id: recordId,
+                        label: this.truncateText(record.content, 30),
+                        type: 'record',
+                        color: this.getNodeColor('record'),
+                        size: this.getNodeSize('record'),
+                        title: this.formatRecordTooltip(record)
+                    });
+
+                    // 连接意图节点到记录节点
+                    edges.push({
+                        from: intentId,
+                        to: recordId,
+                        arrows: 'to'
+                    });
+                });
+            }
         });
+
+        return { nodes, edges };
     }
 
-    // 初始化记录节点
-    initializeRecordNodes() {
-        this.records.forEach((record, index) => {
-            const id = `record_${index}`;
-            const content = record.type === 'text' ?
-                record.content.substring(0, 5) + '...' :
-                'Image ' + (index + 1);
-            const fromId = `l2_${index % 4}`;
+    // 辅助方法：截断文本
+    truncateText(text, maxLength) {
+        if (!text) return 'No content';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
 
-            this.nodes.add({
-                id: id,
-                label: content,
-                color: '#81ecec',
-                shape: 'dot',
-                size: 10,
-                opacity: 0.3
-            });
-            this.nodeStates.set(id, false);
+    // 辅助方法：格式化记录的悬停提示
+    formatRecordTooltip(record) {
+        const content = record.content?.trim() || 'N/A';
+        const context = record.context?.trim() || 'N/A';
+        const comment = record.comment?.trim() || 'N/A';
+        
+        return `Content: ${content}
+Context: ${context}
+Comment: ${comment}`;
+    }
 
-            this.edges.add({
-                id: `e_${fromId}_${id}`,
-                from: fromId,
-                to: id,
-                dashes: true
-            });
-        });
+    // 获取节点颜色
+    getNodeColor(type) {
+        const colors = {
+            root: { background: '#ff7675', border: '#d63031' },    // 红色系
+            intent: { background: '#74b9ff', border: '#0984e3' },  // 蓝色系
+            record: { background: '#81ecec', border: '#00cec9' }   // 青色系
+        };
+        return colors[type] || { background: '#a29bfe', border: '#6c5ce7' };
+    }
+
+    // 获取节点大小
+    getNodeSize(type) {
+        const sizes = {
+            root: 30,    // 根节点最大
+            intent: 25,  // 意图节点中等
+            record: 20   // 记录节点最小
+        };
+        return sizes[type] || 15;
     }
 
     // 更新节点状态
@@ -422,31 +475,70 @@ class NetworkManager {
 
     // 初始化网络图
     initializeNetwork() {
-        const options = {
-            physics: {
-                stabilization: true,
-                barnesHut: {
-                    gravitationalConstant: -2000,
-                    springLength: 200,
-                    springConstant: 0.04
+        setTimeout(() => {
+            const options = {
+                physics: {
+                    enabled: true,
+                    hierarchicalRepulsion: {
+                        centralGravity: 0.0,
+                        springLength: 150,
+                        springConstant: 0.01,
+                        nodeDistance: 150,
+                        damping: 0.09
+                    },
+                    solver: 'hierarchicalRepulsion'
+                },
+                layout: {
+                    hierarchical: {
+                        enabled: true,
+                        direction: 'UD',        // 从上到下布局
+                        sortMethod: 'directed',
+                        nodeSpacing: 150,       // 增加节点间距
+                        treeSpacing: 200,
+                        levelSeparation: 150    // 增加层级间距
+                    }
+                },
+                nodes: {
+                    shape: 'dot',
+                    scaling: {
+                        min: 16,
+                        max: 32
+                    },
+                    font: {
+                        size: 14,
+                        face: 'Arial',
+                        color: '#333'
+                    },
+                    borderWidth: 2,
+                    shadow: true
+                },
+                edges: {
+                    width: 2,
+                    smooth: {
+                        type: 'cubicBezier',
+                        forceDirection: 'vertical'
+                    }
                 }
-            },
-            layout: {
-                hierarchical: {
-                    enabled: false
-                }
-            },
-            interaction: {
-                hover: true
-            }
-        };
+            };
 
-        this.network = new vis.Network(this.visContainer, {
-            nodes: this.nodes,
-            edges: this.edges
-        }, options);
+            this.visContainer.innerHTML = '';
+            this.network = new vis.Network(this.visContainer, {
+                nodes: this.nodes,
+                edges: this.edges
+            }, options);
 
-        this.setupNetworkEvents();
+            // 自动适应视图
+            this.network.once('stabilized', () => {
+                this.network.fit({
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            });
+
+            this.setupNetworkEvents();
+        }, 100);
     }
 
     // 设置网络图事件
@@ -463,7 +555,7 @@ class NetworkManager {
 }
 
 // 主函数
-function showNetworkVisualization(records, containerArea = null) {
+function showNetworkVisualization(intentTree, containerArea = null) {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -471,15 +563,19 @@ function showNetworkVisualization(records, containerArea = null) {
             return;
         }
 
+        console.log('Visualization data:', intentTree);
+
         const mode = containerArea ? 'integrated' : 'standalone';
-        console.log('networkVisualizationContainer mode: ', mode);
-        const networkManager = new NetworkManager(records, containerArea, mode);
+        console.log('networkVisualizationContainer mode:', mode);
+        
+        this.intentTree = intentTree;
+        const networkManager = new NetworkManager(intentTree, containerArea, mode);
         networkManager.initContainer();
         networkManager.initializeNodes();
         networkManager.initializeNetwork();
 
         isNetworkVisible = true;
-        return networkManager; // Return instance for potential mode switching
+        return networkManager;
 
     } catch (error) {
         console.error('Error in network visualization:', error);
