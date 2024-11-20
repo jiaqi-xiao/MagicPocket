@@ -1,5 +1,7 @@
 // 网络图配置和状态管理
 class NetworkManager {
+    static activeNodeMenu = false;  // 跟踪节点菜单状态
+
     constructor(intentTree, containerArea = null, mode = 'standalone') {
         this.intentTree = intentTree;
         this.containerArea = containerArea;
@@ -252,48 +254,55 @@ class NetworkManager {
             label: intentTree.scenario || 'Current Task',
             type: 'root',
             color: this.getNodeColor('root'),
-            size: this.getNodeSize('root')
+            size: this.getNodeSize('root'),
+            opacity: 0.3  // 设置初始透明度
         });
+        // 设置根节点的初始状态
+        this.nodeStates.set(rootId, false);
 
         // 遍历每个意图组
         Object.entries(intentTree.item).forEach(([intentName, records], index) => {
-            // 创建意图节点
             const intentId = `intent_${nodeId++}`;
             nodes.push({
                 id: intentId,
                 label: intentName,
                 type: 'intent',
                 color: this.getNodeColor('intent'),
-                size: this.getNodeSize('intent')
+                size: this.getNodeSize('intent'),
+                opacity: 0.3  // 设置初始透明度
             });
+            // 设置意图节点的初始状态
+            this.nodeStates.set(intentId, false);
 
             // 连接根节点到意图节点
             edges.push({
                 from: rootId,
                 to: intentId,
-                arrows: 'to'
+                arrows: 'to',
+                dashes: true  // 设置初始虚线状态
             });
 
-            // 处理该意图下的所有记录
+            // 处理记录
             if (Array.isArray(records)) {
                 records.forEach(record => {
                     const recordId = `record_${nodeId++}`;
-                    
-                    // 添加记录节点
                     nodes.push({
                         id: recordId,
                         label: this.truncateText(record.content, 30),
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
-                        title: this.formatRecordTooltip(record)
+                        title: this.formatRecordTooltip(record),
+                        opacity: 0.3  // 设置初始透明度
                     });
+                    // 设置记录节点的初始状态
+                    this.nodeStates.set(recordId, false);
 
-                    // 连接意图节点到记录节点
                     edges.push({
                         from: intentId,
                         to: recordId,
-                        arrows: 'to'
+                        arrows: 'to',
+                        dashes: true  // 设置初始虚线状态
                     });
                 });
             }
@@ -365,19 +374,48 @@ Comment: ${comment}`;
     }
 
     // 创建节点菜单
-    createNodeMenu(nodeId, x, y) {
+    createNodeMenu(nodeId) {
+        // 如果已经存在菜单，先移除它
+        const existingMenu = document.getElementById('nodeMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+        
+        // 设置菜单激活状态
+        NetworkManager.activeNodeMenu = true;
+        
         const menu = document.createElement('div');
-        this.setupNodeMenu(menu, x, y);
+        
+        // 获取节点的DOM位置
+        const nodePosition = this.network.getPositions([nodeId])[nodeId];
+        const domPosition = this.network.canvasToDOM(nodePosition);
+        
+        // 获取容器的位置信息
+        const containerRect = this.container.getBoundingClientRect();
+        
+        // 计算菜单的实际位置，需要加上容器的偏移
+        const menuX = domPosition.x + containerRect.left;
+        const menuY = domPosition.y + containerRect.top;
+        
+        // 获取节点的大小信息
+        const node = this.nodes.get(nodeId);
+        const nodeSize = node.size || 16;
+        
+        this.setupNodeMenu(menu, menuX, menuY);
         this.addMenuItems(menu, nodeId);
         document.body.appendChild(menu);
+        
+        // 确保菜单不会超出视窗并居中对齐
+        this.adjustMenuPosition(menu, menuX);
+        
         this.setupMenuCloseEvent(menu);
     }
 
-    // 设置节点菜单样式
     setupNodeMenu(menu, x, y) {
         menu.id = 'nodeMenu';
         Object.assign(menu.style, {
-            position: 'absolute',
+            position: 'fixed',
+            transform: 'translate(-50%, -100%)', // 水平居中并向上偏移菜单自身高度
             left: x + 'px',
             top: y + 'px',
             backgroundColor: 'white',
@@ -387,6 +425,26 @@ Comment: ${comment}`;
             boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
             zIndex: '10001'
         });
+    }
+
+    adjustMenuPosition(menu, nodeX) {
+        const rect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // 检查上边界
+        if (rect.top < 0) {
+            // 如果上方空间不足，则显示在节点下方
+            menu.style.top = (parseInt(menu.style.top) + rect.height + 30) + 'px';
+        }
+        
+        // 检查左右边界，保持水平居中但不超出屏幕
+        const halfWidth = rect.width / 2;
+        if (nodeX - halfWidth < 0) {
+            menu.style.left = halfWidth + 'px';
+        } else if (nodeX + halfWidth > viewportWidth) {
+            menu.style.left = (viewportWidth - halfWidth) + 'px';
+        }
     }
 
     // 添加菜单项
@@ -465,11 +523,14 @@ Comment: ${comment}`;
     // 设置菜单关闭事件
     setupMenuCloseEvent(menu) {
         const closeMenu = (e) => {
-            if (!menu.contains(e.target)) {
+            // 检查点击是否在菜单外且不是节点点击事件
+            if (!menu.contains(e.target) && !e.target.closest('.vis-network')) {
                 menu.remove();
+                NetworkManager.activeNodeMenu = false;
                 document.removeEventListener('click', closeMenu);
             }
         };
+        // 延迟添加事件监听器，避免立即触发
         setTimeout(() => document.addEventListener('click', closeMenu), 0);
     }
 
@@ -479,34 +540,16 @@ Comment: ${comment}`;
             const options = {
                 physics: {
                     enabled: true,
-                    hierarchicalRepulsion: {
-                        centralGravity: 0.0,
-                        springLength: 150,
-                        springConstant: 0.01,
-                        nodeDistance: 150,
-                        damping: 0.09
-                    },
-                    solver: 'hierarchicalRepulsion'
-                },
-                layout: {
-                    hierarchical: {
+                    stabilization: {
                         enabled: true,
-                        direction: 'UD',        // 从上到下布局
-                        sortMethod: 'directed',
-                        nodeSpacing: 150,       // 增加节点间距
-                        treeSpacing: 200,
-                        levelSeparation: 150    // 增加层级间距
+                        iterations: 1000
                     }
                 },
                 nodes: {
                     shape: 'dot',
-                    scaling: {
-                        min: 16,
-                        max: 32
-                    },
+                    size: 16,
                     font: {
                         size: 14,
-                        face: 'Arial',
                         color: '#333'
                     },
                     borderWidth: 2,
@@ -515,19 +558,27 @@ Comment: ${comment}`;
                 edges: {
                     width: 2,
                     smooth: {
-                        type: 'cubicBezier',
-                        forceDirection: 'vertical'
+                        type: 'continuous'
+                    },
+                    arrows: {
+                        to: { enabled: true, scaleFactor: 0.5 }
                     }
                 }
             };
 
+            // 清除加载指示器
             this.visContainer.innerHTML = '';
+            
+            // 初始化网络
             this.network = new vis.Network(this.visContainer, {
                 nodes: this.nodes,
                 edges: this.edges
             }, options);
 
-            // 自动适应视图
+            // 添加网络事件监听
+            this.setupNetworkEvents();
+            
+            // 等待布局稳定后进行初始缩放适配
             this.network.once('stabilized', () => {
                 this.network.fit({
                     animation: {
@@ -537,19 +588,129 @@ Comment: ${comment}`;
                 });
             });
 
-            this.setupNetworkEvents();
+            // 添加双击事件以聚焦节点
+            this.network.on('doubleClick', (params) => {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    this.network.focus(nodeId, {
+                        scale: 1.2,
+                        animation: {
+                            duration: 500,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
+                }
+            });
+
+            // 添加悬停效果
+            this.network.on('hoverNode', (params) => {
+                this.container.style.cursor = 'pointer';
+            });
+
+            this.network.on('blurNode', (params) => {
+                this.container.style.cursor = 'default';
+            });
+
+            // 添加缩放限制
+            this.network.on('zoom', (params) => {
+                if (params.scale < 0.3) {
+                    this.network.moveTo({
+                        scale: 0.3
+                    });
+                } else if (params.scale > 2.5) {
+                    this.network.moveTo({
+                        scale: 2.5
+                    });
+                }
+            });
         }, 100);
     }
 
-    // 设置网络图事件
+    // 设置网络事件
     setupNetworkEvents() {
+        // 点击节点显示菜单
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
-                const canvasPosition = params.pointer.canvas;
-                const DOMPosition = this.network.canvasToDOM(canvasPosition);
-                this.createNodeMenu(nodeId, DOMPosition.x, DOMPosition.y);
+                // 直接使用节点位置创建菜单
+                this.createNodeMenu(nodeId);
             }
+        });
+
+        // 添加拖动开始事件
+        this.network.on('dragStart', (params) => {
+            if (params.nodes.length > 0) {
+                this.container.style.cursor = 'grabbing';
+            }
+        });
+
+        // 添加拖动结束事件
+        this.network.on('dragEnd', (params) => {
+            this.container.style.cursor = 'default';
+        });
+
+        // 添加选择事件
+        this.network.on('select', (params) => {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const node = this.nodes.get(nodeId);
+                if (node.type === 'record') {
+                    // 高亮显示相关节点
+                    this.highlightConnectedNodes(nodeId);
+                }
+            } else {
+                // 取消高亮
+                this.clearHighlight();
+            }
+        });
+    }
+
+    // 高亮相关节点
+    highlightConnectedNodes(nodeId) {
+        const connectedNodes = this.network.getConnectedNodes(nodeId);
+        const allNodes = this.nodes.get();
+        const allEdges = this.edges.get();
+        
+        // 降低其他节点的透明度
+        allNodes.forEach(node => {
+            if (node.id !== nodeId && !connectedNodes.includes(node.id)) {
+                this.nodes.update({
+                    id: node.id,
+                    opacity: 0.3
+                });
+            }
+        });
+        
+        // 降低其他边的透明度
+        allEdges.forEach(edge => {
+            if (edge.from !== nodeId && edge.to !== nodeId) {
+                this.edges.update({
+                    id: edge.id,
+                    opacity: 0.3
+                });
+            }
+        });
+    }
+
+    // 清除高亮效果
+    clearHighlight() {
+        const allNodes = this.nodes.get();
+        const allEdges = this.edges.get();
+        
+        // 恢复所有节点的透明度
+        allNodes.forEach(node => {
+            this.nodes.update({
+                id: node.id,
+                opacity: 1.0
+            });
+        });
+        
+        // 恢复所有边的透明度
+        allEdges.forEach(edge => {
+            this.edges.update({
+                id: edge.id,
+                opacity: 1.0
+            });
         });
     }
 }

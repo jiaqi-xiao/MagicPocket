@@ -124,7 +124,8 @@ class FloatingWindow {
 
     handleMouseLeave() {
         this.hideTimeout = setTimeout(() => {
-            if (!this.isAnalysisMode()) {
+            // 检查是否有活跃的节点菜单
+            if (!this.isAnalysisMode() && !NetworkManager.activeNodeMenu) {
                 this.hideContainers();
             }
         }, 200);
@@ -226,7 +227,7 @@ class FloatingContainer {
         container.className = `floating-container ${this.id}-container`;
         this.setupContainerStyle(container);
         
-        // 添加标题栏
+        // 添标题栏
         if (this.config.title) {
             const titleBar = this.createTitleBar();
             container.appendChild(titleBar);
@@ -249,7 +250,7 @@ class FloatingContainer {
     setupContainerStyle(container) {
         Object.assign(container.style, {
             position: "relative",
-            width: "100%",
+            width: "90%",
             height: this.config.height,
             backgroundColor: "#fff",
             borderRadius: "16px",
@@ -508,8 +509,11 @@ function initializeRecordsContainer(container) {
     // 创建按钮区域容器
     const buttonContainer = document.createElement("div");
     Object.assign(buttonContainer.style, {
-        flexShrink: 0,  // 防止按钮区域被压缩
-        borderTop: "1px solid #eee"
+        flexShrink: 0,
+        borderTop: "1px solid #eee",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0px"
     });
     container.appendChild(buttonContainer);
 
@@ -523,12 +527,12 @@ function initializeRecordsContainer(container) {
     buttonContainer.appendChild(buttonArea2);
 
     // 添加网络可视化按钮
-    const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
-    buttonArea2.appendChild(showNetworkBtn);
+    // const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
+    // buttonArea2.appendChild(showNetworkBtn);
 
-    // 添加高亮按钮
-    const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
-    buttonArea2.appendChild(highlightBtn);
+    // // 添加高亮按钮
+    // const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
+    // buttonArea2.appendChild(highlightBtn);
 
     // 更新记录显示
     updateRecordsList(scrollArea, buttonArea);
@@ -538,10 +542,12 @@ function setupButtonArea(buttonArea) {
     Object.assign(buttonArea.style, {
         padding: "12px 16px",
         display: "flex",
-        justifyContent: "space-between",
+        justifyContent: "flex-start",
+        alignItems: "center",
         backgroundColor: "#fff",
         borderTop: "1px solid #edf2f7",
-        gap: "8px"
+        gap: "8px",
+        flexWrap: "wrap"
     });
 }
 
@@ -550,7 +556,7 @@ function createButton(text, id) {
     button.id = id;
     button.textContent = text;
     Object.assign(button.style, {
-        padding: "8px 12px",
+        padding: "6px 12px",
         borderRadius: "8px",
         border: "none",
         fontSize: "13px",
@@ -558,7 +564,12 @@ function createButton(text, id) {
         cursor: "pointer",
         transition: "all 0.2s ease",
         backgroundColor: getButtonColor(id),
-        color: getButtonTextColor(id)
+        color: getButtonTextColor(id),
+        height: "32px",
+        lineHeight: "20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
     });
 
     // 添加悬停效果
@@ -604,22 +615,20 @@ function updateRecordsList(scrollArea, buttonArea) {
 
         // 清空容器内容
         scrollArea.innerHTML = "";
-
-        // 添加按钮到按钮区域，但只在按钮不存在时创建
         buttonArea.innerHTML = "";
+
+        // 创建按钮
         const clearAllBtn = createButton("Clear All", "clearAllBtn");
         const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
-        const showIntentBtn = createButton("Show Intent", "showIntentBtn");
+        const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
 
+        // 添加按钮到按钮区域
         buttonArea.appendChild(clearAllBtn);
         buttonArea.appendChild(startGenerateBtn);
-        buttonArea.appendChild(showIntentBtn);
+        buttonArea.appendChild(highlightTextBtn);
 
-        // 设置按钮事件监听器，但只在第一次创建时添加
-        if (!window.buttonsInitialized) {
-            setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn);
-            window.buttonsInitialized = true;
-        }
+        // 每次都重新绑定事件监听器
+        setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
 
         // 渲染记录
         await renderRecords(records, scrollArea);
@@ -725,34 +734,36 @@ async function deleteRecord(index) {
     });
 }
 
-function setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn) {
+function setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn) {
+    // Start Generation 按钮
     startGenerateBtn.addEventListener("click", () => {
+        console.log("Start generation button clicked");
         const url = chrome.runtime.getURL(`start_generation.html`);
         window.open(url, "_blank");
     });
 
-    showIntentBtn.addEventListener("click", () => {
-        clickUserIntentBtn();
-    });
-
+    // Clear All 按钮
     clearAllBtn.addEventListener("click", () => {
         chrome.storage.local.clear(() => {
-            updateRecordsList(
-                document.querySelector(".records-container .container-content > div"),
-                document.querySelector(".records-container .container-content > div:nth-child(2)")
-            );
             console.log("Storage cleared");
+            // 直接使用当前的 scrollArea 和 buttonArea
+            const container = document.querySelector(".records-container .container-content");
+            if (container) {
+                const scrollArea = container.querySelector("#recordsScrollArea");
+                const buttonArea = container.querySelector("div:nth-child(2) > div:first-child");
+                if (scrollArea && buttonArea) {
+                    updateRecordsList(scrollArea, buttonArea);
+                }
+            }
         });
     });
 
-    // 添加高亮按钮的事件监听
-    const highlightBtn = document.getElementById("highlightTextBtn");
-    if (highlightBtn && !highlightBtn.hasListener) {
-        highlightBtn.addEventListener("click", () => {
+    // Highlight Text 按钮
+    if (highlightTextBtn) {
+        highlightTextBtn.addEventListener("click", () => {
             console.log("Highlight button clicked");
-            toggleHighlight();
+            window.toggleHighlight();
         });
-        highlightBtn.hasListener = true;
     }
 }
 
