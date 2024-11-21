@@ -358,6 +358,18 @@ async def incremental_construct_intent(request: dict):
             status_code=422,
             detail=f"Error constructing intent tree: {str(e)}"
         )
+    
+
+@app.post("/rag/")
+async def retrieve_top_k_relevant_sentence_based_on_intent(
+    intentList: list[Intent],
+    webContent: str,
+    k: int
+):
+    ## split webContent into sentences list
+    ## vectorize intents and sentences
+    ## cal top-k most relevant sentences for each intents
+    return "top-k most relevant sentences for each intents"
 
 
 @app.post("/cluster/")
