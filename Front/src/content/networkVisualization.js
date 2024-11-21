@@ -1,9 +1,11 @@
 // 网络图配置和状态管理
 class NetworkManager {
-    constructor(records, containerArea = null, mode = 'standalone') {
-        this.records = records;
+    static activeNodeMenu = false;  // 跟踪节点菜单状态
+
+    constructor(intentTree, containerArea = null, mode = 'standalone') {
+        this.intentTree = intentTree;
         this.containerArea = containerArea;
-        this.displayMode = mode; // 'standalone' or 'integrated'
+        this.displayMode = mode;
         this.nodes = new vis.DataSet();
         this.edges = new vis.DataSet();
         this.nodeStates = new Map();
@@ -114,9 +116,24 @@ class NetworkManager {
 
     setupVisContainer() {
         this.visContainer = document.createElement("div");
-        this.visContainer.style.width = "100%";
-        this.visContainer.style.height = "calc(100% - 40px)";
+        Object.assign(this.visContainer.style, {
+            width: "100%",
+            height: "calc(100% - 40px)",
+            position: "relative",
+            overflow: "hidden"
+        });
         this.container.appendChild(this.visContainer);
+        
+        const loader = document.createElement("div");
+        loader.textContent = "Loading visualization...";
+        Object.assign(loader.style, {
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            color: "#666"
+        });
+        this.visContainer.appendChild(loader);
     }
 
     switchDisplayMode(newMode, containerArea = null) {
@@ -202,88 +219,133 @@ class NetworkManager {
 
     // 初始化网络节点
     initializeNodes() {
-        this.initializeCenterNode();
-        this.initializeMiddleLayers();
-        this.initializeRecordNodes();
+        if (!this.intentTree || !this.intentTree.item) {
+            console.warn('No valid intent tree data for visualization');
+            return;
+        }
+
+        console.log('intentTree:', JSON.stringify(this.intentTree, null, 2));
+
+        try {
+            const { nodes, edges } = this.transformIntentTreeToNetwork(this.intentTree);
+            this.nodes.add(nodes);
+            this.edges.add(edges);
+        } catch (error) {
+            console.error('Error initializing nodes:', error);
+            throw error;
+        }
     }
 
-    // 初始化中心节点
-    initializeCenterNode() {
-        this.nodes.add({
-            id: 'center',
-            label: 'Main Goal',
-            color: '#ff7675',
-            shape: 'dot',
-            size: 20,
-            opacity: 1
+    transformIntentTreeToNetwork(intentTree) {
+        const nodes = [];
+        const edges = [];
+        let nodeId = 1;
+
+        // 验证数据结构
+        if (!intentTree || !intentTree.item) {
+            console.error('Invalid intent tree structure:', intentTree);
+            throw new Error('Invalid intent tree structure');
+        }
+
+        // 添加根节点
+        const rootId = 'root';
+        nodes.push({
+            id: rootId,
+            label: intentTree.scenario || 'Current Task',
+            type: 'root',
+            color: this.getNodeColor('root'),
+            size: this.getNodeSize('root'),
+            opacity: 0.3  // 设置初始透明度
         });
-        this.nodeStates.set('center', true);
-    }
+        // 设置根节点的初始状态
+        this.nodeStates.set(rootId, false);
 
-    // 初始化中间层节点
-    initializeMiddleLayers() {
-        const middleLayer1 = ['Planning', 'Execution', 'Feedback'];
-        const middleLayer2 = ['Task Analysis', 'Resource Prep', 'Progress', 'Quality Check'];
-
-        this.createLayerNodes(middleLayer1, 1);
-        this.createLayerNodes(middleLayer2, 2);
-    }
-
-    // 创建层级节点
-    createLayerNodes(layer, level) {
-        layer.forEach((label, index) => {
-            const id = `l${level}_${index}`;
-            const fromId = level === 1 ? 'center' : `l1_${Math.floor(index / 2)}`;
-
-            this.nodes.add({
-                id: id,
-                label: label,
-                color: {
-                    background: level === 1 ?
-                        'rgba(116, 185, 255, 0.5)' :
-                        'rgba(162, 155, 254, 0.5)'
-                },
-                shape: 'dot',
-                size: level === 1 ? 15 : 12,
-                opacity: 0.3
+        // 遍历每个意图组
+        Object.entries(intentTree.item).forEach(([intentName, records], index) => {
+            const intentId = `intent_${nodeId++}`;
+            nodes.push({
+                id: intentId,
+                label: intentName,
+                type: 'intent',
+                color: this.getNodeColor('intent'),
+                size: this.getNodeSize('intent'),
+                opacity: 0.3  // 设置初始透明度
             });
-            this.nodeStates.set(id, false);
+            // 设置意图节点的初始状态
+            this.nodeStates.set(intentId, false);
 
-            this.edges.add({
-                id: `e_${fromId}_${id}`,
-                from: fromId,
-                to: id,
-                dashes: true
+            // 连接根节点到意图节点
+            edges.push({
+                from: rootId,
+                to: intentId,
+                arrows: 'to',
+                dashes: true  // 设置初始虚线状态
             });
+
+            // 处理记录
+            if (Array.isArray(records)) {
+                records.forEach(record => {
+                    const recordId = `record_${nodeId++}`;
+                    nodes.push({
+                        id: recordId,
+                        label: this.truncateText(record.content, 30),
+                        type: 'record',
+                        color: this.getNodeColor('record'),
+                        size: this.getNodeSize('record'),
+                        title: this.formatRecordTooltip(record),
+                        opacity: 0.3  // 设置初始透明度
+                    });
+                    // 设置记录节点的初始状态
+                    this.nodeStates.set(recordId, false);
+
+                    edges.push({
+                        from: intentId,
+                        to: recordId,
+                        arrows: 'to',
+                        dashes: true  // 设置初始虚线状态
+                    });
+                });
+            }
         });
+
+        return { nodes, edges };
     }
 
-    // 初始化记录节点
-    initializeRecordNodes() {
-        this.records.forEach((record, index) => {
-            const id = `record_${index}`;
-            const content = record.type === 'text' ?
-                record.content.substring(0, 5) + '...' :
-                'Image ' + (index + 1);
-            const fromId = `l2_${index % 4}`;
+    // 辅助方法：截断文本
+    truncateText(text, maxLength) {
+        if (!text) return 'No content';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
 
-            this.nodes.add({
-                id: id,
-                label: content,
-                color: '#81ecec',
-                shape: 'dot',
-                size: 10,
-                opacity: 0.3
-            });
-            this.nodeStates.set(id, false);
+    // 辅助方法：格式化记录的悬停提示
+    formatRecordTooltip(record) {
+        const content = record.content?.trim() || 'N/A';
+        const context = record.context?.trim() || 'N/A';
+        const comment = record.comment?.trim() || 'N/A';
+        
+        return `Content: ${content}
+Context: ${context}
+Comment: ${comment}`;
+    }
 
-            this.edges.add({
-                id: `e_${fromId}_${id}`,
-                from: fromId,
-                to: id,
-                dashes: true
-            });
-        });
+    // 获取节点颜色
+    getNodeColor(type) {
+        const colors = {
+            root: { background: '#ff7675', border: '#d63031' },    // 红色系
+            intent: { background: '#74b9ff', border: '#0984e3' },  // 蓝色系
+            record: { background: '#81ecec', border: '#00cec9' }   // 青色系
+        };
+        return colors[type] || { background: '#a29bfe', border: '#6c5ce7' };
+    }
+
+    // 获取节点大小
+    getNodeSize(type) {
+        const sizes = {
+            root: 30,    // 根节点最大
+            intent: 25,  // 意图节点中等
+            record: 20   // 记录节点最小
+        };
+        return sizes[type] || 15;
     }
 
     // 更新节点状态
@@ -312,19 +374,48 @@ class NetworkManager {
     }
 
     // 创建节点菜单
-    createNodeMenu(nodeId, x, y) {
+    createNodeMenu(nodeId) {
+        // 如果已经存在菜单，先移除它
+        const existingMenu = document.getElementById('nodeMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+        
+        // 设置菜单激活状态
+        NetworkManager.activeNodeMenu = true;
+        
         const menu = document.createElement('div');
-        this.setupNodeMenu(menu, x, y);
+        
+        // 获取节点的DOM位置
+        const nodePosition = this.network.getPositions([nodeId])[nodeId];
+        const domPosition = this.network.canvasToDOM(nodePosition);
+        
+        // 获取容器的位置信息
+        const containerRect = this.container.getBoundingClientRect();
+        
+        // 计算菜单的实际位置，需要加上容器的偏移
+        const menuX = domPosition.x + containerRect.left;
+        const menuY = domPosition.y + containerRect.top;
+        
+        // 获取节点的大小信息
+        const node = this.nodes.get(nodeId);
+        const nodeSize = node.size || 16;
+        
+        this.setupNodeMenu(menu, menuX, menuY);
         this.addMenuItems(menu, nodeId);
         document.body.appendChild(menu);
+        
+        // 确保菜单不会超出视窗并居中对齐
+        this.adjustMenuPosition(menu, menuX);
+        
         this.setupMenuCloseEvent(menu);
     }
 
-    // 设置节点菜单样式
     setupNodeMenu(menu, x, y) {
         menu.id = 'nodeMenu';
         Object.assign(menu.style, {
-            position: 'absolute',
+            position: 'fixed',
+            transform: 'translate(-50%, -100%)', // 水平居中并向上偏移菜单自身高度
             left: x + 'px',
             top: y + 'px',
             backgroundColor: 'white',
@@ -334,6 +425,26 @@ class NetworkManager {
             boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
             zIndex: '10001'
         });
+    }
+
+    adjustMenuPosition(menu, nodeX) {
+        const rect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // 检查上边界
+        if (rect.top < 0) {
+            // 如果上方空间不足，则显示在节点下方
+            menu.style.top = (parseInt(menu.style.top) + rect.height + 30) + 'px';
+        }
+        
+        // 检查左右边界，保持水平居中但不超出屏幕
+        const halfWidth = rect.width / 2;
+        if (nodeX - halfWidth < 0) {
+            menu.style.left = halfWidth + 'px';
+        } else if (nodeX + halfWidth > viewportWidth) {
+            menu.style.left = (viewportWidth - halfWidth) + 'px';
+        }
     }
 
     // 添加菜单项
@@ -412,58 +523,200 @@ class NetworkManager {
     // 设置菜单关闭事件
     setupMenuCloseEvent(menu) {
         const closeMenu = (e) => {
-            if (!menu.contains(e.target)) {
+            // 检查点击是否在菜单外且不是节点点击事件
+            if (!menu.contains(e.target) && !e.target.closest('.vis-network')) {
                 menu.remove();
+                NetworkManager.activeNodeMenu = false;
                 document.removeEventListener('click', closeMenu);
             }
         };
+        // 延迟添加事件监听器，避免立即触发
         setTimeout(() => document.addEventListener('click', closeMenu), 0);
     }
 
     // 初始化网络图
     initializeNetwork() {
-        const options = {
-            physics: {
-                stabilization: true,
-                barnesHut: {
-                    gravitationalConstant: -2000,
-                    springLength: 200,
-                    springConstant: 0.04
+        setTimeout(() => {
+            const options = {
+                physics: {
+                    enabled: true,
+                    stabilization: {
+                        enabled: true,
+                        iterations: 1000
+                    }
+                },
+                nodes: {
+                    shape: 'dot',
+                    size: 16,
+                    font: {
+                        size: 14,
+                        color: '#333'
+                    },
+                    borderWidth: 2,
+                    shadow: true
+                },
+                edges: {
+                    width: 2,
+                    smooth: {
+                        type: 'continuous'
+                    },
+                    arrows: {
+                        to: { enabled: true, scaleFactor: 0.5 }
+                    }
                 }
-            },
-            layout: {
-                hierarchical: {
-                    enabled: false
+            };
+
+            // 清除加载指示器
+            this.visContainer.innerHTML = '';
+            
+            // 初始化网络
+            this.network = new vis.Network(this.visContainer, {
+                nodes: this.nodes,
+                edges: this.edges
+            }, options);
+
+            // 添加网络事件监听
+            this.setupNetworkEvents();
+            
+            // 等待布局稳定后进行初始缩放适配
+            this.network.once('stabilized', () => {
+                this.network.fit({
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            });
+
+            // 添加双击事件以聚焦节点
+            this.network.on('doubleClick', (params) => {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    this.network.focus(nodeId, {
+                        scale: 1.2,
+                        animation: {
+                            duration: 500,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
                 }
-            },
-            interaction: {
-                hover: true
-            }
-        };
+            });
 
-        this.network = new vis.Network(this.visContainer, {
-            nodes: this.nodes,
-            edges: this.edges
-        }, options);
+            // 添加悬停效果
+            this.network.on('hoverNode', (params) => {
+                this.container.style.cursor = 'pointer';
+            });
 
-        this.setupNetworkEvents();
+            this.network.on('blurNode', (params) => {
+                this.container.style.cursor = 'default';
+            });
+
+            // 添加缩放限制
+            this.network.on('zoom', (params) => {
+                if (params.scale < 0.3) {
+                    this.network.moveTo({
+                        scale: 0.3
+                    });
+                } else if (params.scale > 2.5) {
+                    this.network.moveTo({
+                        scale: 2.5
+                    });
+                }
+            });
+        }, 100);
     }
 
-    // 设置网络图事件
+    // 设置网络事件
     setupNetworkEvents() {
+        // 点击节点显示菜单
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
-                const canvasPosition = params.pointer.canvas;
-                const DOMPosition = this.network.canvasToDOM(canvasPosition);
-                this.createNodeMenu(nodeId, DOMPosition.x, DOMPosition.y);
+                // 直接使用节点位置创建菜单
+                this.createNodeMenu(nodeId);
             }
+        });
+
+        // 添加拖动开始事件
+        this.network.on('dragStart', (params) => {
+            if (params.nodes.length > 0) {
+                this.container.style.cursor = 'grabbing';
+            }
+        });
+
+        // 添加拖动结束事件
+        this.network.on('dragEnd', (params) => {
+            this.container.style.cursor = 'default';
+        });
+
+        // 添加选择事件
+        this.network.on('select', (params) => {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const node = this.nodes.get(nodeId);
+                if (node.type === 'record') {
+                    // 高亮显示相关节点
+                    this.highlightConnectedNodes(nodeId);
+                }
+            } else {
+                // 取消高亮
+                this.clearHighlight();
+            }
+        });
+    }
+
+    // 高亮相关节点
+    highlightConnectedNodes(nodeId) {
+        const connectedNodes = this.network.getConnectedNodes(nodeId);
+        const allNodes = this.nodes.get();
+        const allEdges = this.edges.get();
+        
+        // 降低其他节点的透明度
+        allNodes.forEach(node => {
+            if (node.id !== nodeId && !connectedNodes.includes(node.id)) {
+                this.nodes.update({
+                    id: node.id,
+                    opacity: 0.3
+                });
+            }
+        });
+        
+        // 降低其他边的透明度
+        allEdges.forEach(edge => {
+            if (edge.from !== nodeId && edge.to !== nodeId) {
+                this.edges.update({
+                    id: edge.id,
+                    opacity: 0.3
+                });
+            }
+        });
+    }
+
+    // 清除高亮效果
+    clearHighlight() {
+        const allNodes = this.nodes.get();
+        const allEdges = this.edges.get();
+        
+        // 恢复所有节点的透明度
+        allNodes.forEach(node => {
+            this.nodes.update({
+                id: node.id,
+                opacity: 1.0
+            });
+        });
+        
+        // 恢复所有边的透明度
+        allEdges.forEach(edge => {
+            this.edges.update({
+                id: edge.id,
+                opacity: 1.0
+            });
         });
     }
 }
 
 // 主函数
-function showNetworkVisualization(records, containerArea = null) {
+function showNetworkVisualization(intentTree, containerArea = null) {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -471,15 +724,19 @@ function showNetworkVisualization(records, containerArea = null) {
             return;
         }
 
+        console.log('Visualization data:', intentTree);
+
         const mode = containerArea ? 'integrated' : 'standalone';
-        console.log('networkVisualizationContainer mode: ', mode);
-        const networkManager = new NetworkManager(records, containerArea, mode);
+        console.log('networkVisualizationContainer mode:', mode);
+        
+        this.intentTree = intentTree;
+        const networkManager = new NetworkManager(intentTree, containerArea, mode);
         networkManager.initContainer();
         networkManager.initializeNodes();
         networkManager.initializeNetwork();
 
         isNetworkVisible = true;
-        return networkManager; // Return instance for potential mode switching
+        return networkManager;
 
     } catch (error) {
         console.error('Error in network visualization:', error);

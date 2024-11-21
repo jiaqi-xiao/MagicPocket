@@ -124,7 +124,8 @@ class FloatingWindow {
 
     handleMouseLeave() {
         this.hideTimeout = setTimeout(() => {
-            if (!this.isAnalysisMode()) {
+            // 检查是否有活跃的节点菜单
+            if (!this.isAnalysisMode() && !NetworkManager.activeNodeMenu) {
                 this.hideContainers();
             }
         }, 200);
@@ -226,7 +227,7 @@ class FloatingContainer {
         container.className = `floating-container ${this.id}-container`;
         this.setupContainerStyle(container);
         
-        // 添加标题栏
+        // 添标题栏
         if (this.config.title) {
             const titleBar = this.createTitleBar();
             container.appendChild(titleBar);
@@ -249,7 +250,7 @@ class FloatingContainer {
     setupContainerStyle(container) {
         Object.assign(container.style, {
             position: "relative",
-            width: "100%",
+            width: "90%",
             height: this.config.height,
             backgroundColor: "#fff",
             borderRadius: "16px",
@@ -364,18 +365,98 @@ class FloatingContainer {
             if (isNetworkVisible) {
                 isNetworkVisible = false;
                 if (this.networkManager) {
-                    this.networkManager.cleanup(); // 使用 this.networkManager
+                    this.networkManager.cleanup();
                 }
             } else {
                 try {
                     await loadVisJs();
-                    chrome.storage.local.get("records", (data) => {
-                        const records = data.records || [];
-                        this.networkManager = showNetworkVisualization(records, floatingWindow.containerArea);
+                    
+                    // 获取当前任务描述
+                    const taskDescription = await new Promise((resolve) => {
+                        chrome.storage.local.get("currentTask", (data) => {
+                            resolve(data.currentTask?.description || "General Task");
+                        });
                     });
+                    
+                    // 获取所有记录
+                    const records = await new Promise((resolve) => {
+                        chrome.storage.local.get("records", (data) => {
+                            resolve(data.records || []);
+                        });
+                    });
+
+                    if (!records.length) {
+                        alert('No records found to visualize.');
+                        return;
+                    }
+
+                    // 添加调试信息
+                    console.log('Attempting to connect to backend at http://localhost:8000/group/');
+                    
+                    // 调用后端 group_nodes API
+                    const groupResponse = await fetch('http://localhost:8000/group/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            data: records.map(record => ({
+                                id: parseInt(record.id) || Date.now(),
+                                content: record.content || "",
+                                context: record.context || "",
+                                comment: record.comment || "",
+                                isLeafNode: true
+                            }))
+                        })
+                    }).catch(error => {
+                        throw new Error(`Network error: ${error.message}. Please ensure the backend server is running at http://localhost:8000`);
+                    });
+                    
+                    if (!groupResponse.ok) {
+                        const errorData = await groupResponse.json();
+                        throw new Error(`Group API error (${groupResponse.status}): ${JSON.stringify(errorData.detail)}`);
+                    }
+                    
+                    const groupsOfNodes = await groupResponse.json();
+
+                    // 调用后端 construct API
+                    const constructRequestBody = {
+                        scenario: taskDescription,
+                        groupsOfNodes: groupsOfNodes,
+                        target_level: 3
+                    };
+                    
+                    console.log("Construct API request body:", JSON.stringify(constructRequestBody, null, 2));
+                    
+                    const constructResponse = await fetch('http://localhost:8000/construct/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(constructRequestBody)
+                    });
+                    
+                    if (!constructResponse.ok) {
+                        const errorData = await constructResponse.json();
+                        console.error('Construct API error response:', errorData);
+                        throw new Error(`Construct API error: ${JSON.stringify(errorData.detail)}`);
+                    }
+
+                    const intentTree = await constructResponse.json();
+                    console.log("Construct API response:", JSON.stringify(intentTree, null, 2));
+                    
+                    if (!intentTree || !intentTree.item) {
+                        throw new Error('Invalid intent tree structure received from server');
+                    }
+                    // intentTree 增加 scenario 字段
+                    intentTree.scenario = taskDescription;
+                    
+                    // 将网络可视化所需的数据结构传递给可视化组件
+                    this.networkManager = showNetworkVisualization(intentTree, floatingWindow.containerArea);
+                    
                 } catch (error) {
-                    console.error('Failed to load visualization:', error);
-                    alert('Failed to load network visualization.');
+                    console.error('Visualization error details:', error);
+                    alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
                 }
             }
         });
@@ -428,8 +509,11 @@ function initializeRecordsContainer(container) {
     // 创建按钮区域容器
     const buttonContainer = document.createElement("div");
     Object.assign(buttonContainer.style, {
-        flexShrink: 0,  // 防止按钮区域被压缩
-        borderTop: "1px solid #eee"
+        flexShrink: 0,
+        borderTop: "1px solid #eee",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0px"
     });
     container.appendChild(buttonContainer);
 
@@ -443,12 +527,12 @@ function initializeRecordsContainer(container) {
     buttonContainer.appendChild(buttonArea2);
 
     // 添加网络可视化按钮
-    const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
-    buttonArea2.appendChild(showNetworkBtn);
+    // const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
+    // buttonArea2.appendChild(showNetworkBtn);
 
-    // 添加高亮按钮
-    const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
-    buttonArea2.appendChild(highlightBtn);
+    // // 添加高亮按钮
+    // const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
+    // buttonArea2.appendChild(highlightBtn);
 
     // 更新记录显示
     updateRecordsList(scrollArea, buttonArea);
@@ -458,10 +542,12 @@ function setupButtonArea(buttonArea) {
     Object.assign(buttonArea.style, {
         padding: "12px 16px",
         display: "flex",
-        justifyContent: "space-between",
+        justifyContent: "flex-start",
+        alignItems: "center",
         backgroundColor: "#fff",
         borderTop: "1px solid #edf2f7",
-        gap: "8px"
+        gap: "8px",
+        flexWrap: "wrap"
     });
 }
 
@@ -470,7 +556,7 @@ function createButton(text, id) {
     button.id = id;
     button.textContent = text;
     Object.assign(button.style, {
-        padding: "8px 12px",
+        padding: "6px 12px",
         borderRadius: "8px",
         border: "none",
         fontSize: "13px",
@@ -478,7 +564,12 @@ function createButton(text, id) {
         cursor: "pointer",
         transition: "all 0.2s ease",
         backgroundColor: getButtonColor(id),
-        color: getButtonTextColor(id)
+        color: getButtonTextColor(id),
+        height: "32px",
+        lineHeight: "20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
     });
 
     // 添加悬停效果
@@ -524,22 +615,20 @@ function updateRecordsList(scrollArea, buttonArea) {
 
         // 清空容器内容
         scrollArea.innerHTML = "";
-
-        // 添加按钮到按钮区域，但只在按钮不存在时创建
         buttonArea.innerHTML = "";
+
+        // 创建按钮
         const clearAllBtn = createButton("Clear All", "clearAllBtn");
         const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
-        const showIntentBtn = createButton("Show Intent", "showIntentBtn");
+        const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
 
+        // 添加按钮到按钮区域
         buttonArea.appendChild(clearAllBtn);
         buttonArea.appendChild(startGenerateBtn);
-        buttonArea.appendChild(showIntentBtn);
+        buttonArea.appendChild(highlightTextBtn);
 
-        // 设置按钮事件监听器，但只在第一次创建时添加
-        if (!window.buttonsInitialized) {
-            setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn);
-            window.buttonsInitialized = true;
-        }
+        // 每次都重新绑定事件监听器
+        setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
 
         // 渲染记录
         await renderRecords(records, scrollArea);
@@ -645,56 +734,157 @@ async function deleteRecord(index) {
     });
 }
 
-function setupButtonListeners(clearAllBtn, startGenerateBtn, showIntentBtn) {
+function setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn) {
+    // Start Generation 按钮
     startGenerateBtn.addEventListener("click", () => {
+        console.log("Start generation button clicked");
         const url = chrome.runtime.getURL(`start_generation.html`);
         window.open(url, "_blank");
     });
 
-    showIntentBtn.addEventListener("click", () => {
-        clickUserIntentBtn();
-    });
-
+    // Clear All 按钮
     clearAllBtn.addEventListener("click", () => {
         chrome.storage.local.clear(() => {
-            updateRecordsList(
-                document.querySelector(".records-container .container-content > div"),
-                document.querySelector(".records-container .container-content > div:nth-child(2)")
-            );
             console.log("Storage cleared");
+            // 直接使用当前的 scrollArea 和 buttonArea
+            const container = document.querySelector(".records-container .container-content");
+            if (container) {
+                const scrollArea = container.querySelector("#recordsScrollArea");
+                const buttonArea = container.querySelector("div:nth-child(2) > div:first-child");
+                if (scrollArea && buttonArea) {
+                    updateRecordsList(scrollArea, buttonArea);
+                }
+            }
         });
     });
 
-    // 添加高亮按钮的事件监听
-    const highlightBtn = document.getElementById("highlightTextBtn");
-    if (highlightBtn && !highlightBtn.hasListener) {
-        highlightBtn.addEventListener("click", () => {
+    // Highlight Text 按钮
+    if (highlightTextBtn) {
+        highlightTextBtn.addEventListener("click", () => {
             console.log("Highlight button clicked");
-            toggleHighlight();
+            window.toggleHighlight();
         });
-        highlightBtn.hasListener = true;
     }
 }
 
+// 加载vis.js库
 async function loadVisJs() {
-    if (visJsLoaded) return Promise.resolve();
+    if (window.visJsLoaded) return;
     
-    return new Promise((resolve, reject) => {
-        const cssLink = document.createElement('link');
-        cssLink.rel = 'stylesheet';
-        cssLink.type = 'text/css';
-        cssLink.href = chrome.runtime.getURL('lib/vis-network.css');
-        document.head.appendChild(cssLink);
+    await Promise.all([
+        loadStylesheet(chrome.runtime.getURL('lib/vis-network.css')),
+        loadScript(chrome.runtime.getURL('lib/vis-network.js'))
+    ]);
+    
+    window.visJsLoaded = true;
+}
 
+function loadStylesheet(url) {
+    return new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        link.onload = resolve;
+        link.onerror = reject;
+        document.head.appendChild(link);
+    });
+}
+
+function loadScript(url) {
+    return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = chrome.runtime.getURL('lib/vis-network.js');
-        script.onload = () => {
-            visJsLoaded = true;
-            resolve();
-        };
+        script.src = url;
+        script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);
     });
+}
+
+// 显示网络可视化的按钮点击处理
+async function handleShowNetwork() {
+    try {
+        await loadVisJs();
+        
+        const taskDescription = await getTaskDescription();
+        const records = await getRecords();
+        
+        if (!records.length) {
+            alert('No records found to visualize.');
+            return;
+        }
+        
+        // 调用分组API
+        const groupsOfNodes = await callGroupAPI(records);
+        
+        // 调用构建API
+        const intentTree = await callConstructAPI({
+            scenario: taskDescription,
+            groupsOfNodes,
+            target_level: 3
+        });
+        
+        // 验证返回的数据结构
+        if (!intentTree || !intentTree.item) {
+            throw new Error('Invalid response structure from construct API');
+        }
+        
+        console.log('Intent tree structure:', JSON.stringify(intentTree, null, 2));
+        
+        // 创建可视化
+        showNetworkVisualization(intentTree, floatingWindow.containerArea);
+        
+    } catch (error) {
+        console.error('Visualization error details:', error);
+        alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+    }
+}
+
+// API调用函数
+async function callGroupAPI(records) {
+    const response = await fetch('http://localhost:8000/group/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            data: records.map(record => ({
+                id: parseInt(record.id) || Date.now(),
+                content: record.content || "",
+                context: record.context || "",
+                comment: record.comment || "",
+                isLeafNode: true
+            }))
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Group API error: ${await response.text()}`);
+    }
+    
+    return await response.json();
+}
+
+async function callConstructAPI(data) {
+    const response = await fetch('http://localhost:8000/construct/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Construct API error: ${await response.text()}`);
+    }
+    
+    return await response.json();
+}
+
+// 辅助函数
+async function getTaskDescription() {
+    const data = await chrome.storage.local.get("currentTask");
+    return data.currentTask?.description || "General Task";
+}
+
+async function getRecords() {
+    const data = await chrome.storage.local.get("records");
+    return data.records || [];
 }
 
 // Add window resize event listener to handle responsive updates

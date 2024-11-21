@@ -43,6 +43,8 @@ from langchain_openai import ChatOpenAI
 import os
 from utils import *
 import json
+import traceback
+from fastapi import HTTPException
 
 app = FastAPI()
 
@@ -257,70 +259,105 @@ chain4Grouping = extractModule.Chain4Grouping(model)
 
 
 @app.post("/group/")
-async def group_nodes(
-    nodesList: NodesList,
-):
-    ### 对nodes分组
+async def group_nodes(nodesList: NodesList):
+    """对nodes进行分组"""
+    try:
+        # 转换输入数据
+        root = [node.model_dump() for node in nodesList.data]
+        
+        # 根据节点类型生成文本描述
+        if isinstance(nodesList.data[0], Record):
+            nodesTxt = "\n\n".join([
+                f"id: {i+1}\n- 选中文本: {node['content']}\n- 上下文: {node['context']}\n- 注释: {node['comment']}"
+                for i, node in enumerate(root)
+            ])
+        else:
+            nodesTxt = "\n\n".join([
+                f"id: {node['id']}\n- intent: {node['intent']}"
+                for node in root
+            ])
 
-    root = [node.model_dump() for node in nodesList.data]
-
-    if isinstance(nodesList.data[0], Record):
-        nodesTxt = "\n\n".join(
-            [
-                "id: {}\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
-                    index + 1,
-                    root[index]["content"],
-                    root[index]["context"],
-                    root[index]["comment"],
-                )
-                for index in range(len(root))
+        # 调用分组模型
+        groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt)
+        
+        # 转换输出格式
+        groupsOfNodes = {
+            "item": [
+                {group_name: [root[i-1] for i in indices]}
+                for group in groupsOfNodesIndex["item"]
+                for group_name, indices in group.items()
             ]
-        )
-    else:
-        nodesTxt = "\n\n".join(
-            [
-                "id: {}\n- intent: {}".format(root[index]["id"], root[index]["intent"])
-                for index in range(len(root))
-            ]
-        )
-    groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt)
+        }
+        
+        return groupsOfNodes
 
-    groupsOfNodes = []
-    for group in groupsOfNodesIndex["item"]:
-        for group_name, indices in group.items():
-            # 根据索引获取对应的节点
-            nodes = [root[i - 1] for i in indices]
-            # 构造输出的分组
-            groupsOfNodes.append({group_name: nodes})
-    return {"item": groupsOfNodes}
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error processing nodes: {str(e)}")
 
 
 chain4Construct = extractModule.Chain4Construct(model)
 
 
 @app.post("/construct/")
-async def incremental_construct_intent(
-    scenario: str,
-    groupsOfNodes: NodeGroups,
-    intentTree: IntentTree,
-    target_level: int = Query(ge=1),
-):
-    # 筛选出immutable的Node
-    immutableIntentsList = extractModule.filterNodes(
-        intentTree.model_dump(), target_level, key="immutable", value=True
-    )
+async def incremental_construct_intent(request: dict):
+    """增量构建意图树"""
+    try:
+        # 验证输入参数
+        scenario = request.get("scenario")
+        groupsOfNodes = request.get("groupsOfNodes")
+        intentTree = request.get("intentTree")
+        target_level = request.get("target_level", 1)
+        
+        if not all([scenario, groupsOfNodes]):
+            raise HTTPException(status_code=422, detail="Missing required parameters")
+            
+        # 标准化分组数据
+        standardized_groups = NodeGroups(
+            item=[{
+                group_name: [
+                    Record(**node) for node in nodes
+                ]
+            } for group in groupsOfNodes["item"]
+            for group_name, nodes in group.items()]
+        )
+        
+        # 创建或转换意图树
+        initial_tree = IntentTree(
+            scenario=scenario,
+            child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
+        )
 
-    # # 映射group到intent，对多余的组提取新意图
-    newIntentTreeIndex = await chain4Construct.invoke(
-        scenario, groupsOfNodes.model_dump_json(), str(immutableIntentsList)
-    )
-    newIntentTree = newIntentTreeIndex["item"]
-    for key, indices in newIntentTreeIndex["item"].items():
-        # 根据索引替换为对应的值
-        for group in groupsOfNodes.model_dump()["item"]:
-            if indices in group.keys():
-                newIntentTree[key] = group[indices]
-    return {"item": newIntentTree}
+        # 获取不可变意图列表
+        immutableIntents = []
+        if intentTree:
+            immutableIntents = extractModule.filterNodes(
+                initial_tree.model_dump(), 
+                target_level,
+                key="immutable",
+                value=True
+            )
+        
+        # 构建新的意图树
+        newIntentTreeIndex = await chain4Construct.invoke(
+            scenario,
+            standardized_groups.model_dump_json(),
+            str(immutableIntents)
+        )
+        
+        # 转换输出格式
+        newIntentTree = newIntentTreeIndex["item"]
+        for key, indices in newIntentTreeIndex["item"].items():
+            for group in standardized_groups.model_dump()["item"]:
+                if indices in group.keys():
+                    newIntentTree[key] = group[indices]
+                    
+        return {"item": newIntentTree}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Error constructing intent tree: {str(e)}"
+        )
 
 
 @app.post("/cluster/")
