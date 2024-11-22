@@ -1,10 +1,12 @@
+import re
+import numpy as np
 
-def filterNodes(tree, target_level, current_level=0, result=None, key="immutable", value=True) -> list:
+def filterNodes(tree, target_level, current_level=0, result=None, key=None, value=True) -> list:
     """
     筛选出tree中指定层中的immutable为True的nodes。
 
     :param tree: 目标树结构，通常是嵌套的字典或列表。
-    :param key: 要检查的键，默认是 'immutable'。
+    :param key: 要检查的键，默认是 None。
     :param value: 要匹配的值，默认为 True。
     :return: 包含符合条件节点的列表。
     """
@@ -14,8 +16,9 @@ def filterNodes(tree, target_level, current_level=0, result=None, key="immutable
     # 如果下一层是目标层，收集所有该层的 "text"
     if current_level == target_level - 1:
         for item in tree["child"]:
-            if (not item["isLeafNode"]) and (item[key] == value):
-                result.append(item["intent"])
+            if not item["isLeafNode"]:
+                if (key is None) or (item[key] == value):
+                    result.append(item["intent"])
 
     # 遍历子节点，继续递归
     for node in tree["child"]:
@@ -23,6 +26,22 @@ def filterNodes(tree, target_level, current_level=0, result=None, key="immutable
 
     return result
 
+def split2Sentences(content):
+    # 使用正则表达式分句
+    sentence_endings = re.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!|\。|\！|\？)\s')
+    sentences = sentence_endings.split(content)
+    # 去除空白句子
+    sentences = [s.strip() for s in sentences if s.strip()]
+    return sentences
+
+def cosine_similarity(vec1, vec2):
+    """
+    计算两个向量之间的余弦相似度。
+    """
+    dot_product = np.dot(vec1, vec2)
+    norm_vec1 = np.linalg.norm(vec1)
+    norm_vec2 = np.linalg.norm(vec2)
+    return dot_product / (norm_vec1 * norm_vec2 + 1e-8)  # 避免除以零
 
 if __name__ == "__main__":
     intentTree = {
