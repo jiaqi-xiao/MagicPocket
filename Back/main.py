@@ -400,7 +400,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
             target_level=1  # 筛选一级意图
         )
         intents_embeddings = embedModel.embeddingList(intents)
-
         # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
@@ -411,7 +410,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
                 cosine_similarity(intent_e, sentence_e)
                 for sentence_e in sentences_embeddings
             ]
-
             # 筛选相似度高于阈值的句子及其索引
             filtered_indices = [
                 i for i, sim in enumerate(similarities) if sim >= top_threshold
@@ -421,20 +419,20 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
             filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
             top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
             top_k_sentences = [sentences[i[0]] for i in top_k_indices]
-
+            top_k_sentences_embeddings = [sentences_embeddings[i[0]] for i in top_k_indices]
+            
             # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
             intent_records_embeddings = embedModel.embeddingList(intent_records)
-
             # 对top-k中每个句子计算与每个 record 的最小相似度
             record_min_similarities = []
-            for sentence_e in top_k_sentences:
+            for sentence_e in top_k_sentences_embeddings:
                 min_sim = min(
                     cosine_similarity(record_e, sentence_e)
                     for record_e in intent_records_embeddings
                 )
                 record_min_similarities.append(min_sim)
-
+            print(intent, record_min_similarities)
             # 筛选低于 bottom_k_threshold 的句子及其索引
             bottom_filtered_indices = [
                 i for i, sim in enumerate(record_min_similarities) if sim <= bottom_threshold
@@ -442,8 +440,8 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
             bottom_filtered_similarities = [
                 (i, record_min_similarities[i]) for i in bottom_filtered_indices
             ]
-            bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:1]
-            bottom_k_sentences = [sentences[i[0]] for i in bottom_k_indices]
+            bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:2]
+            bottom_k_sentences = [top_k_sentences[i[0]] for i in bottom_k_indices]
 
             # 保存结果
             intent_to_top_k_sentences[intent]= top_k_sentences
