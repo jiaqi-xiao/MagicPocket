@@ -1,4 +1,5 @@
-from pydantic import BaseModel, field_validator
+from fastapi import Query
+from pydantic import BaseModel, Field, field_validator
 from typing import Union
 from .utils import *
 
@@ -32,7 +33,7 @@ class IntentTree(BaseModel):
     child: list[Intent] = []
     
     def __getattr__(self, name):
-        if name not in self.__fields__:
+        if name not in self.model_fields:
             return []
         return super().__getattr__(name)
     
@@ -96,4 +97,12 @@ class NodeGroups(BaseModel):
                     raise ValueError(f"Node in group '{group_name}' must be either Record or Intent")
         
         return v
-    
+
+
+class RAGRequest(BaseModel):
+    scenario: str
+    k: int = 3
+    top_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
+    bottom_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
+    intentTree: dict
+    webContent: str = Field(..., max_length=1000, description="The web content to process")
