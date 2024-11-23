@@ -461,6 +461,13 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
 
 
 
+@app.post("/segment/")
+async def page_content_segment_vectorize(
+    page_content: str
+):
+    # 对网页内容进行分句
+    # 对每个句子进行向量化
+    return "vectorized sentences"
 
 @app.post("/cluster/")
 # async def direct_extract_intent(
