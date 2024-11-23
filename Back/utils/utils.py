@@ -15,13 +15,13 @@ def filterNodes(tree, target_level, current_level=0, result=None, key=None, valu
 
     # 如果下一层是目标层，收集所有该层的 "text"
     if current_level == target_level - 1:
-        for item in tree["child"]:
+        for item in tree.get("child", []):
             if not item["isLeafNode"]:
                 if (key is None) or (item[key] == value):
                     result.append(item["intent"])
 
     # 遍历子节点，继续递归
-    for node in tree["child"]:
+    for node in tree.get("child", []):
         filterNodes(node, target_level, current_level + 1, result)
 
     return result
@@ -42,6 +42,49 @@ def cosine_similarity(vec1, vec2):
     norm_vec1 = np.linalg.norm(vec1)
     norm_vec2 = np.linalg.norm(vec2)
     return dot_product / (norm_vec1 * norm_vec2 + 1e-8)  # 避免除以零
+
+def get_intent_records(intentTree, intent):
+    """
+    获取指定 intent 的所有叶节点记录，递归遍历所有层级（除叶节点外）。
+
+    :param intentTree: 树形结构的意图树
+    :param intent: 目标 intent
+    :return: 匹配 intent 的所有叶节点记录列表
+    """
+    def collect_leaf_nodes(node):
+        """
+        递归收集所有叶节点。
+        :param node: 当前节点
+        :return: 叶节点的列表
+        """
+        if not node.get("child", []):  # 如果没有子节点，说明是叶节点
+            return [node]
+        leaf_nodes = []
+        for child in node.get("child", []):
+            leaf_nodes.extend(collect_leaf_nodes(child))
+        return leaf_nodes
+
+    def traverse_and_match(node):
+        """
+        递归遍历所有节点，匹配 intent 并收集叶节点。
+        :param node: 当前节点
+        :return: 匹配 intent 的叶节点列表
+        """
+        # 如果当前节点的 intent 匹配目标 intent，则收集其所有叶节点
+        if node.get("intent") == intent:
+            return collect_leaf_nodes(node)
+        
+        # 如果有子节点，递归遍历子节点
+        results = []
+        for child in node.get("child", []):
+            results.extend(traverse_and_match(child))
+        return results
+
+    # 从根节点开始递归遍历
+    return traverse_and_match(intentTree)
+
+
+
 
 if __name__ == "__main__":
     intentTree = {

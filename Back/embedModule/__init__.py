@@ -31,7 +31,7 @@ class EmbedModel:
         return np.sum(v_list, axis=0).tolist() if vector_operation_mode == "add" else (v_list[0] - np.sum(v_list[1:], axis=0)).tolist()
 
     def embeddingList(self, sentences: list):
-        return self.embeddingsModel.encode(sentences)
+        return self.embeddingsModel.embed_documents(sentences)
 
     # # 获取索引中所有嵌入的向量
     # def get_all_vectors(self):

@@ -348,9 +348,12 @@ async def incremental_construct_intent(request: dict):
         # 转换输出格式
         newIntentTree = newIntentTreeIndex["item"]
         for key, indices in newIntentTreeIndex["item"].items():
-            for group in standardized_groups.model_dump()["item"]:
-                if indices in group.keys():
-                    newIntentTree[key] = group[indices]
+            if indices == "":
+                newIntentTree[key] = []
+            else:
+                for group in standardized_groups.model_dump()["item"]:
+                    if indices in group.keys():
+                        newIntentTree[key] = group[indices]
                     
         return {"item": newIntentTree}
 
@@ -361,87 +364,102 @@ async def incremental_construct_intent(request: dict):
         )
     
 @app.post("/rag/")
-async def retrieve_top_k_relevant_sentence_based_on_intent(
-    intentTree: IntentTree,
-    webContent: Annotated[str, Query(max_length=1000)],
-    k: int,
-):
+async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGRequest):
     """
     从 intentTree 和 webContent 中筛选出每个 intent 对应的 top-k 和 bottom-k 相关句子。
 
     :param intentTree: 意图树，包含嵌套的意图结构。
     :param webContent: Web 内容，字符串形式。
     :param k: 每个意图返回的最相关句子数。
-    :param threshold: top-k 相似度阈值，只有相似度高于该值的句子才会被纳入 top-k。
-    :param bottom_k_threshold: bottom-k 筛选的相似度阈值，低于该值的句子才会被考虑。
+    :param top_threshold: top-k 相似度阈值，只有相似度高于该值的句子才会被纳入 top-k。
+    :param bottom_threshold: bottom-k 筛选的相似度阈值，低于该值的句子才会被考虑。目前为bottom_1
     :return: 每个意图对应的 top-k 和 bottom-k 最相关句子的结果。
     """
-    # Step 1: 将 webContent 分句
-    sentences = split2Sentences(webContent)
+    try:
+        intentTree = ragRequest.intentTree
+        webContent = ragRequest.webContent
+        k = ragRequest.k
+        top_threshold = ragRequest.top_threshold
+        bottom_threshold = ragRequest.bottom_threshold
+        scenario = ragRequest.scenario
 
-    # Step 2: 向量化 webContent 的句子
-    sentences_embeddings = embedModel.embeddingList(sentences)
-
-    # Step 3: 筛选意图并向量化它们
-    intents = filterNodes(
-        intentTree.model_dump(),  # 转换 IntentTree 为字典
-        target_level=1  # 筛选一级意图
-    )
-    intents_embeddings = embedModel.embeddingList(intents)
-
-    # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
-    intent_to_top_k_sentences = {}
-    intent_to_bottom_k_sentences = {}
-
-    for intent, intent_e in zip(intents, intents_embeddings):
-        # 计算意图向量和所有句子向量之间的余弦相似度
-        similarities = [
-            cosine_similarity(intent_e, sentence_e)
-            for sentence_e in sentences_embeddings
-        ]
-
-        # 筛选相似度高于阈值的句子及其索引
-        filtered_indices = [
-            i for i, sim in enumerate(similarities) if sim >= 0.8
-        ]
+        intentTree = IntentTree(
+                scenario = scenario,
+                child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
+            ).model_dump()
         
-        # 从筛选结果中选取 top-k
-        filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
-        top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
-        top_k_sentences = [sentences[i[0]] for i in top_k_indices]
+        # Step 1: 将 webContent 分句
+        sentences = split2Sentences(webContent)
 
-        # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
-        intent_records = intentTree.model_dump()["child"].get(intent, [])  # 获取当前意图的记录
-        intent_records_embeddings = embedModel.embeddingList(intent_records)
+        # Step 2: 向量化 webContent 的句子
+        sentences_embeddings = embedModel.embeddingList(sentences)
 
-        # 对top-k中每个句子计算与每个 record 的最小相似度
-        record_min_similarities = []
-        for sentence_e in top_k_sentences:
-            min_sim = min(
-                cosine_similarity(record_e, sentence_e)
-                for record_e in intent_records_embeddings
-            )
-            record_min_similarities.append(min_sim)
+        # Step 3: 筛选意图并向量化它们
+        intents = filterNodes(
+            intentTree,  # 转换 IntentTree 为字典
+            target_level=1  # 筛选一级意图
+        )
+        intents_embeddings = embedModel.embeddingList(intents)
 
-        # 筛选低于 bottom_k_threshold 的句子及其索引
-        bottom_filtered_indices = [
-            i for i, sim in enumerate(record_min_similarities) if sim <= 0.2
-        ]
-        bottom_filtered_similarities = [
-            (i, record_min_similarities[i]) for i in bottom_filtered_indices
-        ]
-        bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[0]
-        bottom_k_sentences = [sentences[i[0]] for i in bottom_k_indices]
+        # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
+        intent_to_top_k_sentences = {}
+        intent_to_bottom_k_sentences = {}
 
-        # 保存结果
-        intent_to_top_k_sentences[intent]= top_k_sentences
-        intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+        for intent, intent_e in zip(intents, intents_embeddings):
+            # 计算意图向量和所有句子向量之间的余弦相似度
+            similarities = [
+                cosine_similarity(intent_e, sentence_e)
+                for sentence_e in sentences_embeddings
+            ]
 
-    # Step 6: 返回每个意图的 top-k 和 bottom-k 最相关句子
-    return {
-        "top_k": intent_to_top_k_sentences,
-        "bottom_k": intent_to_bottom_k_sentences,
-    }
+            # 筛选相似度高于阈值的句子及其索引
+            filtered_indices = [
+                i for i, sim in enumerate(similarities) if sim >= top_threshold
+            ]
+            
+            # 从筛选结果中选取 top-k
+            filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
+            top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
+            top_k_sentences = [sentences[i[0]] for i in top_k_indices]
+
+            # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
+            intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
+            intent_records_embeddings = embedModel.embeddingList(intent_records)
+
+            # 对top-k中每个句子计算与每个 record 的最小相似度
+            record_min_similarities = []
+            for sentence_e in top_k_sentences:
+                min_sim = min(
+                    cosine_similarity(record_e, sentence_e)
+                    for record_e in intent_records_embeddings
+                )
+                record_min_similarities.append(min_sim)
+
+            # 筛选低于 bottom_k_threshold 的句子及其索引
+            bottom_filtered_indices = [
+                i for i, sim in enumerate(record_min_similarities) if sim <= bottom_threshold
+            ]
+            bottom_filtered_similarities = [
+                (i, record_min_similarities[i]) for i in bottom_filtered_indices
+            ]
+            bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:1]
+            bottom_k_sentences = [sentences[i[0]] for i in bottom_k_indices]
+
+            # 保存结果
+            intent_to_top_k_sentences[intent]= top_k_sentences
+            intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+
+        # Step 6: 返回每个意图的 top-k 和 bottom-k 最相关句子
+        return {
+            "top_k": intent_to_top_k_sentences,
+            "bottom_k": intent_to_bottom_k_sentences,
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Error RAG: {str(e)}"
+        )
 
 
 
