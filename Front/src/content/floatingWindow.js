@@ -452,7 +452,7 @@ class FloatingContainer {
                     intentTree.scenario = taskDescription;
                     
                     // 将网络可视化所需的数据结构传递给可视化组件
-                    this.networkManager = showNetworkVisualization(intentTree, floatingWindow.containerArea);
+                    this.networkManager = showNetworkVisualization(intentTree, floatingWindow.containerArea, 'integrated');
                     
                 } catch (error) {
                     console.error('Visualization error details:', error);

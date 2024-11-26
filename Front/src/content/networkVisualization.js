@@ -19,13 +19,23 @@ class NetworkManager {
         this.container = document.createElement("div");
         this.container.id = "networkVisualizationContainer";
 
-        if (this.displayMode === 'standalone') {
-            this.setupStandaloneContainer();
-        } else {
-            this.setupIntegratedContainer();
+        switch (this.displayMode) {
+            case 'standalone':
+                this.setupStandaloneContainer();
+                break;
+            case 'integrated':
+                this.setupIntegratedContainer();
+                break;
+            case 'sidepanel':
+                this.setupSidePanelContainer();
+                break;
+            default:
+                this.setupStandaloneContainer();
         }
 
-        this.addCloseButton();
+        if (this.displayMode !== 'sidepanel') {
+            this.addCloseButton();
+        }
         this.setupVisContainer();
     }
 
@@ -90,6 +100,23 @@ class NetworkManager {
         // 添加 with-network 类以触发额外的样式
         this.containerArea.classList.add('with-network');
     }
+
+    setupSidePanelContainer() {
+        Object.assign(this.container.style, {
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            backgroundColor: "white",
+            borderRadius: "12px",
+            overflow: "hidden"
+        });
+
+        if (this.containerArea) {
+            this.containerArea.innerHTML = ''; // 清除加载状态
+            this.containerArea.appendChild(this.container);
+        }
+    }
+
     // In networkVisualization.js, add to class NetworkManager
     // Add cleanup method to handle container removal properly
     cleanup() {
@@ -537,35 +564,8 @@ Comment: ${comment}`;
     // 初始化网络图
     initializeNetwork() {
         setTimeout(() => {
-            const options = {
-                physics: {
-                    enabled: true,
-                    stabilization: {
-                        enabled: true,
-                        iterations: 1000
-                    }
-                },
-                nodes: {
-                    shape: 'dot',
-                    size: 16,
-                    font: {
-                        size: 14,
-                        color: '#333'
-                    },
-                    borderWidth: 2,
-                    shadow: true
-                },
-                edges: {
-                    width: 2,
-                    smooth: {
-                        type: 'continuous'
-                    },
-                    arrows: {
-                        to: { enabled: true, scaleFactor: 0.5 }
-                    }
-                }
-            };
-
+            const options = this.getNetworkOptions();
+            
             // 清除加载指示器
             this.visContainer.innerHTML = '';
             
@@ -587,43 +587,77 @@ Comment: ${comment}`;
                     }
                 });
             });
-
-            // 添加双击事件以聚焦节点
-            this.network.on('doubleClick', (params) => {
-                if (params.nodes.length > 0) {
-                    const nodeId = params.nodes[0];
-                    this.network.focus(nodeId, {
-                        scale: 1.2,
-                        animation: {
-                            duration: 500,
-                            easingFunction: 'easeInOutQuad'
-                        }
-                    });
-                }
-            });
-
-            // 添加悬停效果
-            this.network.on('hoverNode', (params) => {
-                this.container.style.cursor = 'pointer';
-            });
-
-            this.network.on('blurNode', (params) => {
-                this.container.style.cursor = 'default';
-            });
-
-            // 添加缩放限制
-            this.network.on('zoom', (params) => {
-                if (params.scale < 0.3) {
-                    this.network.moveTo({
-                        scale: 0.3
-                    });
-                } else if (params.scale > 2.5) {
-                    this.network.moveTo({
-                        scale: 2.5
-                    });
-                }
-            });
         }, 100);
+    }
+
+    getNetworkOptions() {
+        const baseOptions = {
+            nodes: {
+                shape: 'dot',
+                size: 16,
+                font: {
+                    size: 14,
+                    color: '#333'
+                },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                smooth: {
+                    type: 'continuous'
+                },
+                arrows: {
+                    to: { enabled: true, scaleFactor: 0.5 }
+                }
+            },
+            physics: {
+                enabled: true,
+                stabilization: {
+                    enabled: true,
+                    iterations: 1000
+                }
+            }
+        };
+
+        // 为侧边栏模式添加特殊配置
+        if (this.displayMode === 'sidepanel') {
+            return {
+                ...baseOptions,
+                nodes: {
+                    ...baseOptions.nodes,
+                    size: 12, // 更小的节点
+                    font: {
+                        size: 12, // 更小的字体
+                        color: '#333'
+                    }
+                },
+                physics: {
+                    ...baseOptions.physics,
+                    stabilization: {
+                        enabled: true,
+                        iterations: 500 // 减少迭代次数以加快加载
+                    },
+                    barnesHut: {
+                        gravitationalConstant: -2000,
+                        centralGravity: 0.1,
+                        springLength: 95,
+                        springConstant: 0.04,
+                        damping: 0.09
+                    }
+                },
+                interaction: {
+                    dragNodes: true,
+                    dragView: true,
+                    zoomView: true,
+                    hover: true,
+                    multiselect: false,
+                    keyboard: false
+                }
+            };
+        }
+
+        return baseOptions;
     }
 
     // 设置网络事件
@@ -716,7 +750,7 @@ Comment: ${comment}`;
 }
 
 // 主函数
-function showNetworkVisualization(intentTree, containerArea = null) {
+function showNetworkVisualization(intentTree, containerArea = null, mode = 'standalone') {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -725,8 +759,6 @@ function showNetworkVisualization(intentTree, containerArea = null) {
         }
 
         console.log('Visualization data:', intentTree);
-
-        const mode = containerArea ? 'integrated' : 'standalone';
         console.log('networkVisualizationContainer mode:', mode);
         
         this.intentTree = intentTree;

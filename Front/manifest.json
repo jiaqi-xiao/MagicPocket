@@ -8,7 +8,8 @@
     "storage",
     "contextMenus",
     "desktopCapture",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "sidePanel"
   ],
   "background": {
     "service_worker": "src/background/background.js"
@@ -52,12 +53,16 @@
         "lib/vis-network.js",
         "lib/vis-network.css",
         "lib/*.js",
-        "lib/*.css"
+        "lib/*.css",
+        "src/sidePanel/*"
       ],
       "matches": ["<all_urls>"]
     }
   ],
   "options_ui": {
     "page": "src/options/options.html"
+  },
+  "side_panel": {
+    "default_path": "src/sidePanel/sidePanel.html"
   }
 }
