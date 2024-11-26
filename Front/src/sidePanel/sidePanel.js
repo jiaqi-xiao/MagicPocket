@@ -256,6 +256,13 @@ async function updateRecordsList() {
             </div>
             <div class="record-item-meta">
                 <div class="record-item-info">
+                    <button class="goto-page-btn" data-url="${record.url || ''}" title="Go to page">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                    </button>
                     <span class="record-time">${new Date(record.timestamp).toLocaleString()}</span>
                 </div>
                 <button class="delete-btn" data-id="${record.id}">
@@ -267,6 +274,23 @@ async function updateRecordsList() {
         `;
 
         scrollArea.appendChild(item);
+
+        // 添加跳转按钮事件监听器
+        item.querySelector('.goto-page-btn').addEventListener('click', async (e) => {
+            const url = e.currentTarget.dataset.url;
+            if (!url) return;
+            // 查找当前打开的标签页中是否有匹配的URL
+            chrome.tabs.query({}, function(tabs) {
+                // console.log(tabs);
+                const existingTab = tabs.find(tab => tab.url === url);
+                if (existingTab) {
+                    chrome.tabs.update(existingTab.id, { active: true });
+                    chrome.windows.update(existingTab.windowId, { focused: true });
+                } else {
+                    chrome.tabs.create({ url });
+                }
+            });
+        });
     }
 
     // 添加删除按钮事件监听器

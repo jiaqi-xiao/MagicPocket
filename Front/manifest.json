@@ -9,7 +9,8 @@
     "contextMenus",
     "desktopCapture",
     "unlimitedStorage",
-    "sidePanel"
+    "sidePanel",
+    "tabs"
   ],
   "background": {
     "service_worker": "src/background/background.js"
