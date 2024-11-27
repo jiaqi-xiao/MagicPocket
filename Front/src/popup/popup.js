@@ -66,6 +66,18 @@ document.addEventListener("DOMContentLoaded", () => {
         chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
         window.close(); // 关闭popup窗口
     });
+
+    document.getElementById("sidePanelBtn").addEventListener("click", () => {
+        // 打开侧边栏
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            // 通知当前标签页打开侧边栏
+            chrome.sidePanel.open({tabId: tabs[0].id}).catch(error => {
+                console.error('Error opening side panel:', error);
+            });
+        });
+        // 关闭 popup
+        window.close();
+    });
 });
 
 // Listen for updates from the background script
