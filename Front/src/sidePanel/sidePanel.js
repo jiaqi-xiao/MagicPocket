@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeTaskDescription();
     initializeRecordsArea();
     initializeScrollIndicators();
+    initializeResizer();
 });
 
 function initializeTaskDescription() {
@@ -326,7 +327,18 @@ async function getRecords() {
 
 function showNetworkContainer() {
     const container = document.getElementById('networkVisualizationContainer');
+    const resizer = document.querySelector('.resizer');
+    
     container.classList.add('visible');
+    resizer.classList.add('visible');
+    
+    // 初始化高度分配
+    const recordsArea = document.querySelector('.records-area');
+    const scrollArea = document.getElementById('recordsScrollArea');
+    const totalHeight = recordsArea.clientHeight - 6; // 减去分隔条高度
+    
+    scrollArea.style.height = `${totalHeight * 0.6}px`; // 60%
+    container.style.height = `${totalHeight * 0.4}px`; // 40%
 }
 
 function hideNetworkVisualization() {
@@ -335,7 +347,12 @@ function hideNetworkVisualization() {
         networkManager = null;
     }
     const container = document.getElementById('networkVisualizationContainer');
+    const resizer = document.querySelector('.resizer');
+    const scrollArea = document.getElementById('recordsScrollArea');
+    
     container.classList.remove('visible');
+    resizer.classList.remove('visible');
+    scrollArea.style.height = '100%';
 }
 
 function showLoadingState() {
@@ -638,4 +655,130 @@ function findTargetItem(activeItems, scrollArea, direction) {
             })
             .sort((a, b) => b.offsetTop - a.offsetTop)[0];
     }
+}
+
+// 添加：初始化分隔条
+function initializeResizer() {
+    const recordsArea = document.querySelector('.records-area');
+    const scrollArea = document.getElementById('recordsScrollArea');
+    const networkContainer = document.getElementById('networkVisualizationContainer');
+    
+    const resizer = document.createElement('div');
+    resizer.className = 'resizer';
+    
+    // 添加拖动手柄图标
+    resizer.innerHTML = `
+        <div class="resizer-handle">
+            <svg width="20" height="4" viewBox="0 0 20 4">
+                <line x1="0" y1="2" x2="20" y2="2" stroke="#CBD5E0" stroke-width="2"/>
+            </svg>
+        </div>
+    `;
+    
+    scrollArea.after(resizer);
+    
+    let startY;
+    let startHeights;
+    let resizerRect;
+    
+    function startResize(e) {
+        // 阻止默认行为和冒泡
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 添加拖动状态类
+        document.body.classList.add('resizing');
+        resizer.classList.add('dragging');
+        
+        // 记录初始位置和高度
+        startY = e.clientY;
+        resizerRect = resizer.getBoundingClientRect();
+        startHeights = {
+            scrollArea: scrollArea.offsetHeight,
+            networkContainer: networkContainer.offsetHeight
+        };
+        
+        // 添加事件监听
+        document.addEventListener('mousemove', resize, { passive: true });
+        document.addEventListener('mouseup', stopResize);
+        
+        // 创建遮罩层防止iframe干扰
+        const overlay = document.createElement('div');
+        overlay.id = 'resize-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 9999;
+            cursor: row-resize;
+        `;
+        document.body.appendChild(overlay);
+    }
+    
+    function resize(e) {
+        if (!networkContainer.classList.contains('visible')) return;
+        
+        // 使用 requestAnimationFrame 优化性能
+        requestAnimationFrame(() => {
+            const delta = e.clientY - startY;
+            const totalHeight = recordsArea.clientHeight - 6;
+            
+            // 计算新的高度
+            let newScrollAreaHeight = startHeights.scrollArea + delta;
+            let newNetworkHeight = startHeights.networkContainer - delta;
+            
+            // 设置最小高度限制
+            const minHeight = 100;
+            if (newScrollAreaHeight < minHeight) {
+                newScrollAreaHeight = minHeight;
+                newNetworkHeight = totalHeight - minHeight;
+            } else if (newNetworkHeight < minHeight) {
+                newNetworkHeight = minHeight;
+                newScrollAreaHeight = totalHeight - minHeight;
+            }
+            
+            // 应用新的高度
+            scrollArea.style.height = `${newScrollAreaHeight}px`;
+            networkContainer.style.height = `${newNetworkHeight}px`;
+            
+            // 更新网络可视化
+            if (networkManager) {
+                networkManager.updateSize();
+            }
+        });
+    }
+    
+    function stopResize() {
+        // 移除状态类和事件监听
+        document.body.classList.remove('resizing');
+        resizer.classList.remove('dragging');
+        document.removeEventListener('mousemove', resize);
+        document.removeEventListener('mouseup', stopResize);
+        
+        // 移除遮罩层
+        const overlay = document.getElementById('resize-overlay');
+        if (overlay) {
+            overlay.remove();
+        }
+    }
+    
+    // 使用 mousedown 而不是 pointerdown，避免触摸设备的问题
+    resizer.addEventListener('mousedown', startResize);
+    
+    // 添加双击自动调整功能
+    resizer.addEventListener('dblclick', () => {
+        if (!networkContainer.classList.contains('visible')) return;
+        
+        const totalHeight = recordsArea.clientHeight - 6;
+        const equalHeight = totalHeight / 2;
+        
+        scrollArea.style.height = `${equalHeight}px`;
+        networkContainer.style.height = `${equalHeight}px`;
+        
+        if (networkManager) {
+            networkManager.updateSize();
+        }
+    });
 }
