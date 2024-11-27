@@ -414,21 +414,31 @@ function updateScrollIndicators(activeItems, scrollArea) {
     const downIndicator = document.querySelector('.scroll-indicator.down');
     const containerRect = scrollArea.getBoundingClientRect();
     
+    // 更新指示器的位置
+    if (upIndicator) {
+        upIndicator.style.left = `${containerRect.left + containerRect.width / 2}px`;
+        upIndicator.style.top = `${containerRect.top + 12}px`;  // 距离顶部12px
+    }
+    
+    if (downIndicator) {
+        downIndicator.style.left = `${containerRect.left + containerRect.width / 2}px`;
+        downIndicator.style.bottom = `${window.innerHeight - containerRect.bottom + 12}px`;  // 距离底部12px
+    }
+    
     // 检查是否已经滚动到顶部或底部
     const isAtTop = scrollArea.scrollTop <= 0;
-    const isAtBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1; // 添加1px的容差
+    const isAtBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1;
     
     // 如果在顶部或底部，直接隐藏对应提示并返回
     if (isAtTop) {
         upIndicator.classList.remove('visible');
-        upIndicator.dataset.shown = 'true'; // 防止再次显示
+        upIndicator.dataset.shown = 'true';
     }
     if (isAtBottom) {
         downIndicator.classList.remove('visible');
-        downIndicator.dataset.shown = 'true'; // 防止再次显示
+        downIndicator.dataset.shown = 'true';
     }
     
-    // 如果已经在极限位置，不需要继续检查
     if (isAtTop && isAtBottom) return;
 
     let hasItemsAbove = false;
@@ -436,17 +446,14 @@ function updateScrollIndicators(activeItems, scrollArea) {
 
     activeItems.forEach(item => {
         const rect = item.getBoundingClientRect();
-        // 只有当不在顶部且有item在视野上方时才显示向上提示
         if (!isAtTop && rect.bottom < containerRect.top) {
             hasItemsAbove = true;
         }
-        // 只有当不在底部且有item在视野下方时才显示向下提示
         if (!isAtBottom && rect.top > containerRect.bottom) {
             hasItemsBelow = true;
         }
     });
 
-    // 更新提示显示状态
     if (!isAtTop && hasItemsAbove && upIndicator.dataset.shown !== 'true') {
         upIndicator.classList.add('visible');
     } else {
@@ -459,6 +466,15 @@ function updateScrollIndicators(activeItems, scrollArea) {
         downIndicator.classList.remove('visible');
     }
 }
+
+// 添加窗口大小改变事件监听
+window.addEventListener('resize', () => {
+    const scrollArea = document.getElementById("recordsScrollArea");
+    const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
+    if (activeItems.length > 0) {
+        updateScrollIndicators(activeItems, scrollArea);
+    }
+});
 
 // 添加滚动事件监听
 document.addEventListener('DOMContentLoaded', () => {
