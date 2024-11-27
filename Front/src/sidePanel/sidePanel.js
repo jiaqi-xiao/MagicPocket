@@ -5,6 +5,7 @@ let networkManager = null;
 document.addEventListener('DOMContentLoaded', () => {
     initializeTaskDescription();
     initializeRecordsArea();
+    initializeScrollIndicators();
 });
 
 function initializeTaskDescription() {
@@ -131,7 +132,7 @@ function initializeRecordsArea() {
             // 添加场景信息
             intentTree.scenario = taskDescription;
             
-            // 显示网络可视化容器
+            // 显示网络视化容器
             showNetworkContainer();
             
             // 初始化或更新网络可视化
@@ -228,9 +229,22 @@ async function updateRecordsList() {
     
     scrollArea.innerHTML = "";
     
+    // 获取当前活动标签的URL
+    const currentTab = await new Promise(resolve => {
+        chrome.tabs.query({active: true, currentWindow: true}, tabs => {
+            resolve(tabs[0]);
+        });
+    });
+    
     for (const record of records) {
         const item = document.createElement("div");
         item.className = "record-item";
+        
+        // 设置data-url属性和检查是否需要高亮
+        item.setAttribute('data-url', record.url || '');
+        if (currentTab && currentTab.url === record.url) {
+            item.classList.add('active');
+        }
         
         let contentHtml = '';
         if (record.type === "text") {
@@ -334,5 +348,278 @@ function hideLoadingState() {
     const loadingEl = document.querySelector('.loading');
     if (loadingEl) {
         loadingEl.remove();
+    }
+}
+
+// 初始化滚动提示元素
+function initializeScrollIndicators() {
+    const recordsArea = document.querySelector('.records-area');
+    
+    // 创建向上提示
+    const upIndicator = document.createElement('div');
+    upIndicator.className = 'scroll-indicator up';
+    upIndicator.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 15l-6-6-6 6"/>
+        </svg>
+        <span>More matches above</span>
+    `;
+    
+    // 创建向下提示
+    const downIndicator = document.createElement('div');
+    downIndicator.className = 'scroll-indicator down';
+    downIndicator.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+        </svg>
+        <span>More matches below</span>
+    `;
+    
+    recordsArea.appendChild(upIndicator);
+    recordsArea.appendChild(downIndicator);
+
+    // 添加点击事件
+    upIndicator.addEventListener('click', () => {
+        const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
+        if (activeItems.length > 0) {
+            const scrollArea = document.getElementById("recordsScrollArea");
+            const targetItem = findTargetItem(activeItems, scrollArea, 'up');
+            
+            if (targetItem) {
+                scrollToItem(targetItem, scrollArea);
+                upIndicator.classList.remove('visible');
+                upIndicator.dataset.shown = 'true';
+            }
+        }
+    });
+
+    downIndicator.addEventListener('click', () => {
+        const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
+        if (activeItems.length > 0) {
+            const scrollArea = document.getElementById("recordsScrollArea");
+            const targetItem = findTargetItem(activeItems, scrollArea, 'down');
+            
+            if (targetItem) {
+                scrollToItem(targetItem, scrollArea);
+                downIndicator.classList.remove('visible');
+                downIndicator.dataset.shown = 'true';
+            }
+        }
+    });
+}
+
+// 更新滚动提示
+function updateScrollIndicators(activeItems, scrollArea) {
+    const upIndicator = document.querySelector('.scroll-indicator.up');
+    const downIndicator = document.querySelector('.scroll-indicator.down');
+    const containerRect = scrollArea.getBoundingClientRect();
+    
+    // 检查是否已经滚动到顶部或底部
+    const isAtTop = scrollArea.scrollTop <= 0;
+    const isAtBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1; // 添加1px的容差
+    
+    // 如果在顶部或底部，直接隐藏对应提示并返回
+    if (isAtTop) {
+        upIndicator.classList.remove('visible');
+        upIndicator.dataset.shown = 'true'; // 防止再次显示
+    }
+    if (isAtBottom) {
+        downIndicator.classList.remove('visible');
+        downIndicator.dataset.shown = 'true'; // 防止再次显示
+    }
+    
+    // 如果已经在极限位置，不需要继续检查
+    if (isAtTop && isAtBottom) return;
+
+    let hasItemsAbove = false;
+    let hasItemsBelow = false;
+
+    activeItems.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        // 只有当不在顶部且有item在视野上方时才显示向上提示
+        if (!isAtTop && rect.bottom < containerRect.top) {
+            hasItemsAbove = true;
+        }
+        // 只有当不在底部且有item在视野下方时才显示向下提示
+        if (!isAtBottom && rect.top > containerRect.bottom) {
+            hasItemsBelow = true;
+        }
+    });
+
+    // 更新提示显示状态
+    if (!isAtTop && hasItemsAbove && upIndicator.dataset.shown !== 'true') {
+        upIndicator.classList.add('visible');
+    } else {
+        upIndicator.classList.remove('visible');
+    }
+
+    if (!isAtBottom && hasItemsBelow && downIndicator.dataset.shown !== 'true') {
+        downIndicator.classList.add('visible');
+    } else {
+        downIndicator.classList.remove('visible');
+    }
+}
+
+// 添加滚动事件监听
+document.addEventListener('DOMContentLoaded', () => {
+    const scrollArea = document.getElementById("recordsScrollArea");
+    if (scrollArea) {
+        scrollArea.addEventListener('scroll', () => {
+            const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
+            if (activeItems.length > 0) {
+                updateScrollIndicators(activeItems, scrollArea);
+            }
+        });
+    }
+});
+
+// 重置提示状态（在URL变化时调用）
+function resetScrollIndicators() {
+    const upIndicator = document.querySelector('.scroll-indicator.up');
+    const downIndicator = document.querySelector('.scroll-indicator.down');
+    if (upIndicator) upIndicator.dataset.shown = 'false';
+    if (downIndicator) downIndicator.dataset.shown = 'false';
+}
+
+// 更新监听标签页变化的代码
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    resetScrollIndicators(); // 重置提示状态
+    updateActiveRecordHighlight(tab.url);
+});
+
+// 更新监听URL变化的代码
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.url) {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            if (tabs[0] && tabs[0].id === tabId) {
+                resetScrollIndicators(); // 重置提示状态
+                updateActiveRecordHighlight(changeInfo.url);
+            }
+        });
+    }
+});
+
+// 更新高亮状态函数
+function updateActiveRecordHighlight(currentUrl) {
+    const scrollArea = document.getElementById("recordsScrollArea");
+    let activeItems = [];
+    
+    // 更新高亮状态并收集所有匹配的items
+    document.querySelectorAll('.record-item').forEach(item => {
+        const recordUrl = item.getAttribute('data-url');
+        if (recordUrl === currentUrl) {
+            item.classList.add('active');
+            activeItems.push(item);
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    // 如果找到匹配的items
+    if (activeItems.length > 0) {
+        // 找到第一个不完全可见的高亮item
+        const firstVisibleActive = activeItems.find(item => {
+            const rect = item.getBoundingClientRect();
+            const containerRect = scrollArea.getBoundingClientRect();
+            return rect.top >= containerRect.top && rect.bottom <= containerRect.bottom;
+        });
+
+        // 如果没有完全可见的高亮item，滚动到第一个高亮item
+        if (!firstVisibleActive && activeItems.length > 0) {
+            const targetItem = activeItems[0];
+            scrollToItem(targetItem, scrollArea);
+        }
+
+        // 更新滚动提示
+        updateScrollIndicators(activeItems, scrollArea);
+    }
+}
+
+// 滚动到指定item，确保完整显示
+function scrollToItem(item, scrollArea) {
+    const scrollAreaHeight = scrollArea.clientHeight;
+    const itemHeight = item.offsetHeight;
+    const itemOffsetTop = item.offsetTop;
+    const scrollAreaScrollHeight = scrollArea.scrollHeight;
+
+    // 添加一些边距，确保内容不会贴边
+    const MARGIN = 10;
+    
+    let targetScrollTop;
+    
+    // 计算如果将item放在顶部，底部是否有足够空间
+    const remainingItemsHeight = scrollAreaScrollHeight - (itemOffsetTop + itemHeight);
+    
+    if (remainingItemsHeight < scrollAreaHeight - itemHeight) {
+        // 如果底部空间不足，将item放在可视区域的底部
+        targetScrollTop = Math.max(
+            0,
+            Math.min(
+                scrollAreaScrollHeight - scrollAreaHeight,
+                itemOffsetTop - (scrollAreaHeight - itemHeight) + MARGIN
+            )
+        );
+    } else {
+        // 如果底部空间充足，将item放在顶部
+        targetScrollTop = Math.max(0, itemOffsetTop - MARGIN);
+    }
+
+    // 确保不会滚动过头
+    targetScrollTop = Math.min(
+        targetScrollTop,
+        scrollAreaScrollHeight - scrollAreaHeight
+    );
+
+    // 使用平滑滚动
+    scrollArea.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth'
+    });
+
+    // 添加滚动完成后的检查
+    setTimeout(() => {
+        const itemRect = item.getBoundingClientRect();
+        const containerRect = scrollArea.getBoundingClientRect();
+        
+        // 检查item是否完全在可视区域内
+        if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+            // 如果不在，进行微调
+            const adjustment = itemRect.top < containerRect.top ? 
+                itemRect.top - containerRect.top - MARGIN : 
+                itemRect.bottom - containerRect.bottom + MARGIN;
+            
+            scrollArea.scrollBy({
+                top: adjustment,
+                behavior: 'smooth'
+            });
+        }
+    }, 300); // 等待初始滚动完成
+}
+
+// 更新查找目标item的逻辑
+function findTargetItem(activeItems, scrollArea, direction) {
+    const containerRect = scrollArea.getBoundingClientRect();
+    
+    if (direction === 'up') {
+        // 找到视野外最上方的完整item
+        return activeItems
+            .filter(item => {
+                const rect = item.getBoundingClientRect();
+                // 检查item是否完全在视野上方或部分在视野上方
+                return rect.bottom < containerRect.top || 
+                       (rect.top < containerRect.top && rect.bottom > containerRect.top);
+            })
+            .sort((a, b) => a.offsetTop - b.offsetTop)[0];
+    } else {
+        // 找到视野外最下方的完整item
+        return activeItems
+            .filter(item => {
+                const rect = item.getBoundingClientRect();
+                // 检查item是否完全在视野下方或部分在视野下方
+                return rect.top > containerRect.bottom || 
+                       (rect.bottom > containerRect.bottom && rect.top < containerRect.bottom);
+            })
+            .sort((a, b) => b.offsetTop - a.offsetTop)[0];
     }
 }
