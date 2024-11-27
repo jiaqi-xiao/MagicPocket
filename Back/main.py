@@ -41,6 +41,7 @@ from typing import Annotated
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
+from langchain_community.embeddings import OpenAIEmbeddings
 import os
 from utils import *
 import json
@@ -362,7 +363,9 @@ async def incremental_construct_intent(request: dict):
             status_code=422,
             detail=f"Error constructing intent tree: {str(e)}"
         )
-    
+
+model4Embed = OpenAIEmbeddings(model="text-embedding-ada-002")
+embedModel = embedModule.EmbedGPTModel(model4Embed)
 @app.post("/rag/")
 async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGRequest):
     """
@@ -392,14 +395,14 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
         sentences = split2Sentences(webContent)
 
         # Step 2: 向量化 webContent 的句子
-        sentences_embeddings = embedModel.embeddingList(sentences)
+        sentences_embeddings = await embedModel.embeddingList(sentences)
 
         # Step 3: 筛选意图并向量化它们
         intents = filterNodes(
             intentTree,  # 转换 IntentTree 为字典
             target_level=1  # 筛选一级意图
         )
-        intents_embeddings = embedModel.embeddingList(intents)
+        intents_embeddings = await embedModel.embeddingList(intents)
         # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
@@ -423,7 +426,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
             
             # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
-            intent_records_embeddings = embedModel.embeddingList(intent_records)
+            intent_records_embeddings = await embedModel.embeddingList(intent_records)
             # 对top-k中每个句子计算与每个 record 的最小相似度
             record_min_similarities = []
             for sentence_e in top_k_sentences_embeddings:
