@@ -282,7 +282,9 @@ class NetworkManager {
             type: 'root',
             color: this.getNodeColor('root'),
             size: this.getNodeSize('root'),
-            opacity: 0.3  // 设置初始透明度
+            opacity: 0.3,  // 设置初始透明度
+            fixed: true,   // 固定根节点位置
+            physics: false // 禁用物理引擎对根节点的影响
         });
         // 设置根节点的初始状态
         this.nodeStates.set(rootId, false);
@@ -616,6 +618,14 @@ Comment: ${comment}`;
                 stabilization: {
                     enabled: true,
                     iterations: 1000
+                },
+                hierarchicalRepulsion: {
+                    nodeDistance: 120
+                }
+            },
+            interaction: {
+                dragNodes: function (node) {
+                    return node.id !== 'root'; // 禁止拖动根节点
                 }
             }
         };
