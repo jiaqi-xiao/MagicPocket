@@ -4,7 +4,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 import numpy as np
 from typing import Literal, Optional
 
-
 class EmbedModel:
     def __init__(self):
         self.index = None
@@ -51,6 +50,12 @@ class EmbedModel:
 
     #     return results
 
+class EmbedGPTModel:
+    def __init__(self, model) -> None:
+        self.model = model
+    
+    async def embeddingList(self, documents: list) -> list:
+        return self.model.embed_documents(documents)
 
 if __name__ == "__main__":
     intent = {"intent": "想去拍照"}
