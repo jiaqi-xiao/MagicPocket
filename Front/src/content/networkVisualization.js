@@ -759,8 +759,57 @@ Comment: ${comment}`;
     }
 }
 
+// Add function to save IntentTree when Analyze is clicked
+async function saveIntentTree(intentTree) {
+    try {
+        
+        // intentTree: {
+        //     "item": {
+        //       "游览巴塞罗那主要景点": [
+        //         {
+        //           "id": 1732720186197,
+        //           "comment": "",
+        //           "content": "时间紧张的话米拉和巴特罗二选一即可",
+        //           "context": "",
+        //           "isLeafNode": true
+        //         },
+        //         {
+        //           "id": 1732720196427,
+        //           "comment": "拍照",
+        //           "content": "tibidabo山属巴塞最高峰，山顶有游乐园🎠和教堂",
+        //           "context": "",
+        //           "isLeafNode": true
+        //         }
+        //       ],
+        //       "提供西班牙旅行建议": [
+        //         {
+        //           "id": 1732720288906,
+        //           "comment": "",
+        //           "content": "托莱多小镇一日游～整个小镇都被列为世界文化遗产",
+        //           "context": "",
+        //           "isLeafNode": true
+        //         },
+        //       ]
+        //     },
+        //     "scenario": "Write a travel plan"
+        //   }
+        // format intentTree with format check
+        if (!intentTree || !intentTree.item) {
+            throw new Error('Invalid intent tree structure received from server');
+        }
+        await chrome.runtime.sendMessage({
+            action: 'saveIntentTree',
+            intentTree: intentTree
+        });
+        console.log('Intent tree saved successfully');
+    } catch (error) {
+        console.error('Error saving intent tree:', error);
+    }
+}
+
+
 // 主函数
-function showNetworkVisualization(intentTree, containerArea = null, mode = 'standalone') {
+async function showNetworkVisualization(intentTree, containerArea = null, mode = 'standalone') {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -770,6 +819,9 @@ function showNetworkVisualization(intentTree, containerArea = null, mode = 'stan
 
         console.log('Visualization data:', intentTree);
         console.log('networkVisualizationContainer mode:', mode);
+
+        // save intentTree
+        await saveIntentTree(intentTree);
         
         this.intentTree = intentTree;
         const networkManager = new NetworkManager(intentTree, containerArea, mode);

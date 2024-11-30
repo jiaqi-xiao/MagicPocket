@@ -45,12 +45,12 @@ function initializeRecordsArea() {
 
     // 创建按钮
     const clearAllBtn = createButton("Clear All", "clearAllBtn");
-    const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
+    const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
     const analyzeBtn = createButton("Analyze", "analyzeBtn");
 
     // 添加按钮到按钮区域
     buttonArea.appendChild(clearAllBtn);
-    buttonArea.appendChild(startGenerateBtn);
+    buttonArea.appendChild(highlightBtn);
     buttonArea.appendChild(analyzeBtn);
 
     // 设置按钮事件监听器
@@ -59,8 +59,12 @@ function initializeRecordsArea() {
         hideNetworkVisualization();
     });
 
-    startGenerateBtn.addEventListener('click', () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
+    highlightBtn.addEventListener('click', async () => {
+        // 获取当前活动标签
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        // 向content script发送消息来切换高亮
+        chrome.tabs.sendMessage(tab.id, { action: 'toggleHighlight' });
     });
 
     analyzeBtn.addEventListener('click', async () => {
@@ -138,7 +142,7 @@ function initializeRecordsArea() {
             
             // 初始化或更新网络可视化
             if (!networkManager) {
-                networkManager = window.showNetworkVisualization(
+                networkManager = await window.showNetworkVisualization(
                     intentTree, 
                     document.getElementById('networkVisualizationContainer'),
                     'sidepanel'
