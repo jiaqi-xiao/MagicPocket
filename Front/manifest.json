@@ -65,5 +65,8 @@
   },
   "side_panel": {
     "default_path": "src/sidePanel/sidePanel.html"
-  }
+  },
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ]
 }

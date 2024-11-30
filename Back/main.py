@@ -47,6 +47,7 @@ from utils import *
 import json
 import traceback
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 app = FastAPI()
 
@@ -367,7 +368,7 @@ async def incremental_construct_intent(request: dict):
 model4Embed = OpenAIEmbeddings(model="text-embedding-ada-002")
 embedModel = embedModule.EmbedGPTModel(model4Embed)
 @app.post("/rag/")
-async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGRequest):
+async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     """
     从 intentTree 和 webContent 中筛选出每个 intent 对应的 top-k 和 bottom-k 相关句子。
 
@@ -379,6 +380,16 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(ragRequest: RAGReques
     :return: 每个意图对应的 top-k 和 bottom-k 最相关句子的结果。
     """
     try:
+        # 先验证并转换请求数据为RAGRequest对象
+        try:
+            ragRequest = RAGRequest(**request_dict)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid request format: {str(e)}"
+            )
+
+        # 以下是原有逻辑
         intentTree = ragRequest.intentTree
         webContent = ragRequest.webContent
         k = ragRequest.k

@@ -105,4 +105,4 @@ class RAGRequest(BaseModel):
     top_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
     bottom_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
     intentTree: dict
-    webContent: str = Field(..., max_length=1000, description="The web content to process")
+    webContent: str = Field(..., description="The web content to process", max_length=100000)
