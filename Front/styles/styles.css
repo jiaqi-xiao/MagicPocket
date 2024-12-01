@@ -198,7 +198,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-    text-align: center; /* 添加此行以使文字内容居中显�� */
+    text-align: center; /* 添加此行以使文字内容居中显 */
 }
 
 #recordsList li:hover {

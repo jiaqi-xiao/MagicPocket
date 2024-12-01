@@ -19,13 +19,23 @@ class NetworkManager {
         this.container = document.createElement("div");
         this.container.id = "networkVisualizationContainer";
 
-        if (this.displayMode === 'standalone') {
-            this.setupStandaloneContainer();
-        } else {
-            this.setupIntegratedContainer();
+        switch (this.displayMode) {
+            case 'standalone':
+                this.setupStandaloneContainer();
+                break;
+            case 'integrated':
+                this.setupIntegratedContainer();
+                break;
+            case 'sidepanel':
+                this.setupSidePanelContainer();
+                break;
+            default:
+                this.setupStandaloneContainer();
         }
 
-        this.addCloseButton();
+        if (this.displayMode !== 'sidepanel') {
+            this.addCloseButton();
+        }
         this.setupVisContainer();
     }
 
@@ -90,6 +100,23 @@ class NetworkManager {
         // 添加 with-network 类以触发额外的样式
         this.containerArea.classList.add('with-network');
     }
+
+    setupSidePanelContainer() {
+        Object.assign(this.container.style, {
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            backgroundColor: "white",
+            borderRadius: "12px",
+            overflow: "hidden"
+        });
+
+        if (this.containerArea) {
+            this.containerArea.innerHTML = ''; // 清除加载状态
+            this.containerArea.appendChild(this.container);
+        }
+    }
+
     // In networkVisualization.js, add to class NetworkManager
     // Add cleanup method to handle container removal properly
     cleanup() {
@@ -255,7 +282,9 @@ class NetworkManager {
             type: 'root',
             color: this.getNodeColor('root'),
             size: this.getNodeSize('root'),
-            opacity: 0.3  // 设置初始透明度
+            opacity: 0.3,  // 设置初始透明度
+            fixed: true,   // 固定根节点位置
+            physics: false // 禁用物理引擎对根节点的影响
         });
         // 设置根节点的初始状态
         this.nodeStates.set(rootId, false);
@@ -537,35 +566,8 @@ Comment: ${comment}`;
     // 初始化网络图
     initializeNetwork() {
         setTimeout(() => {
-            const options = {
-                physics: {
-                    enabled: true,
-                    stabilization: {
-                        enabled: true,
-                        iterations: 1000
-                    }
-                },
-                nodes: {
-                    shape: 'dot',
-                    size: 16,
-                    font: {
-                        size: 14,
-                        color: '#333'
-                    },
-                    borderWidth: 2,
-                    shadow: true
-                },
-                edges: {
-                    width: 2,
-                    smooth: {
-                        type: 'continuous'
-                    },
-                    arrows: {
-                        to: { enabled: true, scaleFactor: 0.5 }
-                    }
-                }
-            };
-
+            const options = this.getNetworkOptions();
+            
             // 清除加载指示器
             this.visContainer.innerHTML = '';
             
@@ -587,43 +589,85 @@ Comment: ${comment}`;
                     }
                 });
             });
-
-            // 添加双击事件以聚焦节点
-            this.network.on('doubleClick', (params) => {
-                if (params.nodes.length > 0) {
-                    const nodeId = params.nodes[0];
-                    this.network.focus(nodeId, {
-                        scale: 1.2,
-                        animation: {
-                            duration: 500,
-                            easingFunction: 'easeInOutQuad'
-                        }
-                    });
-                }
-            });
-
-            // 添加悬停效果
-            this.network.on('hoverNode', (params) => {
-                this.container.style.cursor = 'pointer';
-            });
-
-            this.network.on('blurNode', (params) => {
-                this.container.style.cursor = 'default';
-            });
-
-            // 添加缩放限制
-            this.network.on('zoom', (params) => {
-                if (params.scale < 0.3) {
-                    this.network.moveTo({
-                        scale: 0.3
-                    });
-                } else if (params.scale > 2.5) {
-                    this.network.moveTo({
-                        scale: 2.5
-                    });
-                }
-            });
         }, 100);
+    }
+
+    getNetworkOptions() {
+        const baseOptions = {
+            nodes: {
+                shape: 'dot',
+                size: 16,
+                font: {
+                    size: 14,
+                    color: '#333'
+                },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                smooth: {
+                    type: 'continuous'
+                },
+                arrows: {
+                    to: { enabled: true, scaleFactor: 0.5 }
+                }
+            },
+            physics: {
+                enabled: true,
+                stabilization: {
+                    enabled: true,
+                    iterations: 1000
+                },
+                hierarchicalRepulsion: {
+                    nodeDistance: 120
+                }
+            },
+            interaction: {
+                dragNodes: function (node) {
+                    return node.id !== 'root'; // 禁止拖动根节点
+                }
+            }
+        };
+
+        // 为侧边栏模式添加特殊配置
+        if (this.displayMode === 'sidepanel') {
+            return {
+                ...baseOptions,
+                nodes: {
+                    ...baseOptions.nodes,
+                    size: 12, // 更小的节点
+                    font: {
+                        size: 12, // 更小的字体
+                        color: '#333'
+                    }
+                },
+                physics: {
+                    ...baseOptions.physics,
+                    stabilization: {
+                        enabled: true,
+                        iterations: 500 // 减少迭代次数以加快加载
+                    },
+                    barnesHut: {
+                        gravitationalConstant: -2000,
+                        centralGravity: 0.1,
+                        springLength: 95,
+                        springConstant: 0.04,
+                        damping: 0.09
+                    }
+                },
+                interaction: {
+                    dragNodes: true,
+                    dragView: true,
+                    zoomView: true,
+                    hover: true,
+                    multiselect: false,
+                    keyboard: false
+                }
+            };
+        }
+
+        return baseOptions;
     }
 
     // 设置网络事件
@@ -715,8 +759,57 @@ Comment: ${comment}`;
     }
 }
 
+// Add function to save IntentTree when Analyze is clicked
+async function saveIntentTree(intentTree) {
+    try {
+        
+        // intentTree: {
+        //     "item": {
+        //       "游览巴塞罗那主要景点": [
+        //         {
+        //           "id": 1732720186197,
+        //           "comment": "",
+        //           "content": "时间紧张的话米拉和巴特罗二选一即可",
+        //           "context": "",
+        //           "isLeafNode": true
+        //         },
+        //         {
+        //           "id": 1732720196427,
+        //           "comment": "拍照",
+        //           "content": "tibidabo山属巴塞最高峰，山顶有游乐园🎠和教堂",
+        //           "context": "",
+        //           "isLeafNode": true
+        //         }
+        //       ],
+        //       "提供西班牙旅行建议": [
+        //         {
+        //           "id": 1732720288906,
+        //           "comment": "",
+        //           "content": "托莱多小镇一日游～整个小镇都被列为世界文化遗产",
+        //           "context": "",
+        //           "isLeafNode": true
+        //         },
+        //       ]
+        //     },
+        //     "scenario": "Write a travel plan"
+        //   }
+        // format intentTree with format check
+        if (!intentTree || !intentTree.item) {
+            throw new Error('Invalid intent tree structure received from server');
+        }
+        await chrome.runtime.sendMessage({
+            action: 'saveIntentTree',
+            intentTree: intentTree
+        });
+        console.log('Intent tree saved successfully');
+    } catch (error) {
+        console.error('Error saving intent tree:', error);
+    }
+}
+
+
 // 主函数
-function showNetworkVisualization(intentTree, containerArea = null) {
+async function showNetworkVisualization(intentTree, containerArea = null, mode = 'standalone') {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -725,9 +818,10 @@ function showNetworkVisualization(intentTree, containerArea = null) {
         }
 
         console.log('Visualization data:', intentTree);
-
-        const mode = containerArea ? 'integrated' : 'standalone';
         console.log('networkVisualizationContainer mode:', mode);
+
+        // save intentTree
+        await saveIntentTree(intentTree);
         
         this.intentTree = intentTree;
         const networkManager = new NetworkManager(intentTree, containerArea, mode);
