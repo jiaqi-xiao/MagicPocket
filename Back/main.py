@@ -439,20 +439,20 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
             intent_records_embeddings = await embedModel.embeddingList(intent_records)
             # 对top-k中每个句子计算与每个 record 的最小相似度
-            record_min_similarities = []
+            record_max_similarities = []
             for sentence_e in top_k_sentences_embeddings:
-                min_sim = min(
+                max_sim = max(
                     cosine_similarity(record_e, sentence_e)
                     for record_e in intent_records_embeddings
                 )
-                record_min_similarities.append(min_sim)
-            print(intent, record_min_similarities)
+                record_max_similarities.append(max_sim)
+            print(intent, record_max_similarities)
             # 筛选低于 bottom_k_threshold 的句子及其索引
             bottom_filtered_indices = [
-                i for i, sim in enumerate(record_min_similarities) if sim <= bottom_threshold
+                i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
             ]
             bottom_filtered_similarities = [
-                (i, record_min_similarities[i]) for i in bottom_filtered_indices
+                (i, record_max_similarities[i]) for i in bottom_filtered_indices
             ]
             bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:2]
             bottom_k_sentences = [top_k_sentences[i[0]] for i in bottom_k_indices]
