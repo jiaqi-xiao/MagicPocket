@@ -68,6 +68,13 @@ function initializeRecordsArea() {
     });
 
     analyzeBtn.addEventListener('click', async () => {
+        // 如果网络可视化已经显示，则隐藏它
+        if (networkManager) {
+            hideNetworkVisualization();
+            analyzeBtn.textContent = "Analyze";
+            return;
+        }
+
         try {
             // 获取当前任务描述
             const taskDescription = await new Promise((resolve) => {
@@ -150,11 +157,15 @@ function initializeRecordsArea() {
             } else {
                 networkManager.updateData(intentTree);
             }
+
+            // 更新按钮文本
+            analyzeBtn.textContent = "Hide Intent Tree";
             
         } catch (error) {
             console.error('Visualization error:', error);
             alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
             hideNetworkVisualization();
+            analyzeBtn.textContent = "Analyze";
         } finally {
             hideLoadingState();
         }
@@ -355,6 +366,7 @@ function hideNetworkVisualization() {
     const scrollArea = document.getElementById('recordsScrollArea');
     
     container.classList.remove('visible');
+    container.style.width = '';
     resizer.classList.remove('visible');
     scrollArea.style.height = '100%';
 }
