@@ -63,6 +63,20 @@ function initializeRecordsArea() {
         // 获取当前活动标签
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
+        // 获取当前高亮状态
+        const currentHighlightBtn = document.getElementById('highlightTextBtn');
+        const isCurrentlyHighlighted = currentHighlightBtn.textContent === 'Remove Highlight';
+
+        // 如果当前没有高亮，且NetworkVisualization未显示
+        if (!isCurrentlyHighlighted && !networkManager) {
+            // 先触发analyzeBtn点击
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            await analyzeBtn.click();
+            
+            // 等待NetworkVisualization加载完成
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
         // 向content script发送消息来切换高亮
         chrome.tabs.sendMessage(tab.id, { action: 'toggleHighlight' });
     });
