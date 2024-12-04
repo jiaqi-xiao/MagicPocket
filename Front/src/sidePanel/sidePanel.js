@@ -171,6 +171,18 @@ function initializeRecordsArea() {
         }
     });
 
+    // 监听来自content script的高亮状态变化
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'highlightStateChanged') {
+            const highlightBtn = document.getElementById('highlightTextBtn');
+            if (request.isActive) {
+                highlightBtn.textContent = 'Remove Highlight';
+            } else {
+                highlightBtn.textContent = 'Highlight Text';
+            }
+        }
+    });
+
     // 初始化记录列表
     updateRecordsList();
 

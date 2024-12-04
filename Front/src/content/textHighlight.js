@@ -32,21 +32,84 @@ function updateStyles() {
             border-radius: 3px;
             padding: 2px;
         }
+        .mp-loading-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .mp-loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: mp-spin 1s linear infinite;
+        }
+        @keyframes mp-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     `;
 }
 
 // Initialize styles
 updateStyles();
 
+function showLoadingOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'mp-loading-overlay';
+    overlay.id = 'mp-loading-overlay';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'mp-loading-spinner';
+    
+    const text = document.createElement('div');
+    text.textContent = 'Processing Highlight...';
+    text.style.color = '#666';
+    text.style.fontSize = '14px';
+    
+    overlay.appendChild(spinner);
+    overlay.appendChild(text);
+    document.body.appendChild(overlay);
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('mp-loading-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
 window.toggleHighlight = async function() {
     console.log("Toggle highlight called");
     isHighlightActive = !isHighlightActive;
     const highlightBtn = document.getElementById('highlightTextBtn');
     
+    // 通知sidePanel状态变化
+    chrome.runtime.sendMessage({
+        action: 'highlightStateChanged',
+        isActive: isHighlightActive
+    });
+    
     if (isHighlightActive) {
         highlightBtn.style.backgroundColor = '#4CAF50';
         highlightBtn.textContent = 'Remove Highlight';
-        await processPageContent();
+        showLoadingOverlay();
+        try {
+            await processPageContent();
+        } finally {
+            hideLoadingOverlay();
+        }
     } else {
         highlightBtn.style.backgroundColor = '#f5f5f5';
         highlightBtn.textContent = 'Highlight Text';
