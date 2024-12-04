@@ -63,11 +63,32 @@ function initializeRecordsArea() {
         // 获取当前活动标签
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
+        // 获取当前高亮状态
+        const currentHighlightBtn = document.getElementById('highlightTextBtn');
+        const isCurrentlyHighlighted = currentHighlightBtn.textContent === 'Remove Highlight';
+
+        // 如果当前没有高亮，且NetworkVisualization未显示
+        if (!isCurrentlyHighlighted && !networkManager) {
+            // 先触发analyzeBtn点击
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            await analyzeBtn.click();
+            
+            // 等待NetworkVisualization加载完成
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
         // 向content script发送消息来切换高亮
         chrome.tabs.sendMessage(tab.id, { action: 'toggleHighlight' });
     });
 
     analyzeBtn.addEventListener('click', async () => {
+        // 如果网络可视化已经显示，则隐藏它
+        if (networkManager) {
+            hideNetworkVisualization();
+            analyzeBtn.textContent = "Analyze";
+            return;
+        }
+
         try {
             // 获取当前任务描述
             const taskDescription = await new Promise((resolve) => {
@@ -150,13 +171,29 @@ function initializeRecordsArea() {
             } else {
                 networkManager.updateData(intentTree);
             }
+
+            // 更新按钮文本
+            analyzeBtn.textContent = "Hide Intent Tree";
             
         } catch (error) {
             console.error('Visualization error:', error);
             alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
             hideNetworkVisualization();
+            analyzeBtn.textContent = "Analyze";
         } finally {
             hideLoadingState();
+        }
+    });
+
+    // 监听来自content script的高亮状态变化
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'highlightStateChanged') {
+            const highlightBtn = document.getElementById('highlightTextBtn');
+            if (request.isActive) {
+                highlightBtn.textContent = 'Remove Highlight';
+            } else {
+                highlightBtn.textContent = 'Highlight Text';
+            }
         }
     });
 
@@ -355,6 +392,7 @@ function hideNetworkVisualization() {
     const scrollArea = document.getElementById('recordsScrollArea');
     
     container.classList.remove('visible');
+    container.style.width = '';
     resizer.classList.remove('visible');
     scrollArea.style.height = '100%';
 }
