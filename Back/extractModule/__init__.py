@@ -191,7 +191,7 @@ class Chain4Construct:
         ## 对Groups中的每一组提炼一个符合Scenario语境下的意图，以字典形式返回，key为意图，value为group的索引。务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。每个Intent的描述必须简短清晰，最多不超过7个词。
         ## 比较所有生成的意图与IntentsList中的意图，用IntentsList中的意图替换字典中最相似的意图，如果不够相似则不需要替换。如果IntentsList中还有未替换的Intent，则对每个剩余的Intent在字典中创建以该Intent为key，None为value的键值对。
         self.instruction = """
-        对Groups中的每一个字典元素提炼一个符合Scenario的意图，以字典形式返回，确保每个意图描述清晰、不重复。
+        对Groups中的每一个字典元素提炼一个符合Scenario的意图，以字典形式返回。确保每个意图描述清晰、不重复，并且符合Mutually Exclusive Collectively Exhaustive原则。
 
         # Steps
             1. **确认group数量**: 理解Groups的结构，确认group的数量，后续提取的意图数量需与group的数量一致。一个group是以group_x为key,一个列表为value的字典。
