@@ -40,8 +40,7 @@
 from typing import Annotated
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_openai import ChatOpenAI
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 import os
 from utils import *
 import json
@@ -428,38 +427,44 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             filtered_indices = [
                 i for i, sim in enumerate(similarities) if sim >= top_threshold
             ]
+            filtered_sentences = [sentences[i] for i in filtered_indices]
+            filtered_sentences_embeddings = [sentences_embeddings[i] for i in filtered_indices]
             
             # 从筛选结果中选取 top-k
             filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
             top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
             top_k_sentences = [sentences[i[0]] for i in top_k_indices]
-            top_k_sentences_embeddings = [sentences_embeddings[i[0]] for i in top_k_indices]
             
             # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
-            intent_records_embeddings = await embedModel.embeddingList(intent_records)
-            # 对top-k中每个句子计算与每个 record 的最小相似度
-            record_max_similarities = []
-            for sentence_e in top_k_sentences_embeddings:
-                max_sim = max(
-                    cosine_similarity(record_e, sentence_e)
-                    for record_e in intent_records_embeddings
-                )
-                record_max_similarities.append(max_sim)
-            print(intent, record_max_similarities)
-            # 筛选低于 bottom_k_threshold 的句子及其索引
-            bottom_filtered_indices = [
-                i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
-            ]
-            bottom_filtered_similarities = [
-                (i, record_max_similarities[i]) for i in bottom_filtered_indices
-            ]
-            bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:2]
-            bottom_k_sentences = [top_k_sentences[i[0]] for i in bottom_k_indices]
+            # 如果intent没有records，直接返回top-k
+            if len(intent_records) == 0:
+                intent_to_top_k_sentences[intent]= []
+                intent_to_bottom_k_sentences[intent] = top_k_sentences
+            else:
+                intent_records_embeddings = await embedModel.embeddingList(intent_records)
+                # 对超过top_threshold的每个句子计算与每个 record 的最小相似度
+                record_max_similarities = []
+                for sentence_e in filtered_sentences_embeddings:
+                    max_sim = max(
+                        cosine_similarity(record_e, sentence_e)
+                        for record_e in intent_records_embeddings
+                    )
+                    record_max_similarities.append(max_sim)
 
-            # 保存结果
-            intent_to_top_k_sentences[intent]= top_k_sentences
-            intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+                # 筛选低于 bottom_k_threshold 的句子及其索引
+                bottom_filtered_indices = [
+                    i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
+                ]
+                bottom_filtered_similarities = [
+                    (i, record_max_similarities[i]) for i in bottom_filtered_indices
+                ]
+                bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
+                bottom_k_sentences = [filtered_sentences[i[0]] for i in bottom_k_indices]
+
+                # 保存结果
+                intent_to_top_k_sentences[intent]= top_k_sentences
+                intent_to_bottom_k_sentences[intent] = bottom_k_sentences
 
         # Step 6: 返回每个意图的 top-k 和 bottom-k 最相关句子
         return {
