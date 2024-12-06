@@ -427,13 +427,13 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             filtered_indices = [
                 i for i, sim in enumerate(similarities) if sim >= top_threshold
             ]
+            filtered_sentences = [sentences[i] for i in filtered_indices]
+            filtered_sentences_embeddings = [sentences_embeddings[i] for i in filtered_indices]
             
             # 从筛选结果中选取 top-k
             filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
             top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
             top_k_sentences = [sentences[i[0]] for i in top_k_indices]
-
-            filtered_sentences_embeddings = [sentences_embeddings[i[0]]  for i in filtered_indices]
             
             # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
@@ -455,7 +455,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 (i, record_max_similarities[i]) for i in bottom_filtered_indices
             ]
             bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
-            bottom_k_sentences = [filtered_sentences_embeddings[i[0]] for i in bottom_k_indices]
+            bottom_k_sentences = [filtered_sentences[i[0]] for i in bottom_k_indices]
 
             # 保存结果
             intent_to_top_k_sentences[intent]= top_k_sentences
