@@ -4,7 +4,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 import numpy as np
 from typing import Literal, Optional
 
-
 class EmbedModel:
     def __init__(self):
         self.index = None
@@ -30,6 +29,8 @@ class EmbedModel:
     def vector_operation(self, v_list, vector_operation_mode: Literal["add", "minus"]):
         return np.sum(v_list, axis=0).tolist() if vector_operation_mode == "add" else (v_list[0] - np.sum(v_list[1:], axis=0)).tolist()
 
+    def embeddingList(self, sentences: list):
+        return self.embeddingsModel.embed_documents(sentences)
 
     # # 获取索引中所有嵌入的向量
     # def get_all_vectors(self):
@@ -49,6 +50,12 @@ class EmbedModel:
 
     #     return results
 
+class EmbedGPTModel:
+    def __init__(self, model) -> None:
+        self.model = model
+    
+    async def embeddingList(self, documents: list) -> list:
+        return self.model.embed_documents(documents)
 
 if __name__ == "__main__":
     intent = {"intent": "想去拍照"}

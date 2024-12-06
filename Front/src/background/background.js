@@ -33,4 +33,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true; // 这表明我们会异步发送响应
     }
+    
+    // Handle IntentTree storage
+    if (request.action === "saveIntentTree") {
+        chrome.storage.local.set({ intentTree: request.intentTree }, () => {
+            if (chrome.runtime.lastError) {
+                console.error("Error saving intent tree:", chrome.runtime.lastError);
+                sendResponse({ status: "error", message: chrome.runtime.lastError.message });
+            } else {
+                console.log("Intent tree saved successfully");
+                // console.log("Intent tree: ", request.intentTree);
+                sendResponse({ status: "success" });
+            }
+        });
+        return true;
+    }
+
+    if (request.action === "getIntentTree") {
+        chrome.storage.local.get(['intentTree'], (result) => {
+            sendResponse({ intentTree: result.intentTree });
+            console.log("Intent tree sent to content script: ", result.intentTree);
+        });
+        return true;
+    }
+
+    if (request.action === "fetchRAG") {
+        fetch('http://localhost:8000/rag', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(request.data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            sendResponse({ result });
+        })
+        .catch(error => {
+            sendResponse({ error: error.message });
+        });
+        return true; // 保持消息通道开放
+    }
 });
