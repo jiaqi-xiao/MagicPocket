@@ -1,28 +1,30 @@
 import re
 import numpy as np
 
-def filterNodes(tree, target_level, current_level=0, result=None, key=None, value=True) -> list:
+def filterNodes(tree, current_level=0, result=None, key=None, value=True) -> list:
     """
-    筛选出tree中指定层中的immutable为True的nodes。
+    筛选出tree中所有层级中的immutable为True的nodes。
 
     :param tree: 目标树结构，通常是嵌套的字典或列表。
-    :param key: 要检查的键，默认是 None。
-    :param value: 要匹配的值，默认为 True。
+    :param current_level: 当前层级，从0开始
+    :param result: 用于存储结果的列表
+    :param key: 要检查的键，默认是 None
+    :param value: 要匹配的值，默认为 True
     :return: 包含符合条件节点的列表。
     """
     if result is None:
         result = []
 
-    # 如果下一层是目标层，收集所有该层的 "text"
-    if current_level == target_level - 1:
-        for item in tree.get("child", []):
-            if not item["isLeafNode"]:
-                if (key is None) or (item[key] == value):
-                    result.append(item["intent"])
-
-    # 遍历子节点，继续递归
-    for node in tree.get("child", []):
-        filterNodes(node, target_level, current_level + 1, result)
+    # 检查当前层级的节点
+    if isinstance(tree, dict) and tree.get(key) == value and not tree.get("isLeafNode", True):
+        intent = tree.get("intent")
+        result.append(intent)
+    
+    # 如果有子节点，继续递归
+    if isinstance(tree, dict) and 'child' in tree and isinstance(tree['child'], list):
+        for node in tree.get("child", []):
+            if not node.get("isLeafNode", True):
+                filterNodes(node, current_level + 1, result, key, value)
 
     return result
 
@@ -134,4 +136,4 @@ if __name__ == "__main__":
         ]
     }
     intent =  "探索巴塞罗那建筑风格"
-    print(get_intent_records(intentTree, intent))
+    print(filterNodes(intentTree, key="intent", value=intent))

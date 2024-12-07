@@ -95,10 +95,20 @@ window.toggleHighlight = async function() {
     isHighlightActive = !isHighlightActive;
     const highlightBtn = document.getElementById('highlightTextBtn');
     
+    // 获取当前所有页面的高亮状态
+    const { pageHighlightStates = {} } = await chrome.storage.local.get('pageHighlightStates');
+    
+    // 更新当前页面的状态
+    pageHighlightStates[window.location.href] = isHighlightActive;
+    
+    // 保存所有页面的状态
+    await chrome.storage.local.set({ pageHighlightStates });
+    
     // 通知sidePanel状态变化
     chrome.runtime.sendMessage({
         action: 'highlightStateChanged',
-        isActive: isHighlightActive
+        isActive: isHighlightActive,
+        url: window.location.href
     });
     
     if (isHighlightActive) {
