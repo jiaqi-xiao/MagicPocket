@@ -1,6 +1,7 @@
 let intentNetwork = null;
 let networkGraph = null;
 let networkManager = null;
+let lastIntentTree = null; // 添加一个变量来保存最后的 intentTree 状态
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeTaskDescription();
@@ -133,6 +134,8 @@ function initializeRecordsArea() {
             const groupsOfNodes = await groupResponse.json();
 
             // 调用后端 construct API
+            console.log("networkManager status: ", networkManager);
+            console.log("lastIntentTree: ", lastIntentTree);
             const constructResponse = await fetch('http://localhost:8000/construct/', {
                 method: 'POST',
                 headers: {
@@ -141,6 +144,7 @@ function initializeRecordsArea() {
                 body: JSON.stringify({
                     scenario: taskDescription,
                     groupsOfNodes: groupsOfNodes,
+                    intentTree: networkManager ? networkManager.getIntentTreeWithStates() : lastIntentTree,
                     target_level: 3
                 })
             });
@@ -384,6 +388,8 @@ function showNetworkContainer() {
 
 function hideNetworkVisualization() {
     if (networkManager) {
+        // 保存当前的 intentTree 状态
+        lastIntentTree = networkManager.getIntentTreeWithStates();
         networkManager.cleanup();
         networkManager = null;
     }
