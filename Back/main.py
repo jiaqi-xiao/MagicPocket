@@ -442,6 +442,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             
             # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
+            print("records num: ", len(intent_records))
             # 如果intent没有records，直接返回top-k
             if len(intent_records) == 0:
                 intent_to_top_k_sentences[intent]= []
