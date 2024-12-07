@@ -560,18 +560,38 @@ function resetScrollIndicators() {
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     resetScrollIndicators(); // 重置提示状态
+    await updateHighlightButtonState(tab.url);
     updateActiveRecordHighlight(tab.url);
 });
 
-// 更新监听URL变化的代码
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+// 监听URL变化
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.url) {
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            if (tabs[0] && tabs[0].id === tabId) {
-                resetScrollIndicators(); // 重置提示状态
-                updateActiveRecordHighlight(changeInfo.url);
-            }
-        });
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab.id === tabId) {
+            await updateHighlightButtonState(changeInfo.url);
+            updateActiveRecordHighlight(changeInfo.url);
+        }
+    }
+});
+
+// 更新高亮按钮状态
+async function updateHighlightButtonState(url) {
+    const { pageHighlightStates = {} } = await chrome.storage.local.get('pageHighlightStates');
+    const highlightBtn = document.getElementById('highlightTextBtn');
+    
+    // 根据当前页面的存储状态更新按钮文本
+    if (pageHighlightStates[url]) {
+        highlightBtn.textContent = 'Remove Highlight';
+    } else {
+        highlightBtn.textContent = 'Highlight Text';
+    }
+}
+
+// 添加消息监听器来处理高亮状态变化
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'highlightStateChanged') {
+        updateHighlightButtonState(request.url);
     }
 });
 
