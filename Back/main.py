@@ -413,7 +413,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             intentTree,  # 转换 IntentTree 为字典
             target_level=1
         )
-        intents.append("intent expression methods") ## test
         intents_embeddings = await embedModel.embeddingList(intents)
 
         # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
