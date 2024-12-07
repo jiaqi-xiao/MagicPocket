@@ -1,6 +1,7 @@
 // 网络图配置和状态管理
 class NetworkManager {
     static activeNodeMenu = false;  // 跟踪节点菜单状态
+    static immutableIntents = new Set();  // 存储所有 immutable 的意图名称
 
     constructor(intentTree, containerArea = null, mode = 'standalone') {
         this.intentTree = intentTree;
@@ -12,6 +13,15 @@ class NetworkManager {
         this.network = null;
         this.container = null;
         this.visContainer = null;
+
+        // 从初始意图树中收集 immutable 意图
+        if (intentTree && intentTree.child) {
+            intentTree.child.forEach(node => {
+                if (node.immutable && node.intent) {
+                    NetworkManager.immutableIntents.add(node.intent);
+                }
+            });
+        }
     }
 
     // 初始化网络容器
@@ -117,133 +127,6 @@ class NetworkManager {
         }
     }
 
-    // In networkVisualization.js, add to class NetworkManager
-    // Add cleanup method to handle container removal properly
-    cleanup() {
-        if (this.container) {
-            this.container.remove();
-            if (this.containerArea) {
-                this.containerArea.classList.remove('with-network');
-                // 重置容器区域样式
-                Object.assign(this.containerArea.style, {
-                    width: "40vw",
-                    maxWidth: "600px"
-                });
-                
-                // 重置记录列表容器样式
-                const recordsList = this.containerArea.querySelector(".mp-floating-main-container");
-                if (recordsList) {
-                    recordsList.style.width = "40vw";
-                    recordsList.style.minWidth = "360px";
-                }
-            }
-        }
-        isNetworkVisible = false;
-    }
-
-    setupVisContainer() {
-        this.visContainer = document.createElement("div");
-        Object.assign(this.visContainer.style, {
-            width: "100%",
-            height: "calc(100% - 40px)",
-            position: "relative",
-            overflow: "hidden"
-        });
-        this.container.appendChild(this.visContainer);
-        
-        const loader = document.createElement("div");
-        loader.textContent = "Loading visualization...";
-        Object.assign(loader.style, {
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            color: "#666"
-        });
-        this.visContainer.appendChild(loader);
-    }
-
-    switchDisplayMode(newMode, containerArea = null) {
-        if (newMode === this.displayMode) return;
-
-        this.container.remove();
-        this.displayMode = newMode;
-        this.containerArea = containerArea;
-        this.initContainer();
-        this.initializeNetwork();
-    }
-
-    // 设置容器样式
-    setupContainerStyle() {
-        Object.assign(this.container.style, {
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "80vw",
-            height: "80vh",
-            backgroundColor: "white",
-            padding: "20px",
-            boxShadow: "0 0 10px rgba(0,0,0,0.5)",
-            zIndex: "10000",
-            borderRadius: "8px"
-        });
-    }
-
-    // 添加关闭按钮
-    addCloseButton() {
-        const closeBtn = document.createElement("button");
-        this.setupCloseButtonStyle(closeBtn);
-        this.container.appendChild(closeBtn);
-    }
-
-    // 设置关闭按钮样式
-    setupCloseButtonStyle(closeBtn) {
-        closeBtn.textContent = "×";
-        Object.assign(closeBtn.style, {
-            position: "absolute",
-            right: "10px",
-            top: "10px",
-            border: "1px solid #ccc",
-            background: "#fff",
-            color: "#333",
-            fontSize: "24px",
-            cursor: "pointer",
-            width: "30px",
-            height: "30px",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "0",
-            lineHeight: "1",
-            textAlign: "center",
-            userSelect: "none",
-            transform: "translateY(-2px)",
-            zIndex: "1"
-        });
-
-        this.setupCloseButtonEvents(closeBtn);
-    }
-
-    // 设置关闭按钮事件
-    setupCloseButtonEvents(closeBtn) {
-        closeBtn.addEventListener("mouseover", () => {
-            closeBtn.style.backgroundColor = "#f0f0f0";
-            closeBtn.style.borderColor = "#999";
-        });
-    
-        closeBtn.addEventListener("mouseout", () => {
-            closeBtn.style.backgroundColor = "#fff";
-            closeBtn.style.borderColor = "#ccc";
-        });
-    
-        closeBtn.onclick = (e) => {
-            e.preventDefault();
-            this.cleanup(); // Use cleanup method instead of just removing container
-        };
-    }
-
     // 初始化网络节点
     initializeNodes() {
         if (!this.intentTree || !this.intentTree.item) {
@@ -282,33 +165,40 @@ class NetworkManager {
             type: 'root',
             color: this.getNodeColor('root'),
             size: this.getNodeSize('root'),
-            opacity: 0.3,  // 设置初始透明度
+            opacity: 1,  // 设置为完全不透明，表示已确认状态
             fixed: true,   // 固定根节点位置
             physics: false // 禁用物理引擎对根节点的影响
         });
-        // 设置根节点的初始状态
-        this.nodeStates.set(rootId, false);
+        // 设置根节点的初始状态为已确认
+        this.nodeStates.set(rootId, true);
 
         // 遍历每个意图组
         Object.entries(intentTree.item).forEach(([intentName, records], index) => {
+            // Skip intents that start with 'remaining_intent_'
+            if (intentName.startsWith('remaining_intent_')) {
+                return;
+            }
+
             const intentId = `intent_${nodeId++}`;
+            const isImmutable = NetworkManager.immutableIntents.has(intentName);
+            
             nodes.push({
                 id: intentId,
                 label: intentName,
                 type: 'intent',
                 color: this.getNodeColor('intent'),
                 size: this.getNodeSize('intent'),
-                opacity: 0.3  // 设置初始透明度
+                opacity: isImmutable ? 1 : 0.3  // 如果是 immutable，设置为不透明
             });
             // 设置意图节点的初始状态
-            this.nodeStates.set(intentId, false);
+            this.nodeStates.set(intentId, isImmutable);
 
             // 连接根节点到意图节点
             edges.push({
                 from: rootId,
                 to: intentId,
                 arrows: 'to',
-                dashes: true  // 设置初始虚线状态
+                dashes: !isImmutable  // 如果是 immutable，使用实线
             });
 
             // 处理记录
@@ -321,17 +211,18 @@ class NetworkManager {
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
-                        title: this.formatRecordTooltip(record),
-                        opacity: 0.3  // 设置初始透明度
+                        opacity: isImmutable ? 1 : 0.3,  // 如果父意图是 immutable，子节点也设置为不透明
+                        title: this.formatRecordTooltip(record)  // 设置悬停提示
                     });
-                    // 设置记录节点的初始状态
-                    this.nodeStates.set(recordId, false);
+                    // 设置记录节点的初始状态与父意图节点一致
+                    this.nodeStates.set(recordId, isImmutable);
 
+                    // 连接意图节点到记录节点
                     edges.push({
                         from: intentId,
                         to: recordId,
                         arrows: 'to',
-                        dashes: true  // 设置初始虚线状态
+                        dashes: !isImmutable  // 如果父意图是 immutable，使用实线
                     });
                 });
             }
@@ -380,6 +271,13 @@ Comment: ${comment}`;
     // 更新节点状态
     updateNodeState(nodeId, confirmed) {
         this.nodeStates.set(nodeId, confirmed);
+        
+        // 如果是意图节点且被确认，添加到 immutable 集合中
+        const node = this.nodes.get(nodeId);
+        if (node && node.type === 'intent' && confirmed) {
+            NetworkManager.immutableIntents.add(node.label);
+        }
+        
         this.nodes.update({
             id: nodeId,
             opacity: confirmed ? 1 : 0.3
@@ -552,8 +450,8 @@ Comment: ${comment}`;
     // 设置菜单关闭事件
     setupMenuCloseEvent(menu) {
         const closeMenu = (e) => {
-            // 检查点击是否在菜单外且不是节点点击事件
-            if (!menu.contains(e.target) && !e.target.closest('.vis-network')) {
+            // 只检查点击是否在菜单外
+            if (!menu.contains(e.target)) {
                 menu.remove();
                 NetworkManager.activeNodeMenu = false;
                 document.removeEventListener('click', closeMenu);
@@ -756,6 +654,170 @@ Comment: ${comment}`;
                 opacity: 1.0
             });
         });
+    }
+
+    // 获取带有确认状态的意图树
+    getIntentTreeWithStates() {
+        // 创建新的意图树结构
+        const newIntentTree = {
+            scenario: this.intentTree.scenario,
+            child: []
+        };
+        
+        // 遍历所有节点状态
+        if (this.intentTree.item) {
+            let idCounter = 1; // 用于生成唯一的ID
+            Object.keys(this.intentTree.item).forEach(intentName => {
+                // 跳过以 'remaining_intent_' 开头的意图
+                if (intentName.startsWith('remaining_intent_')) {
+                    return;
+                }
+
+                // 创建意图对象
+                const intentObj = {
+                    id: idCounter++,
+                    intent: intentName,
+                    isLeafNode: false,
+                    // 如果意图名称在 immutableIntents 中，就标记为 immutable
+                    immutable: NetworkManager.immutableIntents.has(intentName),
+                    child: this.intentTree.item[intentName] || [],
+                    child_num: (this.intentTree.item[intentName] || []).length,
+                    priority: 1
+                };
+
+                newIntentTree.child.push(intentObj);
+            });
+        }
+
+        console.log('Intent tree with states:', JSON.stringify(newIntentTree, null, 2));
+        console.log('Immutable intents:', Array.from(NetworkManager.immutableIntents));
+        return newIntentTree;
+    }
+
+    // Add cleanup method to handle container removal properly
+    cleanup() {
+        if (this.container) {
+            this.container.remove();
+            if (this.containerArea) {
+                this.containerArea.classList.remove('with-network');
+                // 重置容器区域样式
+                Object.assign(this.containerArea.style, {
+                    width: "40vw",
+                    maxWidth: "600px"
+                });
+                
+                // 重置记录列表容器样式
+                const recordsList = this.containerArea.querySelector(".mp-floating-main-container");
+                if (recordsList) {
+                    recordsList.style.width = "40vw";
+                    recordsList.style.minWidth = "360px";
+                }
+            }
+        }
+        isNetworkVisible = false;
+    }
+
+    setupVisContainer() {
+        this.visContainer = document.createElement("div");
+        Object.assign(this.visContainer.style, {
+            width: "100%",
+            height: "calc(100% - 40px)",
+            position: "relative",
+            overflow: "hidden"
+        });
+        this.container.appendChild(this.visContainer);
+        
+        const loader = document.createElement("div");
+        loader.textContent = "Loading visualization...";
+        Object.assign(loader.style, {
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            color: "#666"
+        });
+        this.visContainer.appendChild(loader);
+    }
+
+    switchDisplayMode(newMode, containerArea = null) {
+        if (newMode === this.displayMode) return;
+
+        this.container.remove();
+        this.displayMode = newMode;
+        this.containerArea = containerArea;
+        this.initContainer();
+        this.initializeNetwork();
+    }
+
+    // 设置容器样式
+    setupContainerStyle() {
+        Object.assign(this.container.style, {
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "80vw",
+            height: "80vh",
+            backgroundColor: "white",
+            padding: "20px",
+            boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+            zIndex: "10000",
+            borderRadius: "8px"
+        });
+    }
+
+    // 添加关闭按钮
+    addCloseButton() {
+        const closeBtn = document.createElement("button");
+        this.setupCloseButtonStyle(closeBtn);
+        this.container.appendChild(closeBtn);
+    }
+
+    // 设置关闭按钮样式
+    setupCloseButtonStyle(closeBtn) {
+        closeBtn.textContent = "×";
+        Object.assign(closeBtn.style, {
+            position: "absolute",
+            right: "10px",
+            top: "10px",
+            border: "1px solid #ccc",
+            background: "#fff",
+            color: "#333",
+            fontSize: "24px",
+            cursor: "pointer",
+            width: "30px",
+            height: "30px",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0",
+            lineHeight: "1",
+            textAlign: "center",
+            userSelect: "none",
+            transform: "translateY(-2px)",
+            zIndex: "1"
+        });
+
+        this.setupCloseButtonEvents(closeBtn);
+    }
+
+    // 设置关闭按钮事件
+    setupCloseButtonEvents(closeBtn) {
+        closeBtn.addEventListener("mouseover", () => {
+            closeBtn.style.backgroundColor = "#f0f0f0";
+            closeBtn.style.borderColor = "#999";
+        });
+    
+        closeBtn.addEventListener("mouseout", () => {
+            closeBtn.style.backgroundColor = "#fff";
+            closeBtn.style.borderColor = "#ccc";
+        });
+    
+        closeBtn.onclick = (e) => {
+            e.preventDefault();
+            this.cleanup(); // Use cleanup method instead of just removing container
+        };
     }
 }
 
