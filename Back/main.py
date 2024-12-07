@@ -375,7 +375,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     :param webContent: Web 内容，字符串形式。
     :param k: 每个意图返回的最相关句子数。
     :param top_threshold: top-k 相似度阈值，只有相似度高于该值的句子才会被纳入 top-k。
-    :param bottom_threshold: bottom-k 筛选的相似度阈值，低于该值的句子才会被考虑。目前为bottom_1
+    :param bottom_threshold: bottom-k 筛选的相似度阈值，低于该值的句子才会被考虑。
     :return: 每个意图对应的 top-k 和 bottom-k 最相关句子的结果。
     """
     try:
@@ -403,6 +403,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         
         # Step 1: 将 webContent 分句
         sentences = split2Sentences(webContent)
+        print("该网页句子数量：", len(sentences))
 
         # Step 2: 向量化 webContent 的句子
         sentences_embeddings = await embedModel.embeddingList(sentences)
@@ -410,9 +411,10 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         # Step 3: 筛选意图并向量化它们
         intents = filterNodes(
             intentTree,  # 转换 IntentTree 为字典
-            target_level=1  # 筛选一级意图
+            target_level=1
         )
         intents_embeddings = await embedModel.embeddingList(intents)
+
         # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
@@ -434,6 +436,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
             top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
             top_k_sentences = [sentences[i[0]] for i in top_k_indices]
+
+            print(f"意图：{intent}\ntop-k预览：{top_k_indices}")
+            print(top_k_sentences)
             
             # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
@@ -451,7 +456,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                         for record_e in intent_records_embeddings
                     )
                     record_max_similarities.append(max_sim)
-
+                print("min record sim: ", min(record_max_similarities))
                 # 筛选低于 bottom_k_threshold 的句子及其索引
                 bottom_filtered_indices = [
                     i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
@@ -461,6 +466,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 ]
                 bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
                 bottom_k_sentences = [filtered_sentences[i[0]] for i in bottom_k_indices]
+
+                print("bottom-k预览：",bottom_filtered_indices)
+                print(bottom_k_sentences)
 
                 # 保存结果
                 intent_to_top_k_sentences[intent]= top_k_sentences
