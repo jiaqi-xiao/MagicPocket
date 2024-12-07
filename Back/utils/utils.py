@@ -1,7 +1,10 @@
 import re
 import numpy as np
 
-def filterNodes(tree, current_level=0, result=None, key=None, value=True) -> list:
+
+def filterNodes(
+    tree, current_level=0, target_level=1, result=None, key=None, value=None
+) -> list:
     """
     筛选出tree中所有层级中的immutable为True的nodes。
 
@@ -16,25 +19,34 @@ def filterNodes(tree, current_level=0, result=None, key=None, value=True) -> lis
         result = []
 
     # 检查当前层级的节点
-    if isinstance(tree, dict) and tree.get(key) == value and not tree.get("isLeafNode", True):
+    if (
+        isinstance(tree, dict)
+        and tree.get(key) == value
+        and not tree.get("isLeafNode", True)
+    ):
         intent = tree.get("intent")
         result.append(intent)
-    
+
+    if current_level == target_level:
+        return result
+
     # 如果有子节点，继续递归
-    if isinstance(tree, dict) and 'child' in tree and isinstance(tree['child'], list):
+    if isinstance(tree, dict) and "child" in tree and isinstance(tree["child"], list):
         for node in tree.get("child", []):
             if not node.get("isLeafNode", True):
-                filterNodes(node, current_level + 1, result, key, value)
+                filterNodes(node, current_level + 1, target_level, result, key, value)
 
     return result
 
+
 def split2Sentences(content):
     # 使用正则表达式分句
-    sentence_endings = re.compile(r'(?<=[。！？!?.])') 
+    sentence_endings = re.compile(r"(?<=[。！？!?.])")
     sentences = sentence_endings.split(content)
     # 去除空白句子
     sentences = [s.strip() for s in sentences if s.strip()]
     return sentences
+
 
 def cosine_similarity(vec1, vec2):
     """
@@ -45,6 +57,7 @@ def cosine_similarity(vec1, vec2):
     norm_vec2 = np.linalg.norm(vec2)
     return dot_product / (norm_vec1 * norm_vec2 + 1e-8)  # 避免除以零
 
+
 def get_intent_records(intentTree, intent):
     """
     获取指定 intent 的所有叶节点记录，递归遍历所有层级（除叶节点外）。
@@ -53,6 +66,7 @@ def get_intent_records(intentTree, intent):
     :param intent: 目标 intent
     :return: 匹配 intent 的所有叶节点记录列表
     """
+
     def collect_leaf_nodes(node):
         """
         递归收集所有叶节点。
@@ -75,7 +89,7 @@ def get_intent_records(intentTree, intent):
         # 如果当前节点的 intent 匹配目标 intent，则收集其所有叶节点
         if node.get("intent") == intent:
             return collect_leaf_nodes(node)
-        
+
         # 如果有子节点，递归遍历子节点
         results = []
         for child in node.get("child", []):
@@ -86,54 +100,58 @@ def get_intent_records(intentTree, intent):
     return traverse_and_match(intentTree)
 
 
-
-
 if __name__ == "__main__":
     intentTree = {
-        "scenario": "travel",
+        "scenario": "intent-based user interface",
         "child": [
             {
-                "id": 0,
+                "id": 953682,
                 "isLeafNode": False,
                 "immutable": False,
                 "child": [
                     {
-                        "id": 0,
-                        "comment": "挑一个天气好的傍晚取圣家堂",
-                        "content": "巴塞罗那三件套：圣家堂、米拉之家、巴特略之家尽量不要一天去，不然出片都是一样的，而且时间也会紧张 ⭐️圣家堂日落前两小时的光最好",
-                        "context": "小tips:⭐️巴塞罗那三件套：圣家堂、米拉之家、巴特略之家尽量不要一天去，不然出片都是一样的，而且时间也会紧张 ⭐️圣家堂日落前两小时的光最好 ⭐️买90欧72h的3日联票🎫最划算p18，它包含了10个景点门票和公交地铁，可以直接去景点换票，官网：visit Barcelona tickets,（具体情况可以在小📕搜，有好多相关攻略） 以下标注🟢的表示用了这个联票 ⭐️小偷很多，注意钱包",
-                        "isLeafNode": True
+                        "id": 1733575992751,
+                        "comment": "",
+                        "content": "[PDF] Enhancing intent classification via zero-shot and few-shot ChatGPT prompting engineering: generating training data or directly detecting intents",
+                        "context": "",
+                        "isLeafNode": True,
                     },
                     {
-                        "id": 1,
-                        "comment": "很奇幻的建筑风格，想去亲眼看看",
-                        "content": "巴特罗之家外立面的波浪形曲线和五彩斑斓的瓷砖装饰，象征着大海的波涛和色彩斑斓的鳞片。其阳台和窗户的造型被认为像是动物的骨骼，尤其是龙的形象，反映了高迪从自然界中汲取的灵感。屋顶的龙脊设计和圣乔治屠龙的传说也有关联。",
-                        "context": "巴特罗之家（Casa Batlló）是位于西班牙巴塞罗那的一座标志性建筑，由著名建筑师安东尼·高迪（Antoni Gaudí）于1904年设计改造。它是加泰罗尼亚现代主义的杰出代表，以其独特的外观和富有想象力的设计而闻名。 巴特罗之家外立面的波浪形曲线和五彩斑斓的瓷砖装饰，象征着大海的波涛和色彩斑斓的鳞片。其阳台和窗户的造型被认为像是动物的骨骼，尤其是龙的形象，反映了高迪从自然界中汲取的灵感。屋顶的龙脊设计和圣乔治屠龙的传说也有关联。 内部空间也充满创意和细节，每个房间都采用独特的设计理念，光线的运用和空气流通的考量令人称奇。如今，巴特罗之家是世界文化遗产之一，向公众开放，是巴塞罗那不可错过的文化与建筑地标。",
-                        "isLeafNode": True
-                    }
+                        "id": 1733576137113,
+                        "comment": "",
+                        "content": "Beyond Prompts: Learning from Human Communication for Enhanced AI Intent Alignment",
+                        "context": "",
+                        "isLeafNode": True,
+                    },
                 ],
                 "child_num": 2,
-                "priority": 1,
-                "intent": "探索巴塞罗那建筑风格"
+                "priority": 5,
+                "intent": "intent alignment strategies",
             },
             {
-                "id": 1,
+                "id": 262644,
                 "isLeafNode": False,
                 "immutable": False,
                 "child": [
                     {
-                        "id": 2,
-                        "comment": "想尝试一些当地特色美食",
-                        "content": "西班牙朋友的强推 tapas和海鲜饭是我吃下来综合实力第一名的！！ 不是网红店 非常低调的当地小店",
-                        "context": "📝《综合实力第一名》🥇 Can Ramonet 图2-3 💰：40欧 📍：老城区里 西班牙朋友的强推 tapas和海鲜饭是我吃下来综合实力第一名的！！ 不是网红店 非常低调的当地小店 📝《海鲜 前两名》🦞🐟🦀🦑🐙 Puertecillo Born 图4-5 💰：30欧 📍：老城区 餐厅里有海鲜摊 买好现场加工 非常新鲜 价格便宜种类多 可以每种点一些 吃到好多种 Colom 图6-7 💰：30镑 📍：有两家 连锁店 海鲜拼盘种类很多很大量！海鲜饭也很好吃！ 两人点一个拼盘一个海鲜饭刚刚好 ps：波盖利亚市场 逛一下就行 很贵而且不好吃 梅西光顾的海鲜店 人均100欧 味道是不错 但性价比不高 📝《tapas 不分伯仲的前两名》🍖🍖 Vinitus 图8-9 （有两家） Cerveseria Catalana 图10 💰：30欧 📍：都在感恩大道（购物街）和巴特略之家附近 老网红了 我这五次 每次都会去吃的tapas店 ！ 哪家排队人少去哪家！都很好吃 时间有限选一家就可以，不用都去～ 《海鲜饭争霸赛》 都是💰40欧左右 我心里的前3名 🥇La fonda 图11 连锁店 很多家 我觉得海鲜饭里最好吃的一家 景点附近都有！量很大！ 🥈Taverna el glop 图12 天气好可以坐在室外吃 超级舒服！ 🥉El Glop Braseria 图13 当地人很喜欢的一家店！不是传统的味道 蕃茄味很浓郁",
-                        "isLeafNode": True
-                    }
+                        "id": 1733575946575,
+                        "comment": "",
+                        "content": "LLM-based Weak Supervision Framework for Query Intent Classification in Video Search",
+                        "context": "",
+                        "isLeafNode": True,
+                    },
+                    {
+                        "id": 1733575967235,
+                        "comment": "",
+                        "content": "Using large language models to generate, validate, and apply user intent taxonomies",
+                        "context": "",
+                        "isLeafNode": True,
+                    },
                 ],
-                "child_num": 1,
-                "priority": 1,
-                "intent": "品尝当地特色美食"
-            }
-        ]
+                "child_num": 2,
+                "priority": 5,
+                "intent": "intent classification framework",
+            },
+        ],
     }
-    intent =  "探索巴塞罗那建筑风格"
-    print(filterNodes(intentTree, key="intent", value=intent))
+    print(filterNodes(intentTree, target_level=1))
