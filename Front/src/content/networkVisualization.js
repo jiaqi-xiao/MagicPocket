@@ -376,6 +376,18 @@ Comment: ${comment}`;
 
     // 添加菜单项
     addMenuItems(menu, nodeId) {
+        // 如果是根节点，添加"添加子意图"按钮
+        if (nodeId === 'root') {
+            const addChildBtn = this.createMenuItem(
+                nodeId,
+                'Add Child Intent',
+                '#27ae60',
+                '#2ecc71'
+            );
+            menu.appendChild(addChildBtn);
+            this.setupAddChildIntentAction(addChildBtn, nodeId);
+        }
+
         const toggleBtn = this.createMenuItem(
             nodeId,
             this.nodeStates.get(nodeId) ? 'Set as Pending' : 'Set as Confirmed',
@@ -425,6 +437,164 @@ Comment: ${comment}`;
         } else {
             item.onclick = () => this.toggleNodeState(nodeId, item);
         }
+    }
+
+    // 设置添加子意图节点的动作
+    setupAddChildIntentAction(menuItem, nodeId) {
+        menuItem.onclick = async () => {
+            // 创建对话框
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 10002;
+                min-width: 300px;
+            `;
+
+            // 创建标题
+            const title = document.createElement('h3');
+            title.textContent = 'Add New Intent';
+            title.style.cssText = `
+                margin: 0 0 15px 0;
+                color: #2d3436;
+            `;
+
+            // 创建输入框
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'Enter intent name';
+            input.value = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
+            input.style.cssText = `
+                width: 100%;
+                padding: 8px;
+                margin-bottom: 15px;
+                border: 1px solid #dfe6e9;
+                border-radius: 4px;
+                box-sizing: border-box;
+            `;
+
+            // 创建按钮容器
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = `
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+            `;
+
+            // 创建确认按钮
+            const confirmButton = document.createElement('button');
+            confirmButton.textContent = 'Confirm';
+            confirmButton.style.cssText = `
+                padding: 6px 12px;
+                background: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            // 创建取消按钮
+            const cancelButton = document.createElement('button');
+            cancelButton.textContent = 'Cancel';
+            cancelButton.style.cssText = `
+                padding: 6px 12px;
+                background: #95a5a6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            // 添加按钮事件
+            confirmButton.onclick = async () => {
+                const intentName = input.value.trim();
+                if (!intentName) {
+                    alert('Please enter an intent name');
+                    return;
+                }
+
+                const newNodeId = 'intent_' + (this.nodes.length + 1);
+                
+                // 添加新节点到数据集
+                this.nodes.add({
+                    id: newNodeId,
+                    label: intentName,
+                    type: 'intent',
+                    color: this.getNodeColor('intent'),
+                    size: this.getNodeSize('intent'),
+                    opacity: 1  // 设置为已确认状态
+                });
+
+                // 添加连接边
+                this.edges.add({
+                    from: nodeId,
+                    to: newNodeId,
+                    arrows: 'to',
+                    dashes: false  // 实线表示已确认状态
+                });
+
+                // 设置新节点状态为已确认
+                this.updateNodeState(newNodeId, true);  // 使用updateNodeState来确保一致的状态更新
+                
+                // 更新意图树数据
+                if (!this.intentTree.item) {
+                    this.intentTree.item = {};
+                }
+                this.intentTree.item[intentName] = [];
+
+                // 持久化更新后的意图树
+                try {
+                    await saveIntentTree(this.intentTree);
+                    console.log('Intent tree updated and saved successfully');
+                } catch (error) {
+                    console.error('Error saving intent tree:', error);
+                    alert('Failed to save the new intent. Please try again.');
+                    
+                    // 如果保存失败，回滚更改
+                    this.nodes.remove(newNodeId);
+                    this.edges.remove({ from: nodeId, to: newNodeId });
+                    this.nodeStates.delete(newNodeId);
+                    NetworkManager.immutableIntents.delete(intentName);
+                    if (this.intentTree.item[intentName]) {
+                        delete this.intentTree.item[intentName];
+                    }
+                }
+
+                // 关闭对话框和菜单
+                document.body.removeChild(dialog);
+            };
+
+            cancelButton.onclick = () => {
+                document.body.removeChild(dialog);
+            };
+
+            // 组装对话框
+            buttonContainer.appendChild(cancelButton);
+            buttonContainer.appendChild(confirmButton);
+            dialog.appendChild(title);
+            dialog.appendChild(input);
+            dialog.appendChild(buttonContainer);
+            document.body.appendChild(dialog);
+
+            // 聚焦输入框并选中默认文本
+            input.focus();
+            input.select();
+
+            // 添加按下回车键确认的功能
+            input.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') {
+                    confirmButton.click();
+                } else if (event.key === 'Escape') {
+                    cancelButton.click();
+                }
+            });
+        };
     }
 
     // 删除节点
@@ -838,7 +1008,7 @@ async function saveIntentTree(intentTree) {
         //         {
         //           "id": 1732720196427,
         //           "comment": "拍照",
-        //           "content": "tibidabo山属巴塞最高峰，山顶有游乐园🎠和教堂",
+        //           "content": "tibidabo山属巴塞最高峰，山顶有游乐园",
         //           "context": "",
         //           "isLeafNode": true
         //         }
