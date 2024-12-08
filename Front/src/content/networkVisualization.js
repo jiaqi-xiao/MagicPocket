@@ -598,16 +598,80 @@ Comment: ${comment}`;
     }
 
     // 删除节点
-    deleteNode(nodeId, menuItem) {
-        if (nodeId !== 'center') {
+    async deleteNode(nodeId, menuItem) {
+        if (nodeId === 'root') {
+            return; // 不允许删除根节点
+        }
+
+        try {
+            // 获取要删除的节点信息
+            const node = this.nodes.get(nodeId);
+            if (!node) {
+                throw new Error('Node not found');
+            }
+
+            // 保存要删除的节点和边的信息（用于回滚）
+            const deletedNode = { ...node };
+            const deletedEdges = [];
+            this.edges.forEach(edge => {
+                if (edge.from === nodeId || edge.to === nodeId) {
+                    deletedEdges.push({ ...edge });
+                }
+            });
+
+            // 从可视化中删除节点和相关边
             this.nodes.remove(nodeId);
             this.edges.forEach(edge => {
                 if (edge.from === nodeId || edge.to === nodeId) {
                     this.edges.remove(edge.id);
                 }
             });
+
+            // 从内存中删除节点状态
+            this.nodeStates.delete(nodeId);
+
+            // 如果是意图节点，从意图树中删除相应的数据
+            if (node.type === 'intent' && this.intentTree.item) {
+                const intentName = node.label;
+                delete this.intentTree.item[intentName];
+                NetworkManager.immutableIntents.delete(intentName);
+            }
+
+            // 持久化更新后的意图树
+            await saveIntentTree(this.intentTree);
+            console.log('Intent tree updated and saved successfully after node deletion');
+
+            // 删除菜单项
+            if (menuItem && menuItem.parentElement) {
+                menuItem.parentElement.remove();
+            }
+
+        } catch (error) {
+            console.error('Error deleting node:', error);
+            alert('Failed to delete the node. Rolling back changes...');
+
+            // 回滚所有更改
+            try {
+                // 恢复节点
+                this.nodes.add(deletedNode);
+                // 恢复边
+                deletedEdges.forEach(edge => {
+                    this.edges.add(edge);
+                });
+                // 恢复节点状态
+                if (deletedNode.type === 'intent') {
+                    this.nodeStates.set(nodeId, NetworkManager.immutableIntents.has(deletedNode.label));
+                }
+                // 恢复意图树数据
+                if (deletedNode.type === 'intent' && this.intentTree.item) {
+                    const intentName = deletedNode.label;
+                    this.intentTree.item[intentName] = [];
+                }
+            } catch (rollbackError) {
+                console.error('Error during rollback:', rollbackError);
+                alert('Critical error: Failed to rollback changes. Please refresh the page.');
+            }
         }
-        menuItem.parentElement.remove();
     }
 
     // 切换节点状态
