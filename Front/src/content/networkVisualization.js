@@ -376,6 +376,8 @@ Comment: ${comment}`;
 
     // 添加菜单项
     addMenuItems(menu, nodeId) {
+        const node = this.nodes.get(nodeId);
+        
         // 如果是根节点，添加"添加子意图"按钮
         if (nodeId === 'root') {
             const addChildBtn = this.createMenuItem(
@@ -386,6 +388,18 @@ Comment: ${comment}`;
             );
             menu.appendChild(addChildBtn);
             this.setupAddChildIntentAction(addChildBtn, nodeId);
+        }
+        
+        // 如果是意图节点，添加"编辑意图"按钮
+        if (node.type === 'intent') {
+            const editIntentBtn = this.createMenuItem(
+                nodeId,
+                'Edit Intent',
+                '#2d3436',
+                '#0984e3'
+            );
+            menu.appendChild(editIntentBtn);
+            this.setupEditIntentAction(editIntentBtn, nodeId);
         }
 
         const toggleBtn = this.createMenuItem(
@@ -563,6 +577,151 @@ Comment: ${comment}`;
                     NetworkManager.immutableIntents.delete(intentName);
                     if (this.intentTree.item[intentName]) {
                         delete this.intentTree.item[intentName];
+                    }
+                }
+
+                // 关闭对话框和菜单
+                document.body.removeChild(dialog);
+            };
+
+            cancelButton.onclick = () => {
+                document.body.removeChild(dialog);
+            };
+
+            // 组装对话框
+            buttonContainer.appendChild(cancelButton);
+            buttonContainer.appendChild(confirmButton);
+            dialog.appendChild(title);
+            dialog.appendChild(input);
+            dialog.appendChild(buttonContainer);
+            document.body.appendChild(dialog);
+
+            // 聚焦输入框并选中默认文本
+            input.focus();
+            input.select();
+
+            // 添加按下回车键确认的功能
+            input.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') {
+                    confirmButton.click();
+                } else if (event.key === 'Escape') {
+                    cancelButton.click();
+                }
+            });
+        };
+    }
+
+    // 编辑意图节点的动作
+    setupEditIntentAction(menuItem, nodeId) {
+        menuItem.onclick = async () => {
+            // 创建对话框
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 10002;
+                min-width: 300px;
+            `;
+
+            // 创建标题
+            const title = document.createElement('h3');
+            title.textContent = 'Edit Intent';
+            title.style.cssText = `
+                margin: 0 0 15px 0;
+            `;
+
+            // 获取意图名称
+            const node = this.nodes.get(nodeId);
+            const intentName = node.label;
+
+            // 创建输入框
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'Enter new intent name';
+            input.value = intentName;
+            input.style.cssText = `
+                width: 100%;
+                padding: 8px;
+                margin-bottom: 15px;
+                border: 1px solid #dfe6e9;
+                border-radius: 4px;
+                box-sizing: border-box;
+            `;
+
+            // 创建按钮容器
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = `
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+            `;
+
+            // 创建确认按钮
+            const confirmButton = document.createElement('button');
+            confirmButton.textContent = 'Confirm';
+            confirmButton.style.cssText = `
+                padding: 6px 12px;
+                background: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            // 创建取消按钮
+            const cancelButton = document.createElement('button');
+            cancelButton.textContent = 'Cancel';
+            cancelButton.style.cssText = `
+                padding: 6px 12px;
+                background: #95a5a6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            // 添加按钮事件
+            confirmButton.onclick = async () => {
+                const newIntentName = input.value.trim();
+                if (!newIntentName) {
+                    alert('Please enter a new intent name');
+                    return;
+                }
+
+                // 更新意图树数据
+                if (this.intentTree.item) {
+                    delete this.intentTree.item[intentName];
+                    this.intentTree.item[newIntentName] = this.intentTree.item[intentName];
+                }
+
+                // 更新节点数据
+                this.nodes.update({
+                    id: nodeId,
+                    label: newIntentName
+                });
+
+                // 持久化更新后的意图树
+                try {
+                    await saveIntentTree(this.intentTree);
+                    console.log('Intent tree updated and saved successfully');
+                } catch (error) {
+                    console.error('Error saving intent tree:', error);
+                    alert('Failed to save the new intent. Please try again.');
+                    
+                    // 如果保存失败，回滚更改
+                    this.nodes.update({
+                        id: nodeId,
+                        label: intentName
+                    });
+                    if (this.intentTree.item) {
+                        this.intentTree.item[intentName] = this.intentTree.item[newIntentName];
+                        delete this.intentTree.item[newIntentName];
                     }
                 }
 
