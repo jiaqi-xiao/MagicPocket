@@ -456,83 +456,9 @@ Comment: ${comment}`;
     // 设置添加子意图节点的动作
     setupAddChildIntentAction(menuItem, nodeId) {
         menuItem.onclick = async () => {
-            // 创建对话框
-            const dialog = document.createElement('div');
-            dialog.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                z-index: 10002;
-                min-width: 300px;
-            `;
-
-            // 创建标题
-            const title = document.createElement('h3');
-            title.textContent = 'Add New Intent';
-            title.style.cssText = `
-                margin: 0 0 15px 0;
-                color: #2d3436;
-            `;
-
-            // 创建输入框
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'Enter intent name';
-            input.value = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
-            input.style.cssText = `
-                width: 100%;
-                padding: 8px;
-                margin-bottom: 15px;
-                border: 1px solid #dfe6e9;
-                border-radius: 4px;
-                box-sizing: border-box;
-            `;
-
-            // 创建按钮容器
-            const buttonContainer = document.createElement('div');
-            buttonContainer.style.cssText = `
-                display: flex;
-                justify-content: flex-end;
-                gap: 10px;
-            `;
-
-            // 创建确认按钮
-            const confirmButton = document.createElement('button');
-            confirmButton.textContent = 'Confirm';
-            confirmButton.style.cssText = `
-                padding: 6px 12px;
-                background: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // 创建取消按钮
-            const cancelButton = document.createElement('button');
-            cancelButton.textContent = 'Cancel';
-            cancelButton.style.cssText = `
-                padding: 6px 12px;
-                background: #95a5a6;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // 添加按钮事件
-            confirmButton.onclick = async () => {
-                const intentName = input.value.trim();
-                if (!intentName) {
-                    alert('Please enter an intent name');
-                    return;
-                }
-
+            const defaultValue = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
+            
+            this.createDialog('Add New Intent', defaultValue, async (intentName) => {
                 const newNodeId = 'intent_' + (this.nodes.length + 1);
                 
                 // 添加新节点到数据集
@@ -542,7 +468,7 @@ Comment: ${comment}`;
                     type: 'intent',
                     color: this.getNodeColor('intent'),
                     size: this.getNodeSize('intent'),
-                    opacity: 1  // 设置为已确认状态
+                    opacity: 1
                 });
 
                 // 添加连接边
@@ -550,11 +476,11 @@ Comment: ${comment}`;
                     from: nodeId,
                     to: newNodeId,
                     arrows: 'to',
-                    dashes: false  // 实线表示已确认状态
+                    dashes: false
                 });
 
                 // 设置新节点状态为已确认
-                this.updateNodeState(newNodeId, true);  // 使用updateNodeState来确保一致的状态更新
+                this.updateNodeState(newNodeId, true);
                 
                 // 更新意图树数据
                 if (!this.intentTree.item) {
@@ -570,7 +496,7 @@ Comment: ${comment}`;
                     console.error('Error saving intent tree:', error);
                     alert('Failed to save the new intent. Please try again.');
                     
-                    // 如果保存失败，回滚更改
+                    // 如果保存失败，回滚更��
                     this.nodes.remove(newNodeId);
                     this.edges.remove({ from: nodeId, to: newNodeId });
                     this.nodeStates.delete(newNodeId);
@@ -579,34 +505,6 @@ Comment: ${comment}`;
                         delete this.intentTree.item[intentName];
                     }
                 }
-
-                // 关闭对话框和菜单
-                document.body.removeChild(dialog);
-            };
-
-            cancelButton.onclick = () => {
-                document.body.removeChild(dialog);
-            };
-
-            // 组装对话框
-            buttonContainer.appendChild(cancelButton);
-            buttonContainer.appendChild(confirmButton);
-            dialog.appendChild(title);
-            dialog.appendChild(input);
-            dialog.appendChild(buttonContainer);
-            document.body.appendChild(dialog);
-
-            // 聚焦输入框并选中默认文本
-            input.focus();
-            input.select();
-
-            // 添加按下回车键确认的功能
-            input.addEventListener('keyup', (event) => {
-                if (event.key === 'Enter') {
-                    confirmButton.click();
-                } else if (event.key === 'Escape') {
-                    cancelButton.click();
-                }
             });
         };
     }
@@ -614,90 +512,15 @@ Comment: ${comment}`;
     // 编辑意图节点的动作
     setupEditIntentAction(menuItem, nodeId) {
         menuItem.onclick = async () => {
-            // 创建对话框
-            const dialog = document.createElement('div');
-            dialog.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                z-index: 10002;
-                min-width: 300px;
-            `;
-
-            // 创建标题
-            const title = document.createElement('h3');
-            title.textContent = 'Edit Intent';
-            title.style.cssText = `
-                margin: 0 0 15px 0;
-            `;
-
-            // 获取意图名称
             const node = this.nodes.get(nodeId);
             const intentName = node.label;
-
-            // 创建输入框
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'Enter new intent name';
-            input.value = intentName;
-            input.style.cssText = `
-                width: 100%;
-                padding: 8px;
-                margin-bottom: 15px;
-                border: 1px solid #dfe6e9;
-                border-radius: 4px;
-                box-sizing: border-box;
-            `;
-
-            // 创建按钮容器
-            const buttonContainer = document.createElement('div');
-            buttonContainer.style.cssText = `
-                display: flex;
-                justify-content: flex-end;
-                gap: 10px;
-            `;
-
-            // 创建确认按钮
-            const confirmButton = document.createElement('button');
-            confirmButton.textContent = 'Confirm';
-            confirmButton.style.cssText = `
-                padding: 6px 12px;
-                background: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // 创建取消按钮
-            const cancelButton = document.createElement('button');
-            cancelButton.textContent = 'Cancel';
-            cancelButton.style.cssText = `
-                padding: 6px 12px;
-                background: #95a5a6;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // 添加按钮事件
-            confirmButton.onclick = async () => {
-                const newIntentName = input.value.trim();
-                if (!newIntentName) {
-                    alert('Please enter a new intent name');
-                    return;
-                }
-
+            
+            this.createDialog('Edit Intent', intentName, async (newIntentName) => {
                 // 更新意图树数据
                 if (this.intentTree.item) {
+                    const intentData = this.intentTree.item[intentName];
                     delete this.intentTree.item[intentName];
-                    this.intentTree.item[newIntentName] = this.intentTree.item[intentName];
+                    this.intentTree.item[newIntentName] = intentData;
                 }
 
                 // 更新节点数据
@@ -705,6 +528,9 @@ Comment: ${comment}`;
                     id: nodeId,
                     label: newIntentName
                 });
+
+                // 编辑意图节点后，设置为已确认
+                this.updateNodeState(nodeId, true);
 
                 // 持久化更新后的意图树
                 try {
@@ -723,34 +549,6 @@ Comment: ${comment}`;
                         this.intentTree.item[intentName] = this.intentTree.item[newIntentName];
                         delete this.intentTree.item[newIntentName];
                     }
-                }
-
-                // 关闭对话框和菜单
-                document.body.removeChild(dialog);
-            };
-
-            cancelButton.onclick = () => {
-                document.body.removeChild(dialog);
-            };
-
-            // 组装对话框
-            buttonContainer.appendChild(cancelButton);
-            buttonContainer.appendChild(confirmButton);
-            dialog.appendChild(title);
-            dialog.appendChild(input);
-            dialog.appendChild(buttonContainer);
-            document.body.appendChild(dialog);
-
-            // 聚焦输入框并选中默认文本
-            input.focus();
-            input.select();
-
-            // 添加按下回车键确认的功能
-            input.addEventListener('keyup', (event) => {
-                if (event.key === 'Enter') {
-                    confirmButton.click();
-                } else if (event.key === 'Escape') {
-                    cancelButton.click();
                 }
             });
         };
@@ -1061,7 +859,7 @@ Comment: ${comment}`;
         if (this.intentTree.item) {
             let idCounter = 1; // 用于生成唯一的ID
             Object.keys(this.intentTree.item).forEach(intentName => {
-                // 跳过以 'remaining_intent_' 开头的意图
+                // 跳过��� 'remaining_intent_' 开头的意图
                 if (intentName.startsWith('remaining_intent_')) {
                     return;
                 }
@@ -1211,6 +1009,122 @@ Comment: ${comment}`;
             e.preventDefault();
             this.cleanup(); // Use cleanup method instead of just removing container
         };
+    }
+
+    // 在 NetworkManager 类中添加新的通用对话框方法
+    createDialog(dialogTitle, defaultValue, onConfirm) {
+        // 创建对话框
+        const intentDialog = document.createElement('div');
+        intentDialog.id = 'mp-intent-dialog';  // 添加唯一ID
+        intentDialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10002;
+            min-width: 300px;
+        `;
+
+        // 创建标题
+        const intentDialogTitle = document.createElement('h3');
+        intentDialogTitle.id = 'mp-intent-dialog-title';  // 添加唯一ID
+        intentDialogTitle.textContent = dialogTitle;  // 使用参数名dialogTitle而不是title
+        intentDialogTitle.style.cssText = `
+            margin: 0 0 15px 0;
+            color: #2d3436;
+        `;
+
+        // 创建输入框
+        const intentInput = document.createElement('input');
+        intentInput.id = 'mp-intent-dialog-input';  // 添加唯一ID
+        intentInput.type = 'text';
+        intentInput.placeholder = 'Enter intent name';
+        intentInput.value = defaultValue;
+        intentInput.style.cssText = `
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #dfe6e9;
+            border-radius: 4px;
+            box-sizing: border-box;
+        `;
+
+        // 创建按钮容器
+        const intentButtonContainer = document.createElement('div');
+        intentButtonContainer.id = 'mp-intent-dialog-buttons';  // 添加唯一ID
+        intentButtonContainer.style.cssText = `
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        `;
+
+        // 创建确认按钮
+        const intentConfirmButton = document.createElement('button');
+        intentConfirmButton.id = 'mp-intent-dialog-confirm';  // 添加唯一ID
+        intentConfirmButton.textContent = 'Confirm';
+        intentConfirmButton.style.cssText = `
+            padding: 6px 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+
+        // 创建取消按钮
+        const intentCancelButton = document.createElement('button');
+        intentCancelButton.id = 'mp-intent-dialog-cancel';  // 添加唯一ID
+        intentCancelButton.textContent = 'Cancel';
+        intentCancelButton.style.cssText = `
+            padding: 6px 12px;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+
+        // 添加按钮事件
+        intentConfirmButton.onclick = async () => {
+            const value = intentInput.value.trim();
+            if (!value) {
+                alert('Please enter an intent name');
+                return;
+            }
+            await onConfirm(value);
+            document.body.removeChild(intentDialog);
+        };
+
+        intentCancelButton.onclick = () => {
+            document.body.removeChild(intentDialog);
+        };
+
+        // 组装对话框
+        intentButtonContainer.appendChild(intentCancelButton);
+        intentButtonContainer.appendChild(intentConfirmButton);
+        intentDialog.appendChild(intentDialogTitle);
+        intentDialog.appendChild(intentInput);
+        intentDialog.appendChild(intentButtonContainer);
+        document.body.appendChild(intentDialog);
+
+        // 聚焦输入框并选中默认文本
+        intentInput.focus();
+        intentInput.select();
+
+        // 添加按下回车键确认的功能
+        intentInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                intentConfirmButton.click();
+            } else if (event.key === 'Escape') {
+                intentCancelButton.click();
+            }
+        });
+
+        return intentDialog;
     }
 }
 
