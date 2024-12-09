@@ -430,7 +430,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 i for i, sim in enumerate(similarities) if sim >= top_threshold
             ]
             filtered_sentences = [sentences[i] for i in filtered_indices]
-            print(filtered_sentences)
             filtered_sentences_embeddings = [sentences_embeddings[i] for i in filtered_indices]
 
             # # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
@@ -443,7 +442,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 recordList=intent_records,
                 sentenceList=filtered_sentences
             )
-            print(type(indicesDict), indicesDict)
             top_k_indices = indicesDict["top_k"]
             bottom_k_indices = indicesDict["bottom_k"]
 

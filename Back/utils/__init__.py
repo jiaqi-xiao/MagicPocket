@@ -74,7 +74,8 @@ class NodeGroupsIndex(BaseModel):
     item: list[dict[str, list[int]]]
 
 class sentenceGroupsIndex(BaseModel):
-    item: dict[str, list[int]]
+    top_k: list[int]
+    bottom_k: list[int]
     
 class NodeGroups(BaseModel):
     item: list[dict[str, list[Union[Record, Intent]]]]

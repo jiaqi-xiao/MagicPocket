@@ -25,8 +25,9 @@ class Chain4RAG:
 
 # Output Format
     - 输出格式为JSON，包含两个字段：
-    - `top-k`: 一个数组，包含最符合Intent的句子在SentenceList中的索引。
-    - `bottom-k`: 一个数组，包含符合Intent且提供新信息的句子在SentenceList中的索引。
+    - `top_k`: 一个数组，包含最符合Intent的句子在SentenceList中的索引。
+    - `bottom_k`: 一个数组，包含符合Intent且提供新信息的句子在SentenceList中的索引。
+    - {format_instructions}
 
 # Notes
 - `SentenceList`中的句子应按相关性进行排序以帮助选出top-k。
