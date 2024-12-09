@@ -130,19 +130,19 @@ window.toggleHighlight = async function() {
 function formatIntentTree(rawIntentTree) {
     const generateId = () => Math.floor(Math.random() * 1000000);
     
-    // 创建默认的空记录
-    const createDefaultRecord = () => ({
-        id: generateId(),
-        comment: '',
-        content: '',
-        context: '',
-        isLeafNode: true
-    });
+    // // 创建默认的空记录
+    // const createDefaultRecord = () => ({
+    //     id: generateId(),
+    //     comment: '',
+    //     content: '',
+    //     context: '',
+    //     isLeafNode: true
+    // });
     
     const formatItems = (items) => {
         return Object.entries(items).map(([intentName, records]) => {
-            // 如果records为空，使用默认记录
-            const processedRecords = records.length ? records : [createDefaultRecord()];
+            // 如果records为空，使用空数组
+            const processedRecords = records.length ? records : [];
             
             return {
                 id: generateId(),
