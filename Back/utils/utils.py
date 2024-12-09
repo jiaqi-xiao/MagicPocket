@@ -44,7 +44,7 @@ def split2Sentences(content):
     sentence_endings = re.compile(r"(?<=[。！？!?.])")
     sentences = sentence_endings.split(content)
     # 去除空白句子
-    sentences = [s.strip() for s in sentences if s.strip()]
+    sentences = [s.strip() for s in sentences if s.strip() and not all(c in "。！？!?.\n" for c in s)]
     return sentences
 
 

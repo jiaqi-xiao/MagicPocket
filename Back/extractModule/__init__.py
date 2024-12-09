@@ -10,42 +10,42 @@ from utils import *
 class ExtractModelDirect:
     def __init__(self, model):
         self.instruction = """
-        ## System:
-        根据用户提供的List，提炼并总结用户在指定Scenario下产生的搜索意图。将List中每个Element分组，确保组间差异尽可能大，组内差异尽可能小。  
-            - 意图的表述应尽量简洁，控制在7个词以内，并保持表述风格的统一。
-            - 优先级必须为整数，数字越大代表优先级越低。
-            - 确保组别的差异尽可能大，防止误将无关记录归于同一组。
+## System:
+根据用户提供的List，提炼并总结用户在指定Scenario下产生的搜索意图。将List中每个Element分组，确保组间差异尽可能大，组内差异尽可能小。  
+    - 意图的表述应尽量简洁，控制在7个词以内，并保持表述风格的统一。
+    - 优先级必须为整数，数字越大代表优先级越低。
+    - 确保组别的差异尽可能大，防止误将无关记录归于同一组。
             
-        # Definition of Intention
-            - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
+# Definition of Intention
+    - At the highest level, an intention is a situated pursuit of a goal that is attainable through the execution of a process of a certain sequence of actions conceived as leading towards a goal. An intention is an intermediate cognitive state that translates the abstract desire (goal) into concrete actions.
         
-        # Steps
-        1. **Grouping Elements**: 
-            - 根据每条Element的内容，将具有类似含义或相似关联的Element归类到同一组，确保组间的差异尽可能大，组内的差异尽可能小。
-        2. **Summarizing Intentions for Each Group**: 
-            - 为每一组提炼出一个代表该组搜索意图的简洁表述，不超过7个词。
-        3. **Prioritizing Group Intentions**:
-            - 为每组搜索意图设定优先级，数字越大表示优先级越低，且优先级为整数。
-        4. **Structuring Output as a JSON Tree**:
-            - 返回一个JSON对象，其中每个`Scenario`为树的根节点，`意图`为子节点，每个意图下包含所有属于该意图的Element。
+# Steps
+    1. **Grouping Elements**: 
+        - 根据每条Element的内容，将具有类似含义或相似关联的Element归类到同一组，确保组间的差异尽可能大，组内的差异尽可能小。
+    2. **Summarizing Intentions for Each Group**: 
+        - 为每一组提炼出一个代表该组搜索意图的简洁表述，不超过7个词。
+    3. **Prioritizing Group Intentions**:
+        - 为每组搜索意图设定优先级，数字越大表示优先级越低，且优先级为整数。
+    4. **Structuring Output as a JSON Tree**:
+        - 返回一个JSON对象，其中每个`Scenario`为树的根节点，`意图`为子节点，每个意图下包含所有属于该意图的Element。
             
-        # Output Format
-            - 输出应该是一个JSON格式，结构如下：
-                - `Scenario`: 树的根节点。
-                - 包含一个或多个子节点，每个子节点为一个意图，每个子节点有两个布尔类型的属性，分别是isLeafNode和immutable，默认值是False。
-                - 每个意图子节点内包含所有与之对应的Element，Element的id需与输入时保持一致。
-                - 每个叶节点为一个Record，有一个布尔类型的属性isLeafNode，默认值为True。
-                - {format_instructions}
-        
-        # Notes
-            - Ensure clarity and brevity in the intent extraction.
-            - Maintain a unified style across all extracted intents and high-level summaries.
-            - Consider edge cases where intents might not initially seem distinct and work to identify distinct themes.
-        
-        ## User:
-        Scenario: {scenario}
-        List: {list}
-        """
+# Output Format
+    - 输出应该是一个JSON格式，结构如下：
+        - `Scenario`: 树的根节点。
+        - 包含一个或多个子节点，每个子节点为一个意图，每个子节点有两个布尔类型的属性，分别是isLeafNode和immutable，默认值是False。
+        - 每个意图子节点内包含所有与之对应的Element，Element的id需与输入时保持一致。
+        - 每个叶节点为一个Record，有一个布尔类型的属性isLeafNode，默认值为True。
+        - {format_instructions}
+
+# Notes
+    - Ensure clarity and brevity in the intent extraction.
+    - Maintain a unified style across all extracted intents and high-level summaries.
+    - Consider edge cases where intents might not initially seem distinct and work to identify distinct themes.
+
+## User:
+Scenario: {scenario}
+List: {list}
+"""
 
         self.model = model
         self.parser = JsonOutputParser(pydantic_object=IntentTree)
@@ -223,33 +223,33 @@ class Chain4Construct:
             IntentsList: {intentsList}
         """
 
-        self.instruction1 = """
-        根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents，。
-            - 每个Intent和Group之间的匹配应尽可能准确。
-            - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
-            - 每个Intent的描述必须简短清晰，最多不超过7个词。
-            - 务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。
+        # self.instruction1 = """
+        # 根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents，。
+        #     - 每个Intent和Group之间的匹配应尽可能准确。
+        #     - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
+        #     - 每个Intent的描述必须简短清晰，最多不超过7个词。
+        #     - 务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。
 
-        # Steps
-            1. **初步匹配**: 将IntentsList中的现有intent与Groups列表中的每个group进行匹配，找到最相似的组合。
-            2. **分析未匹配的Group**: 如果有多余的group，基于Scenario内容提炼出新的intent以确保每个group都有唯一的intent。
-            3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
-            4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
-            5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
+        # # Steps
+        #     1. **初步匹配**: 将IntentsList中的现有intent与Groups列表中的每个group进行匹配，找到最相似的组合。
+        #     2. **分析未匹配的Group**: 如果有多余的group，基于Scenario内容提炼出新的intent以确保每个group都有唯一的intent。
+        #     3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
+        #     4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
+        #     5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
         
-        # Output Format
-            - The output should be structured in JSON format as following {format_instructions}.
+        # # Output Format
+        #     - The output should be structured in JSON format as following {format_instructions}.
         
-        # Notes
-        - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
-        - 请注意每个生成的intent要有显著区别，避免重复以及同义描述。
-        - 生成的intent节点的immutable属性值为false，原有的intent节点为true
+        # # Notes
+        # - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
+        # - 请注意每个生成的intent要有显著区别，避免重复以及同义描述。
+        # - 生成的intent节点的immutable属性值为false，原有的intent节点为true
         
-        # User:
-        Scenario: {scenario}
-        Groups: {groups}
-        IntentsList: {intentsList}
-        """
+        # # User:
+        # Scenario: {scenario}
+        # Groups: {groups}
+        # IntentsList: {intentsList}
+        # """
 
         self.model = model
         self.parser = JsonOutputParser(pydantic_object=IntentTreeIndex)
