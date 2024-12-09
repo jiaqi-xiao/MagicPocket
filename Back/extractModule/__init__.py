@@ -210,11 +210,12 @@ class Chain4Construct:
             - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
             
         # Notes
-            - 对每个group提炼唯一一个意图，不可以超过一个。意图需要与group中列表的所有Node的共性相符。
+            - 对每个group提炼唯一一个意图，不可以超过一个。意图是对group中列表的所有Node的共性的抽象概括。
             - 每个意图描述必须具备逻辑独立性，最大程度维持多样性, 且不超过7个词。
             - 当进行相似度替换时，务必保证只有在相似度足够高的情况下才进行替换。
             - 如果不存在足够相似的意图，则原意图保持不变，且`IntentsList`中的意图不会被强行替换。
-            - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
+            - 新字典中的'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
+            - 检查最终生成的新字典，确保每个intent处于相同颗粒度下。
         
         # User:
             Scenario: {scenario}
