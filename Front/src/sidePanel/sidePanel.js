@@ -143,7 +143,9 @@ function initializeRecordsArea() {
                 },
                 body: JSON.stringify({
                     scenario: taskDescription,
-                    groupsOfNodes: groupsOfNodes,
+                    groupsOfNodes: {
+                        item: groupsOfNodes.item || []
+                    },
                     intentTree: networkManager ? networkManager.getIntentTreeWithStates() : lastIntentTree,
                     target_level: 3
                 })
