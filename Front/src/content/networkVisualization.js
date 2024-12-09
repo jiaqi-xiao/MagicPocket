@@ -376,6 +376,32 @@ Comment: ${comment}`;
 
     // 添加菜单项
     addMenuItems(menu, nodeId) {
+        const node = this.nodes.get(nodeId);
+        
+        // 如果是根节点，添加"添加子意图"按钮
+        if (nodeId === 'root') {
+            const addChildBtn = this.createMenuItem(
+                nodeId,
+                'Add Child Intent',
+                '#27ae60',
+                '#2ecc71'
+            );
+            menu.appendChild(addChildBtn);
+            this.setupAddChildIntentAction(addChildBtn, nodeId);
+        }
+        
+        // 如果是意图节点，添加"编辑意图"按钮
+        if (node.type === 'intent') {
+            const editIntentBtn = this.createMenuItem(
+                nodeId,
+                'Edit Intent',
+                '#2d3436',
+                '#0984e3'
+            );
+            menu.appendChild(editIntentBtn);
+            this.setupEditIntentAction(editIntentBtn, nodeId);
+        }
+
         const toggleBtn = this.createMenuItem(
             nodeId,
             this.nodeStates.get(nodeId) ? 'Set as Pending' : 'Set as Confirmed',
@@ -427,17 +453,182 @@ Comment: ${comment}`;
         }
     }
 
+    // 设置添加子意图节点的动作
+    setupAddChildIntentAction(menuItem, nodeId) {
+        menuItem.onclick = async () => {
+            const defaultValue = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
+            
+            this.createDialog('Add New Intent', defaultValue, async (intentName) => {
+                const newNodeId = 'intent_' + (this.nodes.length + 1);
+                
+                // 添加新节点到数据集
+                this.nodes.add({
+                    id: newNodeId,
+                    label: intentName,
+                    type: 'intent',
+                    color: this.getNodeColor('intent'),
+                    size: this.getNodeSize('intent'),
+                    opacity: 1
+                });
+
+                // 添加连接边
+                this.edges.add({
+                    from: nodeId,
+                    to: newNodeId,
+                    arrows: 'to',
+                    dashes: false
+                });
+
+                // 设置新节点状态为已确认
+                this.updateNodeState(newNodeId, true);
+                
+                // 更新意图树数据
+                if (!this.intentTree.item) {
+                    this.intentTree.item = {};
+                }
+                this.intentTree.item[intentName] = [];
+
+                // 持久化更新后的意图树
+                try {
+                    await saveIntentTree(this.intentTree);
+                    console.log('Intent tree updated and saved successfully');
+                } catch (error) {
+                    console.error('Error saving intent tree:', error);
+                    alert('Failed to save the new intent. Please try again.');
+                    
+                    // 如果保存失败，回滚更��
+                    this.nodes.remove(newNodeId);
+                    this.edges.remove({ from: nodeId, to: newNodeId });
+                    this.nodeStates.delete(newNodeId);
+                    NetworkManager.immutableIntents.delete(intentName);
+                    if (this.intentTree.item[intentName]) {
+                        delete this.intentTree.item[intentName];
+                    }
+                }
+            });
+        };
+    }
+
+    // 编辑意图节点的动作
+    setupEditIntentAction(menuItem, nodeId) {
+        menuItem.onclick = async () => {
+            const node = this.nodes.get(nodeId);
+            const intentName = node.label;
+            
+            this.createDialog('Edit Intent', intentName, async (newIntentName) => {
+                // 更新意图树数据
+                if (this.intentTree.item) {
+                    const intentData = this.intentTree.item[intentName];
+                    delete this.intentTree.item[intentName];
+                    this.intentTree.item[newIntentName] = intentData;
+                }
+
+                // 更新节点数据
+                this.nodes.update({
+                    id: nodeId,
+                    label: newIntentName
+                });
+
+                // 编辑意图节点后，设置为已确认
+                this.updateNodeState(nodeId, true);
+
+                // 持久化更新后的意图树
+                try {
+                    await saveIntentTree(this.intentTree);
+                    console.log('Intent tree updated and saved successfully');
+                } catch (error) {
+                    console.error('Error saving intent tree:', error);
+                    alert('Failed to save the new intent. Please try again.');
+                    
+                    // 如果保存失败，回滚更改
+                    this.nodes.update({
+                        id: nodeId,
+                        label: intentName
+                    });
+                    if (this.intentTree.item) {
+                        this.intentTree.item[intentName] = this.intentTree.item[newIntentName];
+                        delete this.intentTree.item[newIntentName];
+                    }
+                }
+            });
+        };
+    }
+
     // 删除节点
-    deleteNode(nodeId, menuItem) {
-        if (nodeId !== 'center') {
+    async deleteNode(nodeId, menuItem) {
+        if (nodeId === 'root') {
+            return; // 不允许删除根节点
+        }
+
+        try {
+            // 获取要删除的节点信息
+            const node = this.nodes.get(nodeId);
+            if (!node) {
+                throw new Error('Node not found');
+            }
+
+            // 保存要删除的节点和边的信息（用于回滚）
+            const deletedNode = { ...node };
+            const deletedEdges = [];
+            this.edges.forEach(edge => {
+                if (edge.from === nodeId || edge.to === nodeId) {
+                    deletedEdges.push({ ...edge });
+                }
+            });
+
+            // 从可视化中删除节点和相关边
             this.nodes.remove(nodeId);
             this.edges.forEach(edge => {
                 if (edge.from === nodeId || edge.to === nodeId) {
                     this.edges.remove(edge.id);
                 }
             });
+
+            // 从内存中删除节点状态
+            this.nodeStates.delete(nodeId);
+
+            // 如果是意图节点，从意图树中删除相应的数据
+            if (node.type === 'intent' && this.intentTree.item) {
+                const intentName = node.label;
+                delete this.intentTree.item[intentName];
+                NetworkManager.immutableIntents.delete(intentName);
+            }
+
+            // 持久化更新后的意图树
+            await saveIntentTree(this.intentTree);
+            console.log('Intent tree updated and saved successfully after node deletion');
+
+            // 删除菜单项
+            if (menuItem && menuItem.parentElement) {
+                menuItem.parentElement.remove();
+            }
+
+        } catch (error) {
+            console.error('Error deleting node:', error);
+            alert('Failed to delete the node. Rolling back changes...');
+
+            // 回滚所有更改
+            try {
+                // 恢复节点
+                this.nodes.add(deletedNode);
+                // 恢复边
+                deletedEdges.forEach(edge => {
+                    this.edges.add(edge);
+                });
+                // 恢复节点状态
+                if (deletedNode.type === 'intent') {
+                    this.nodeStates.set(nodeId, NetworkManager.immutableIntents.has(deletedNode.label));
+                }
+                // 恢复意图树数据
+                if (deletedNode.type === 'intent' && this.intentTree.item) {
+                    const intentName = deletedNode.label;
+                    this.intentTree.item[intentName] = [];
+                }
+            } catch (rollbackError) {
+                console.error('Error during rollback:', rollbackError);
+                alert('Critical error: Failed to rollback changes. Please refresh the page.');
+            }
         }
-        menuItem.parentElement.remove();
     }
 
     // 切换节点状态
@@ -668,7 +859,7 @@ Comment: ${comment}`;
         if (this.intentTree.item) {
             let idCounter = 1; // 用于生成唯一的ID
             Object.keys(this.intentTree.item).forEach(intentName => {
-                // 跳过以 'remaining_intent_' 开头的意图
+                // 跳过��� 'remaining_intent_' 开头的意图
                 if (intentName.startsWith('remaining_intent_')) {
                     return;
                 }
@@ -819,6 +1010,122 @@ Comment: ${comment}`;
             this.cleanup(); // Use cleanup method instead of just removing container
         };
     }
+
+    // 在 NetworkManager 类中添加新的通用对话框方法
+    createDialog(dialogTitle, defaultValue, onConfirm) {
+        // 创建对话框
+        const intentDialog = document.createElement('div');
+        intentDialog.id = 'mp-intent-dialog';  // 添加唯一ID
+        intentDialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10002;
+            min-width: 300px;
+        `;
+
+        // 创建标题
+        const intentDialogTitle = document.createElement('h3');
+        intentDialogTitle.id = 'mp-intent-dialog-title';  // 添加唯一ID
+        intentDialogTitle.textContent = dialogTitle;  // 使用参数名dialogTitle而不是title
+        intentDialogTitle.style.cssText = `
+            margin: 0 0 15px 0;
+            color: #2d3436;
+        `;
+
+        // 创建输入框
+        const intentInput = document.createElement('input');
+        intentInput.id = 'mp-intent-dialog-input';  // 添加唯一ID
+        intentInput.type = 'text';
+        intentInput.placeholder = 'Enter intent name';
+        intentInput.value = defaultValue;
+        intentInput.style.cssText = `
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #dfe6e9;
+            border-radius: 4px;
+            box-sizing: border-box;
+        `;
+
+        // 创建按钮容器
+        const intentButtonContainer = document.createElement('div');
+        intentButtonContainer.id = 'mp-intent-dialog-buttons';  // 添加唯一ID
+        intentButtonContainer.style.cssText = `
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        `;
+
+        // 创建确认按钮
+        const intentConfirmButton = document.createElement('button');
+        intentConfirmButton.id = 'mp-intent-dialog-confirm';  // 添加唯一ID
+        intentConfirmButton.textContent = 'Confirm';
+        intentConfirmButton.style.cssText = `
+            padding: 6px 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+
+        // 创建取消按钮
+        const intentCancelButton = document.createElement('button');
+        intentCancelButton.id = 'mp-intent-dialog-cancel';  // 添加唯一ID
+        intentCancelButton.textContent = 'Cancel';
+        intentCancelButton.style.cssText = `
+            padding: 6px 12px;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+
+        // 添加按钮事件
+        intentConfirmButton.onclick = async () => {
+            const value = intentInput.value.trim();
+            if (!value) {
+                alert('Please enter an intent name');
+                return;
+            }
+            await onConfirm(value);
+            document.body.removeChild(intentDialog);
+        };
+
+        intentCancelButton.onclick = () => {
+            document.body.removeChild(intentDialog);
+        };
+
+        // 组装对话框
+        intentButtonContainer.appendChild(intentCancelButton);
+        intentButtonContainer.appendChild(intentConfirmButton);
+        intentDialog.appendChild(intentDialogTitle);
+        intentDialog.appendChild(intentInput);
+        intentDialog.appendChild(intentButtonContainer);
+        document.body.appendChild(intentDialog);
+
+        // 聚焦输入框并选中默认文本
+        intentInput.focus();
+        intentInput.select();
+
+        // 添加按下回车键确认的功能
+        intentInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                intentConfirmButton.click();
+            } else if (event.key === 'Escape') {
+                intentCancelButton.click();
+            }
+        });
+
+        return intentDialog;
+    }
 }
 
 // Add function to save IntentTree when Analyze is clicked
@@ -838,7 +1145,7 @@ async function saveIntentTree(intentTree) {
         //         {
         //           "id": 1732720196427,
         //           "comment": "拍照",
-        //           "content": "tibidabo山属巴塞最高峰，山顶有游乐园🎠和教堂",
+        //           "content": "tibidabo山属巴塞最高峰，山顶有游乐园",
         //           "context": "",
         //           "isLeafNode": true
         //         }
