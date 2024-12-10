@@ -25,6 +25,7 @@ class Intent(BaseModel):
     child_num: int
     priority: int
     intent: str
+    description: str
 
 
 # Define the main Pydantic model
@@ -38,7 +39,7 @@ class IntentTree(BaseModel):
         return super().__getattr__(name)
     
 class IntentTreeIndex(BaseModel):
-    item: dict[str, str]
+    item: dict[str, dict[str, str]]
     
 
 class RecordwithVector(BaseModel):

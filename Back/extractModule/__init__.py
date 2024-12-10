@@ -202,11 +202,12 @@ class Chain4Construct:
                 - 找到最相似意图时，将字典中的意图替换为`IntentsList`中的意图。
                 - 如果某个意图没有足够相似的替换项，则保留不变。
             5. **添加剩余意图**: 对于`IntentsList`中未使用的意图，视为remaining_intent。将这些剩余意图作为key添加到第四步中构建的新字典中，其对应值为空字符串。如果没未替换的意图则跳过这一步。
+            6. **添加描述**： 对于新字典中的每一个意图，给出一个具体的描述，解释为了满足意图用户需要哪些后续信息。
         
         # Output Format
             - The output should be structured in JSON format as following {format_instructions}.
             - example: 
-                    {{'item': {{'generated_intent_1': "group1", 'generated_intent_2': "group2", 'remaining_intent_3': ''}}}}
+                    {{'item': {{'generated_intent_1': {{"group": "group1", "description": "Reasons for generated_intent_1 and required further information"}}, 'generated_intent_2': {{"group": "group2", "description": "Reasons for generated_intent_2 and required further information"}}, 'remaining_intent_3': {{"group": "", "description": "Reasons for remaining_intent_3 and required further information"}}}}}}
             - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
             
         # Notes
@@ -215,7 +216,7 @@ class Chain4Construct:
             - 当进行相似度替换时，务必保证只有在相似度足够高的情况下才进行替换。
             - 如果不存在足够相似的意图，则原意图保持不变，且`IntentsList`中的意图不会被强行替换。
             - 新字典中的'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
-            - 检查最终生成的新字典，确保每个intent处于相同颗粒度下。
+            - 检查最终生成的新字典，确保每个intent处于相同颗粒度下，否则调整intent文本。
         
         # User:
             Scenario: {scenario}
@@ -236,15 +237,15 @@ class Chain4Construct:
         #     3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
         #     4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
         #     5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
-        
+
         # # Output Format
         #     - The output should be structured in JSON format as following {format_instructions}.
-        
+
         # # Notes
         # - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
         # - 请注意每个生成的intent要有显著区别，避免重复以及同义描述。
         # - 生成的intent节点的immutable属性值为false，原有的intent节点为true
-        
+
         # # User:
         # Scenario: {scenario}
         # Groups: {groups}

@@ -343,16 +343,17 @@ async def incremental_construct_intent(request: dict):
             standardized_groups.model_dump_json(),
             str(immutableIntents)
         )
-        
+
         # 转换输出格式
         newIntentTree = newIntentTreeIndex["item"]
         for key, indices in newIntentTreeIndex["item"].items():
-            if indices == "":
-                newIntentTree[key] = []
+            if indices["group"] == "":
+                newIntentTree[key]["group"] = []
             else:
                 for group in standardized_groups.model_dump()["item"]:
-                    if indices in group.keys():
-                        newIntentTree[key] = group[indices]
+                    if indices["group"] in group.keys():
+                        newIntentTree[key]["group"] = group[indices["group"]]
+                        break
                     
         return {"item": newIntentTree}
 
@@ -390,6 +391,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
         # 以下是原有逻辑
         intentTree = ragRequest.intentTree
+        print(intentTree)
         webContent = ragRequest.webContent
         k = ragRequest.k
         top_threshold = ragRequest.top_threshold
@@ -409,20 +411,22 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         sentences_embeddings = await embedModel.embeddingList(sentences)
 
         # Step 3: 筛选意图并向量化它们
-        intents = filterNodes(
+        combinedIntents = filterNodes(
             intentTree,  # 转换 IntentTree 为字典
             target_level=1
         )
-        intents_embeddings = await embedModel.embeddingList(intents)
+
+        combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
         # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
 
-        for intent, intent_e in zip(intents, intents_embeddings):
+        for combinedIntent, conbinedIntent_e in zip(combinedIntents, combinedIntents_embeddings):
+            intent = combinedIntent.split("-")[0]
             # 计算意图向量和所有句子向量之间的余弦相似度
             similarities = [
-                cosine_similarity(intent_e, sentence_e)
+                cosine_similarity(conbinedIntent_e, sentence_e)
                 for sentence_e in sentences_embeddings
             ]
             # 筛选相似度高于阈值的句子及其索引
@@ -430,7 +434,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 i for i, sim in enumerate(similarities) if sim >= top_threshold
             ]
             filtered_sentences = [sentences[i] for i in filtered_indices]
-            filtered_sentences_embeddings = [sentences_embeddings[i] for i in filtered_indices]
 
             # # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
@@ -438,9 +441,10 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
             indicesDict = await model4RAG.invoke(
                 scenario,
-                intent=intent,
+                intent=combinedIntent,
                 recordList=intent_records,
-                sentenceList=filtered_sentences
+                sentenceList=filtered_sentences,
+                k=k,
             )
             top_k_indices = indicesDict["top_k"]
             bottom_k_indices = indicesDict["bottom_k"]
