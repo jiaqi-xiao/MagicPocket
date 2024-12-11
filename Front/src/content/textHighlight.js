@@ -129,7 +129,7 @@ window.toggleHighlight = async function() {
 
 function formatIntentTree(rawIntentTree) {
     const generateId = () => Math.floor(Math.random() * 1000000);
-    
+
     // // 创建默认的空记录
     // const createDefaultRecord = () => ({
     //     id: generateId(),
@@ -140,13 +140,14 @@ function formatIntentTree(rawIntentTree) {
     // });
     
     const formatItems = (items) => {
-        return Object.entries(items).map(([intentName, records]) => {
-            // 如果records为空，使用空数组
-            const processedRecords = records.length ? records : [];
+        return Object.entries(items).map(([intentName, intentData]) => {
+            // intentData 现在包含 description 和 group
+            const processedRecords = intentData.group || [];
             
             return {
                 id: generateId(),
                 intent: intentName,
+                description: intentData.description,  // 直接使用意图数据中的 description
                 isLeafNode: false,
                 immutable: false,
                 priority: 5,
@@ -188,7 +189,9 @@ async function processPageContent() {
         return;
     }
 
-    // 确保格式化后的intentTree符合后端要求
+    console.log("/rag response raw intentTree: ", intentTree);
+
+    // 确保格式化后的intentTree符合���端要求
     const formattedIntentTree = formatIntentTree(intentTree);
     
     // 构建符合RAGRequest模型的请求体
