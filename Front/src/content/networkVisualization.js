@@ -137,9 +137,10 @@ class NetworkManager {
         console.log('intentTree:', JSON.stringify(this.intentTree, null, 2));
 
         try {
-            const { nodes, edges } = this.transformIntentTreeToNetwork(this.intentTree);
-            this.nodes.add(nodes);
-            this.edges.add(edges);
+            const networkData = this.transformIntentTreeToNetwork(this.intentTree);
+            this.nodes.add(networkData.nodes);
+            this.edges.add(networkData.edges);
+
         } catch (error) {
             console.error('Error initializing nodes:', error);
             throw error;
@@ -159,21 +160,23 @@ class NetworkManager {
 
         // 添加根节点
         const rootId = 'root';
-        nodes.push({
+        const rootNode = {
             id: rootId,
             label: intentTree.scenario || 'Current Task',
             type: 'root',
             color: this.getNodeColor('root'),
             size: this.getNodeSize('root'),
-            opacity: 1,  // 设置为完全不透明，表示已确认状态
-            fixed: true,   // 固定根节点位置
-            physics: false // 禁用物理引擎对根节点的影响
-        });
+            opacity: 1,
+            fixed: true,
+            physics: false
+        };
+        nodes.push(rootNode);
+        
         // 设置根节点的初始状态为已确认
         this.nodeStates.set(rootId, true);
 
         // 遍历每个意图组
-        Object.entries(intentTree.item).forEach(([intentName, records], index) => {
+        Object.entries(intentTree.item).forEach(([intentName, intentData], index) => {
             // Skip intents that start with 'remaining_intent_'
             if (intentName.startsWith('remaining_intent_')) {
                 return;
@@ -202,18 +205,25 @@ class NetworkManager {
             });
 
             // 处理记录
-            if (Array.isArray(records)) {
-                records.forEach(record => {
+            console.log(`Processing records for intent "${intentName}":`, intentData);
+            if (intentData.group && Array.isArray(intentData.group)) {
+                intentData.group.forEach(record => {
                     const recordId = `record_${nodeId++}`;
-                    nodes.push({
+                    const recordNode = {
                         id: recordId,
-                        label: this.truncateText(record.content, 30),
+                        label: this.truncateText(record.content || record.text || record.description || 'No content', 30),
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
-                        opacity: isImmutable ? 1 : 0.3,  // 如果父意图是 immutable，子节点也设置为不透明
-                        title: this.formatRecordTooltip(record)  // 设置悬停提示
-                    });
+                        opacity: isImmutable ? 1 : 0.3,
+                        title: this.formatRecordTooltip({
+                            content: record.content || record.text || record.description || 'No content',
+                            context: record.context || intentData.description || '',
+                            comment: record.comment || ''
+                        })
+                    };
+                    nodes.push(recordNode);
+
                     // 设置记录节点的初始状态与父意图节点一致
                     this.nodeStates.set(recordId, isImmutable);
 
@@ -225,16 +235,27 @@ class NetworkManager {
                         dashes: !isImmutable  // 如果父意图是 immutable，使用实线
                     });
                 });
+            } else {
+                console.warn(`No valid group array found for intent "${intentName}"`, intentData);
             }
         });
 
+        console.log('Final network structure:', {
+            nodes: nodes,
+            edges: edges,
+            nodeStates: Array.from(this.nodeStates.entries())
+        });
         return { nodes, edges };
     }
 
     // 辅助方法：截断文本
     truncateText(text, maxLength) {
-        if (!text) return 'No content';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        if (!text) {
+            console.warn('Empty or null text received');
+            return 'No content';
+        }
+        const truncated = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        return truncated;
     }
 
     // 辅助方法：格式化记录的悬停提示
@@ -496,7 +517,7 @@ Comment: ${comment}`;
                     console.error('Error saving intent tree:', error);
                     alert('Failed to save the new intent. Please try again.');
                     
-                    // 如果保存失败，回滚更��
+                    // 如果保存失败，回滚更新
                     this.nodes.remove(newNodeId);
                     this.edges.remove({ from: nodeId, to: newNodeId });
                     this.nodeStates.delete(newNodeId);
@@ -849,30 +870,27 @@ Comment: ${comment}`;
 
     // 获取带有确认状态的意图树
     getIntentTreeWithStates() {
-        // 创建新的意图树结构
         const newIntentTree = {
             scenario: this.intentTree.scenario,
             child: []
         };
         
-        // 遍历所有节点状态
         if (this.intentTree.item) {
-            let idCounter = 1; // 用于生成唯一的ID
+            let idCounter = 1;
             Object.keys(this.intentTree.item).forEach(intentName => {
-                // 跳过��� 'remaining_intent_' 开头的意图
                 if (intentName.startsWith('remaining_intent_')) {
                     return;
                 }
 
-                // 创建意图对象
+                const intentData = this.intentTree.item[intentName];
                 const intentObj = {
                     id: idCounter++,
                     intent: intentName,
+                    description: intentData.description || intentName,
                     isLeafNode: false,
-                    // 如果意图名称在 immutableIntents 中，就标记为 immutable
                     immutable: NetworkManager.immutableIntents.has(intentName),
-                    child: this.intentTree.item[intentName] || [],
-                    child_num: (this.intentTree.item[intentName] || []).length,
+                    child: intentData.group || [],
+                    child_num: (intentData.group || []).length,
                     priority: 1
                 };
 
@@ -880,8 +898,6 @@ Comment: ${comment}`;
             });
         }
 
-        console.log('Intent tree with states:', JSON.stringify(newIntentTree, null, 2));
-        console.log('Immutable intents:', Array.from(NetworkManager.immutableIntents));
         return newIntentTree;
     }
 
