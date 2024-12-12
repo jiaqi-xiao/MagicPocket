@@ -62,6 +62,29 @@ class FloatingWindow {
         this.element.addEventListener("mouseleave", () => this.handleMouseLeave());
         this.containerArea.addEventListener("mouseenter", () => this.cancelHide());
         this.containerArea.addEventListener("mouseleave", () => this.handleMouseLeave());
+
+        // 侧边栏控制
+        this.element.addEventListener("click", () => {
+            chrome.runtime.sendMessage({
+                action: 'closeSidePanel'
+            }, response => {
+                // 忽略连接错误，这是正常的，因为侧边栏可能已经关闭
+                if (chrome.runtime.lastError) {
+                    console.log('Side panel is already closed');
+                    // 直接发送打开消息
+                    chrome.runtime.sendMessage({ action: "openSidePanel" });
+                    console.log("openSidePanel");
+                    return;
+                }
+                
+                // 如果收到响应但关闭失败，也发送打开消息
+                if (!response || !response.success) {
+                    chrome.runtime.sendMessage({ action: "openSidePanel" });
+                    console.log("openSidePanel");
+                }
+                // 如果关闭成功，不需要额外操作
+            });
+        });
     }
 
     // 添加新容器
@@ -519,12 +542,12 @@ function initializeRecordsContainer(container) {
 
     // 创建两个按钮区域
     const buttonArea = document.createElement("div");
-    setupButtonArea(buttonArea);
-    buttonContainer.appendChild(buttonArea);
+    // setupButtonArea(buttonArea);
+    // buttonContainer.appendChild(buttonArea);
 
-    const buttonArea2 = document.createElement("div");
-    setupButtonArea(buttonArea2);
-    buttonContainer.appendChild(buttonArea2);
+    // const buttonArea2 = document.createElement("div");
+    // setupButtonArea(buttonArea2);
+    // buttonContainer.appendChild(buttonArea2);
 
     // 添加网络可视化按钮
     // const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
@@ -615,20 +638,20 @@ function updateRecordsList(scrollArea, buttonArea) {
 
         // 清空容器内容
         scrollArea.innerHTML = "";
-        buttonArea.innerHTML = "";
+        // buttonArea.innerHTML = "";
 
-        // 创建按钮
-        const clearAllBtn = createButton("Clear All", "clearAllBtn");
-        const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
-        const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
+        // // 创建按钮
+        // const clearAllBtn = createButton("Clear All", "clearAllBtn");
+        // const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
+        // const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
 
-        // 添加按钮到按钮区域
-        buttonArea.appendChild(clearAllBtn);
-        buttonArea.appendChild(startGenerateBtn);
-        buttonArea.appendChild(highlightTextBtn);
+        // // 添加按钮到按钮区域
+        // buttonArea.appendChild(clearAllBtn);
+        // buttonArea.appendChild(startGenerateBtn);
+        // buttonArea.appendChild(highlightTextBtn);
 
-        // 每次都重新绑定事件监听器
-        setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
+        // // 每次都重新绑定事件监听器
+        // setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
 
         // 渲染记录
         await renderRecords(records, scrollArea);
@@ -835,7 +858,7 @@ async function handleShowNetwork() {
         
     } catch (error) {
         console.error('Visualization error details:', error);
-        alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+        alert(`无法加载网络可���化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
     }
 }
 

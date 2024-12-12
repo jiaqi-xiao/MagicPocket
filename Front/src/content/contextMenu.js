@@ -59,6 +59,7 @@ function saveSelectionWithComment(comment) {
         content: selectedText,
         comment: comment,
         paragraph: paragraph.textContent,
+        context: paragraph.textContent,
         url: window.location.href,
         timestamp: new Date().toISOString()
     };
@@ -103,6 +104,7 @@ function saveSelection() {
         type: "text",
         content: selectedText,
         paragraph: paragraph.textContent,
+        context: paragraph.textContent,
         url: window.location.href,
         timestamp: new Date().toISOString()
     };
