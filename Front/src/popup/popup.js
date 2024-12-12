@@ -54,8 +54,10 @@ function deleteRecord(index) {
 
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("mp-popup-new-task-btn").addEventListener("click", () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
-        window.close();
+        if (confirm("Are you sure you want to start a new task? This will clear all current records.")) {
+            chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
+            window.close();
+        }
     });
 
     document.getElementById("mp-popup-side-panel-btn").addEventListener("click", () => {
