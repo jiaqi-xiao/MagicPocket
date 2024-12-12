@@ -423,7 +423,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         intent_to_bottom_k_sentences = {}
 
         for combinedIntent, conbinedIntent_e in zip(combinedIntents, combinedIntents_embeddings):
-            intent = combinedIntent.split("-")[0]
+            [intent, description] = combinedIntent.split("-")
             # 计算意图向量和所有句子向量之间的余弦相似度
             similarities = [
                 cosine_similarity(conbinedIntent_e, sentence_e)
@@ -442,6 +442,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             indicesDict = await model4RAG.invoke(
                 scenario,
                 intent=combinedIntent,
+                description=description,
                 recordList=intent_records,
                 sentenceList=filtered_sentences,
                 k=k,
