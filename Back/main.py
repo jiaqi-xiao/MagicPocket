@@ -418,46 +418,104 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
         combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
-        # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
+        # Step 4: 计算每个意图的 top-k 相关句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
 
-        for combinedIntent, conbinedIntent_e in zip(combinedIntents, combinedIntents_embeddings):
+        intentsDict = {}
+        for combinedIntent in combinedIntents:
             [intent, description] = combinedIntent.split("-")
-            # 计算意图向量和所有句子向量之间的余弦相似度
-            similarities = [
-                cosine_similarity(conbinedIntent_e, sentence_e)
-                for sentence_e in sentences_embeddings
-            ]
-            # 筛选相似度高于阈值的句子及其索引
-            filtered_indices = [
-                i for i, sim in enumerate(similarities) if sim >= top_threshold
-            ]
-            filtered_sentences = [sentences[i] for i in filtered_indices]
+            intentsDict[intent] = description
+        
+        # 调用LLM
+        response = await model4RAG.invoke(
+                scenario,
+                intentsDict=intentsDict,
+                sentenceList=sentences,
+                top_threshold=top_threshold,
+            )
+        # 重构响应，替换索引
+        print("response", response)
+        intent_to_top_k_sentences = {}
+        for item in response["data"]:
+            intent = item["intent"]
+            intent_to_top_k_sentences[intent] = [sentences[i] for i in item["topKIndices"]]
 
-            # # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
             print("records num: ", len(intent_records))
 
-            indicesDict = await model4RAG.invoke(
-                scenario,
-                intent=combinedIntent,
-                description=description,
-                recordList=intent_records,
-                sentenceList=filtered_sentences,
-                k=k,
-            )
-            top_k_indices = indicesDict["top_k"]
-            bottom_k_indices = indicesDict["bottom_k"]
+             # 如果intent没有records，直接返回top-k
+            if len(intent_records) == 0:
+                intent_to_bottom_k_sentences[intent] = intent_to_top_k_sentences[intent][:k]
+                intent_to_top_k_sentences[intent]= []
+            else:
+                intent_records_embeddings = await embedModel.embeddingList(intent_records)
+                # 对超过top_threshold的每个句子计算与每个 record 的最小相似度
+                record_max_similarities = []
+                top_sentences_embeddings = [sentences_embeddings[i] for i in item["topKIndices"]]
+                if top_sentences_embeddings:
+                    for sentence_e in top_sentences_embeddings:
+                        max_sim = max(
+                            cosine_similarity(record_e, sentence_e)
+                            for record_e in intent_records_embeddings
+                        )
+                        record_max_similarities.append(max_sim)
+                    print("min record sim: ", min(record_max_similarities))
 
-            top_k_sentences = [filtered_sentences[i] for i in top_k_indices]
-            bottom_k_sentences = [filtered_sentences[i] for i in bottom_k_indices]
-            print("top-k", top_k_sentences)
-            print("bottom-k",bottom_k_sentences)
+                    # 筛选低于 bottom_k_threshold 的句子及其索引
+                    bottom_filtered_indices = [
+                        i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
+                    ]
+                    bottom_filtered_similarities = [
+                        (i, record_max_similarities[i]) for i in bottom_filtered_indices
+                    ]
+                    bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
+                    bottom_k_sentences = [sentences[i[0]] for i in bottom_k_indices]
 
-            # 保存结果
-            intent_to_top_k_sentences[intent]= top_k_sentences
-            intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+                    print("bottom-k预览：",bottom_filtered_indices)
+                    print(bottom_k_sentences)
+
+                    intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+                else:
+                    intent_to_bottom_k_sentences[intent] = []
+
+
+        # for combinedIntent, conbinedIntent_e in zip(combinedIntents, combinedIntents_embeddings):
+        #     [intent, description] = combinedIntent.split("-")
+        #     # 计算意图向量和所有句子向量之间的余弦相似度
+        #     similarities = [
+        #         cosine_similarity(conbinedIntent_e, sentence_e)
+        #         for sentence_e in sentences_embeddings
+        #     ]
+        #     # 筛选相似度高于阈值的句子及其索引
+        #     filtered_indices = [
+        #         i for i, sim in enumerate(similarities) if sim >= top_threshold
+        #     ]
+        #     filtered_sentences = [sentences[i] for i in filtered_indices]
+
+        #     # # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
+        #     intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
+        #     print("records num: ", len(intent_records))
+
+            # indicesDict = await model4RAG.invoke(
+            #     scenario,
+            #     intent=intent,
+            #     description=description,
+            #     recordList=intent_records,
+            #     sentenceList=filtered_sentences,
+            #     k=k,
+            # )
+            # top_k_indices = indicesDict["top_k"]
+            # bottom_k_indices = indicesDict["bottom_k"]
+
+            # top_k_sentences = [filtered_sentences[i] for i in top_k_indices]
+            # bottom_k_sentences = [filtered_sentences[i] for i in bottom_k_indices]
+            # print("top-k", top_k_sentences)
+            # print("bottom-k",bottom_k_sentences)
+
+            # # 保存结果
+            # intent_to_top_k_sentences[intent]= top_k_sentences
+            # intent_to_bottom_k_sentences[intent] = bottom_k_sentences
 
             #### 原逻辑
         

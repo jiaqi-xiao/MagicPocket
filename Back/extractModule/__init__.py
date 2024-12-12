@@ -160,7 +160,7 @@ class ExtractModelCluster:
 class Chain4Grouping:
     def __init__(self, model):
         self.instruction = """
-        根据用户提供的List，将List中每个Node分组，确保组间差异尽可能大，组内差异尽可能小。返回一个列表，每个元素是一个子列表，代表一个组，子列表中是Node对应的索引，。
+        你将作为协助用户进行信息调研的助手。请根据用户提供的List，将List中每个Node分组，确保组间差异尽可能大，组内差异尽可能小。返回一个列表，每个元素是一个子列表，代表一个组，子列表中是Node对应的索引，。
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
@@ -191,11 +191,11 @@ class Chain4Construct:
         ## 对Groups中的每一组提炼一个符合Scenario语境下的意图，以字典形式返回，key为意图，value为group的索引。务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。每个Intent的描述必须简短清晰，最多不超过7个词。
         ## 比较所有生成的意图与IntentsList中的意图，用IntentsList中的意图替换字典中最相似的意图，如果不够相似则不需要替换。如果IntentsList中还有未替换的Intent，则对每个剩余的Intent在字典中创建以该Intent为key，None为value的键值对。
         self.instruction = """
-        对Groups中的每一个字典元素提炼一个符合Scenario的意图，以字典形式返回。确保每个意图描述清晰、不重复，并且保证每个intent处于相同颗粒度下。
+        你将作为协助用户围绕调研场景Scenario进行信息调研的助手。请对Groups中的每一个字典元素提炼一个符合Scenario的调研意图，以字典形式返回。确保每个意图描述清晰、不重复，并且保证每个intent处于相同颗粒度下。
 
         # Steps
             1. **确认group数量**: 理解Groups的结构，确认group的数量，后续提取的意图数量需与group的数量一致。一个group是以group_x为key,一个列表为value的字典。
-            2. **提取意图**: 对每个group提炼出一个相应的意图描述，该意图需要与group中列表里所有Node的共性相符。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述不超过7个词，确保简短精炼。
+            2. **提取意图**: 对每个group提炼出一个相应的意图描述，该意图需要与group中列表里所有Node的共性相符。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述应该为动词短语形式且不超过7个词，确保简短精炼。
             3. **创建新字典**: 根据Output Format，用提取的意图作为key，对应的group字典中的键作为value。
             4. **比较替换**:
                 - 使用`IntentsList`中的意图与提取出的字典键进行比较，寻找最相似的意图。
