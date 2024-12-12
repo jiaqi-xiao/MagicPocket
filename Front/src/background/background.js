@@ -74,4 +74,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true; // 保持消息通道开放
     }
+
+    if (request.action === "openSidePanel") {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.sidePanel.open({tabId: tabs[0].id}).catch(error => {
+                console.error('Error opening side panel:', error);
+            });
+        });
+        return true;
+    }
 });

@@ -62,6 +62,29 @@ class FloatingWindow {
         this.element.addEventListener("mouseleave", () => this.handleMouseLeave());
         this.containerArea.addEventListener("mouseenter", () => this.cancelHide());
         this.containerArea.addEventListener("mouseleave", () => this.handleMouseLeave());
+
+        // 侧边栏控制
+        this.element.addEventListener("click", () => {
+            chrome.runtime.sendMessage({
+                action: 'closeSidePanel'
+            }, response => {
+                // 忽略连接错误，这是正常的，因为侧边栏可能已经关闭
+                if (chrome.runtime.lastError) {
+                    console.log('Side panel is already closed');
+                    // 直接发送打开消息
+                    chrome.runtime.sendMessage({ action: "openSidePanel" });
+                    console.log("openSidePanel");
+                    return;
+                }
+                
+                // 如果收到响应但关闭失败，也发送打开消息
+                if (!response || !response.success) {
+                    chrome.runtime.sendMessage({ action: "openSidePanel" });
+                    console.log("openSidePanel");
+                }
+                // 如果关闭成功，不需要额外操作
+            });
+        });
     }
 
     // 添加新容器
@@ -835,7 +858,7 @@ async function handleShowNetwork() {
         
     } catch (error) {
         console.error('Visualization error details:', error);
-        alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+        alert(`无法加载网络可���化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
     }
 }
 

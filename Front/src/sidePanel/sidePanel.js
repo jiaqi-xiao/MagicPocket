@@ -3,6 +3,14 @@ let networkGraph = null;
 let networkManager = null;
 let lastIntentTree = null; // 添加一个变量来保存最后的 intentTree 状态
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'closeSidePanel') {
+        window.close();
+        sendResponse({ success: true });
+        return true; // 保持消息通道开放
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeTaskDescription();
     initializeRecordsArea();
