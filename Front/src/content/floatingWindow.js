@@ -519,12 +519,12 @@ function initializeRecordsContainer(container) {
 
     // 创建两个按钮区域
     const buttonArea = document.createElement("div");
-    setupButtonArea(buttonArea);
-    buttonContainer.appendChild(buttonArea);
+    // setupButtonArea(buttonArea);
+    // buttonContainer.appendChild(buttonArea);
 
-    const buttonArea2 = document.createElement("div");
-    setupButtonArea(buttonArea2);
-    buttonContainer.appendChild(buttonArea2);
+    // const buttonArea2 = document.createElement("div");
+    // setupButtonArea(buttonArea2);
+    // buttonContainer.appendChild(buttonArea2);
 
     // 添加网络可视化按钮
     // const showNetworkBtn = createButton("Show Network", "showNetworkBtn");
@@ -615,20 +615,20 @@ function updateRecordsList(scrollArea, buttonArea) {
 
         // 清空容器内容
         scrollArea.innerHTML = "";
-        buttonArea.innerHTML = "";
+        // buttonArea.innerHTML = "";
 
-        // 创建按钮
-        const clearAllBtn = createButton("Clear All", "clearAllBtn");
-        const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
-        const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
+        // // 创建按钮
+        // const clearAllBtn = createButton("Clear All", "clearAllBtn");
+        // const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
+        // const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
 
-        // 添加按钮到按钮区域
-        buttonArea.appendChild(clearAllBtn);
-        buttonArea.appendChild(startGenerateBtn);
-        buttonArea.appendChild(highlightTextBtn);
+        // // 添加按钮到按钮区域
+        // buttonArea.appendChild(clearAllBtn);
+        // buttonArea.appendChild(startGenerateBtn);
+        // buttonArea.appendChild(highlightTextBtn);
 
-        // 每次都重新绑定事件监听器
-        setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
+        // // 每次都重新绑定事件监听器
+        // setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
 
         // 渲染记录
         await renderRecords(records, scrollArea);
