@@ -4,17 +4,29 @@
 
 <head>
     <title>Web Content Recorder</title>
-    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="../../styles/styles.css">
     <script src="../utils/imageStorage.js"></script>
+    <style>
+        body {
+            margin: 0;
+            width: 240px;
+            min-height: 140px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
 </head>
 
 <body>
-    <div class="button-container">
-        <button id="screenshotBtn">Screenshot</button>
-        <button id="newTaskBtn">New Task</button>
-        <button id="sidePanelBtn">Side Panel</button>
+    <div class="mp-popup-button-container">
+        <button id="mp-popup-new-task-btn" class="mp-popup-btn">New Task</button>
+        <button id="mp-popup-screenshot-btn" class="mp-popup-btn">Screenshot</button>
+        <button id="mp-popup-side-panel-btn" class="mp-popup-btn">Side Panel</button>
     </div>
-    <div id="recordsList"></div>
     <script src="popup.js"></script>
 </body>
 
