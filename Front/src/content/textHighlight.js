@@ -147,7 +147,7 @@ function formatIntentTree(rawIntentTree) {
             return {
                 id: generateId(),
                 intent: intentName,
-                description: intentData.description,  // 直接使用意图数据中的 description
+                description: intentData.description || '',  // 直接使用意图数据中的 description
                 isLeafNode: false,
                 immutable: false,
                 priority: 5,
