@@ -1,6 +1,12 @@
 function handleMouseUp(e) {
     e.stopPropagation();
     const selection = window.getSelection();
+    
+    // 检查是否有选中的内容
+    if (!selection || selection.rangeCount === 0) {
+        return;
+    }
+    
     const range = selection.getRangeAt(0);
     
     // 获取选中内容的容器元素
