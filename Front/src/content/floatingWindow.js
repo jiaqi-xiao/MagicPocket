@@ -64,27 +64,27 @@ class FloatingWindow {
         this.containerArea.addEventListener("mouseleave", () => this.handleMouseLeave());
 
         // 侧边栏控制
-        this.element.addEventListener("click", () => {
-            chrome.runtime.sendMessage({
-                action: 'closeSidePanel'
-            }, response => {
-                // 忽略连接错误，这是正常的，因为侧边栏可能已经关闭
-                if (chrome.runtime.lastError) {
-                    console.log('Side panel is already closed');
-                    // 直接发送打开消息
-                    chrome.runtime.sendMessage({ action: "openSidePanel" });
-                    console.log("openSidePanel");
-                    return;
-                }
+        // this.element.addEventListener("click", () => {
+        //     chrome.runtime.sendMessage({
+        //         action: 'closeSidePanel'
+        //     }, response => {
+        //         // 忽略连接错误，这是正常的，因为侧边栏可能已经关闭
+        //         if (chrome.runtime.lastError) {
+        //             console.log('Side panel is already closed');
+        //             // 直接发送打开消息
+        //             chrome.runtime.sendMessage({ action: "openSidePanel" });
+        //             console.log("openSidePanel");
+        //             return;
+        //         }
                 
-                // 如果收到响应但关闭失败，也发送打开消息
-                if (!response || !response.success) {
-                    chrome.runtime.sendMessage({ action: "openSidePanel" });
-                    console.log("openSidePanel");
-                }
-                // 如果关闭成功，不需要额外操作
-            });
-        });
+        //         // 如果收到响应但关闭失败，也发送打开消息
+        //         if (!response || !response.success) {
+        //             chrome.runtime.sendMessage({ action: "openSidePanel" });
+        //             console.log("openSidePanel");
+        //         }
+        //         // 如果关闭成功，不需要额外操作
+        //     });
+        // });
     }
 
     // 添加新容器
@@ -342,8 +342,8 @@ class FloatingContainer {
             gap: "8px"
         });
 
-        const sidebarBtn = this.createSidebarButton();
-        controls.appendChild(sidebarBtn);
+        // const sidebarBtn = this.createSidebarButton();
+        // controls.appendChild(sidebarBtn);
 
         return controls;
     }
