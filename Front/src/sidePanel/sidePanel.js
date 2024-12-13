@@ -3,6 +3,14 @@ let networkGraph = null;
 let networkManager = null;
 let lastIntentTree = null; // 添加一个变量来保存最后的 intentTree 状态
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'closeSidePanel') {
+        window.close();
+        sendResponse({ success: true });
+        return true; // 保持消息通道开放
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeTaskDescription();
     initializeRecordsArea();
@@ -296,9 +304,36 @@ async function updateRecordsList() {
         });
     });
     
-    for (const record of records) {
+    // 使用 Promise.all 来并行处理所有记录
+    await Promise.all(records.map(async (record, index) => {
         const item = document.createElement("div");
         item.className = "record-item";
+        
+        // 添加点击事件和样式
+        item.style.cursor = "pointer";
+        item.addEventListener('click', async (e) => {
+            // 确保点击不是来自删除按钮或跳转按钮
+            if (!e.target.closest('.delete-btn') && !e.target.closest('.goto-page-btn')) {
+                const url = chrome.runtime.getURL(`records.html?index=${index}`);
+                
+                // 查找当前窗口中是否已经打开了 records.html
+                const tabs = await chrome.tabs.query({});
+                const recordsTab = tabs.find(tab => tab.url.includes('records.html'));
+                
+                if (recordsTab) {
+                    // 如果已经打开，更新该标签页的URL并激活它
+                    await chrome.tabs.update(recordsTab.id, { 
+                        url: url,
+                        active: true 
+                    });
+                    // 确保包含该标签页的窗口被激活
+                    chrome.windows.update(recordsTab.windowId, { focused: true });
+                } else {
+                    // 如果没有打开，创建新标签页
+                    chrome.tabs.create({ url: url });
+                }
+            }
+        });
         
         // 设置data-url属性和检查是否需要高亮
         item.setAttribute('data-url', record.url || '');
@@ -365,7 +400,7 @@ async function updateRecordsList() {
                 }
             });
         });
-    }
+    }));
 
     // 添加删除按钮事件监听器
     scrollArea.querySelectorAll('.delete-btn').forEach(btn => {

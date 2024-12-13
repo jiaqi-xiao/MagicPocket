@@ -53,29 +53,19 @@ function deleteRecord(index) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    // displayRecords();
-
-    // document.getElementById("recordsList").addEventListener("click", (e) => {
-    //     if (e.target.classList.contains("delete-btn")) {
-    //         const index = parseInt(e.target.getAttribute("data-index"));
-    //         deleteRecord(index);
-    //     }
-    // });
-
-    document.getElementById("newTaskBtn").addEventListener("click", () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
-        window.close(); // 关闭popup窗口
+    document.getElementById("mp-popup-new-task-btn").addEventListener("click", () => {
+        if (confirm("Are you sure you want to start a new task? This will clear all current records.")) {
+            chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
+            window.close();
+        }
     });
 
-    document.getElementById("sidePanelBtn").addEventListener("click", () => {
-        // 打开侧边栏
+    document.getElementById("mp-popup-side-panel-btn").addEventListener("click", () => {
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            // 通知当前标签页打开侧边栏
             chrome.sidePanel.open({tabId: tabs[0].id}).catch(error => {
                 console.error('Error opening side panel:', error);
             });
         });
-        // 关闭 popup
         window.close();
     });
 });
@@ -88,16 +78,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// document.getElementById("clearAllBtn").addEventListener("click", () => {
-//     chrome.storage.local.set({ records: [] }, () => {
-//         displayRecords();
-//     });
-// });
-
-document.getElementById("screenshotBtn").addEventListener("click", () => {
+document.getElementById("mp-popup-screenshot-btn").addEventListener("click", () => {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         console.log("screenshotBtn clicked in popup.js");
         chrome.tabs.sendMessage(tabs[0].id, {action: "startScreenshot"});
     });
-    window.close(); // 关闭popup窗口
+    window.close();
 });

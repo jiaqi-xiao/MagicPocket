@@ -1,10 +1,43 @@
 function handleMouseUp(e) {
     e.stopPropagation();
-    selectedText = window.getSelection().toString().trim();
+    const selection = window.getSelection();
+    
+    // 检查是否有选中的内容
+    if (!selection || selection.rangeCount === 0) {
+        return;
+    }
+    
+    const range = selection.getRangeAt(0);
+    
+    // 获取选中内容的容器元素
+    const container = range.commonAncestorContainer;
+    let selectedContent = '';
+    
+    // 如果选中的内容包含HTML元素
+    if (container.nodeType === Node.ELEMENT_NODE) {
+        const tempDiv = document.createElement('div');
+        tempDiv.appendChild(range.cloneContents());
+        
+        // 处理选中内容中的链接
+        const links = tempDiv.getElementsByTagName('a');
+        if (links.length > 0) {
+            // 将所有链接转换为markdown格式
+            Array.from(links).forEach(link => {
+                const linkText = link.textContent;
+                const linkUrl = link.href;
+                const markdownLink = `[${linkText}](${linkUrl})`;
+                link.outerHTML = markdownLink;
+            });
+        }
+        selectedContent = tempDiv.textContent;
+    } else {
+        selectedContent = selection.toString();
+    }
+    
+    selectedText = selectedContent.trim();
+    
     if (selectedText) {
         console.log("Text selected:", selectedText);
-        const selection = window.getSelection();
-        const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
 
         const x = rect.left + window.scrollX;
@@ -59,6 +92,7 @@ function saveSelectionWithComment(comment) {
         content: selectedText,
         comment: comment,
         paragraph: paragraph.textContent,
+        context: paragraph.textContent,
         url: window.location.href,
         timestamp: new Date().toISOString()
     };
@@ -103,6 +137,7 @@ function saveSelection() {
         type: "text",
         content: selectedText,
         paragraph: paragraph.textContent,
+        context: paragraph.textContent,
         url: window.location.href,
         timestamp: new Date().toISOString()
     };
