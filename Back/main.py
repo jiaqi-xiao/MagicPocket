@@ -56,7 +56,7 @@ if "OPENAI_API_KEY" in os.environ:
 else:
     os.environ["OPENAI_API_KEY"] = ""
 
-modelName = "gpt-4o-mini"
+modelName = "gpt-4o"
 model = ChatOpenAI(model=modelName)
 
 # Add CORS middleware
@@ -310,7 +310,8 @@ async def incremental_construct_intent(request: dict):
         
         if not all([scenario, groupsOfNodes]):
             raise HTTPException(status_code=422, detail="Missing required parameters")
-            
+
+
         # 标准化分组数据
         standardized_groups = NodeGroups(
             item=[{
@@ -320,7 +321,7 @@ async def incremental_construct_intent(request: dict):
             } for group in groupsOfNodes["item"]
             for group_name, nodes in group.items()]
         )
-        
+
         # 创建或转换意图树
         initial_tree = IntentTree(
             scenario=scenario,
@@ -343,7 +344,7 @@ async def incremental_construct_intent(request: dict):
             standardized_groups.model_dump_json(),
             str(immutableIntents)
         )
-
+        print(newIntentTreeIndex)
         # 转换输出格式
         newIntentTree = newIntentTreeIndex["item"]
         for key, indices in newIntentTreeIndex["item"].items():

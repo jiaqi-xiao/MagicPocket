@@ -37,10 +37,13 @@ class IntentTree(BaseModel):
         if name not in self.model_fields:
             return []
         return super().__getattr__(name)
-    
+
+class IntentTreeIndexItem(BaseModel):
+    group: str
+    description: str
+
 class IntentTreeIndex(BaseModel):
-    item: dict[str, dict[str, str]]
-    
+    item: dict[str, IntentTreeIndexItem]    
 
 class RecordwithVector(BaseModel):
     id: int
