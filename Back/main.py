@@ -476,6 +476,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         # 以下是原有逻辑
         intentTree = ragRequest.intentTree
         webContent = ragRequest.webContent
+        print(webContent)
         k = ragRequest.k
         top_threshold = ragRequest.top_threshold
         bottom_threshold = ragRequest.bottom_threshold

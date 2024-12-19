@@ -45,6 +45,8 @@ def split2Sentences(content):
     sentences = sentence_endings.split(content)
     # 去除空白句子
     sentences = [s.strip() for s in sentences if s.strip() and not all(c in "。！？!?.\n" for c in s)]
+    # 去除过短的句子
+    sentences = [s for s in sentences if len(s.split(" ")) > 3]
     return sentences
 
 
