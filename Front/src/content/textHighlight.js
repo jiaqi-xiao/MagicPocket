@@ -112,8 +112,11 @@ window.toggleHighlight = async function() {
     });
     
     if (isHighlightActive) {
-        highlightBtn.style.backgroundColor = '#4CAF50';
-        highlightBtn.textContent = 'Remove Highlight';
+        // 只在按钮存在时更新按钮样式
+        if (highlightBtn) {
+            highlightBtn.style.backgroundColor = '#4CAF50';
+            highlightBtn.textContent = 'Remove Highlight';
+        }
         showLoadingOverlay();
         try {
             await processPageContent();
@@ -121,8 +124,11 @@ window.toggleHighlight = async function() {
             hideLoadingOverlay();
         }
     } else {
-        highlightBtn.style.backgroundColor = '#f5f5f5';
-        highlightBtn.textContent = 'Highlight Text';
+        // 只在按钮存在时更新按钮样式
+        if (highlightBtn) {
+            highlightBtn.style.backgroundColor = '#f5f5f5';
+            highlightBtn.textContent = 'Highlight Text';
+        }
         removeHighlights();
     }
 }
@@ -163,7 +169,7 @@ function formatIntentTree(rawIntentTree) {
         });
     };
 
-    // 处理主要的转换逻辑
+    // 处理主���的转换逻辑
     if (rawIntentTree.item) {
         return {
             scenario: rawIntentTree.scenario,
@@ -289,7 +295,7 @@ function highlightMatchingText(ragResult) {
 
     console.log(sentencesToHighlight);
 
-    // 修改文本节点处理逻辑
+    // 修改文本节���处理逻辑
     textNodes.forEach(textNode => {
         if (!textNode || !textNode.parentNode) {
             console.warn('Invalid text node encountered, skipping...');
@@ -326,7 +332,7 @@ function highlightMatchingText(ragResult) {
             }
         });
 
-        // 如果有匹配，替换节点
+        // 如果有匹配��替换节点
         if (hasMatch) {
             // 添加剩余文本
             if (lastIndex < text.length) {
