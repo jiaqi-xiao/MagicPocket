@@ -18,9 +18,9 @@ class Chain4RAG:
    - **IntentsDict**: 结构为{{intent: description}}
 
 2. **筛选并匹配**：
-   - 针对IntentsDict中的每一对Intent和Description，分析其内容以确定其关键主题。
-   - 从SentenceList中找到与当前Intent和Description主题最相关的句子。
-   - 依据内容筛选出相关性高于top_threshold的句子，但如果没有句子满足足够高的相关性条件，可以返回0个。
+   - 针对IntentsDict中的每一对Intent和Description，分析其内容以确定其主题。
+   - 分析SentenceList中的句子，理解其内容，判断是否属于当前Intent和Description的主题。
+   - 筛选出属于主题的所有句子，但如果没有句子满足条件，可以返回0个。
    
 3. **收集结果**：
    - 将筛选出的句子在SentenceList中的索引位置作为结果返回，按照相似度从高到低的顺序排列。
