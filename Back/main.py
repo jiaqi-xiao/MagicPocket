@@ -261,7 +261,7 @@ chain4Grouping = extractModule.Chain4Grouping(model)
 
 
 @app.post("/group/")
-async def group_nodes(nodesList: NodesList):
+async def group_nodes(nodesList: NodesList, scenario: str="learn prompt engineering techniques"):
     """对nodes进行分组"""
     try:
         # 转换输入数据
@@ -269,18 +269,18 @@ async def group_nodes(nodesList: NodesList):
         
         # 根据节点类型生成文本描述
         if isinstance(nodesList.data[0], Record):
-            nodesTxt = "\n\n".join([
+            nodesTxt = [
                 f"id: {i+1}\n- 选中文本: {node['content']}\n- 上下文: {node['context']}\n- 注释: {node['comment']}"
                 for i, node in enumerate(root)
-            ])
+            ]
         else:
-            nodesTxt = "\n\n".join([
+            nodesTxt = [
                 f"id: {node['id']}\n- intent: {node['intent']}"
                 for node in root
-            ])
+            ]
 
         # 调用分组模型
-        groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt)
+        groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt, scenario)
         
         # 转换输出格式
         groupsOfNodes = {
@@ -475,7 +475,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
         # 以下是原有逻辑
         intentTree = ragRequest.intentTree
-        print(intentTree)
         webContent = ragRequest.webContent
         k = ragRequest.k
         top_threshold = ragRequest.top_threshold
@@ -495,21 +494,18 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         sentences_embeddings = await embedModel.embeddingList(sentences)
 
         # Step 3: 筛选意图并向量化它们
-        combinedIntents = filterNodes(
+        intentsDict = filterNodes(
             intentTree,  # 转换 IntentTree 为字典
             target_level=1
         )
 
-        combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
+        # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
         # Step 4: 计算每个意图的 top-k 相关句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
 
-        intentsDict = {}
-        for combinedIntent in combinedIntents:
-            [intent, description] = combinedIntent.split("-")
-            intentsDict[intent] = description
+        print("call LLM")
         
         # 调用LLM
         response = await model4RAG.invoke(

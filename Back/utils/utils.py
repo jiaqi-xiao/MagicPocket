@@ -25,7 +25,7 @@ def filterNodes(
         and not tree.get("isLeafNode", True)
     ):
         intent = tree.get("intent")
-        result.append(f"{intent}-{tree.get('description')}")
+        result.append({intent: tree.get('description')})
 
     if current_level == target_level:
         return result

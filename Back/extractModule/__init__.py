@@ -160,13 +160,14 @@ class ExtractModelCluster:
 class Chain4Grouping:
     def __init__(self, model):
         self.instruction = """
-        你将作为协助用户进行信息调研的助手。请根据用户提供的List，将List中每个Node分组，确保组间差异尽可能大，组内差异尽可能小。返回一个列表，每个元素是一个子列表，代表一个组，子列表中是Node对应的索引，。
+        你将作为协助用户进行信息调研的助手。请基于给定的Scenario分析用户的潜在意图，并以此为基础将用户提供的List，将List中每个Node分成多个组，确保组间差异尽可能大，组内差异尽可能小。返回一个列表，每个元素是一个子列表，代表一个组，子列表中是Node对应的索引。
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
         - example: {{"item": [{{"group1": [0,1]}}, {{"group2": [2]}}]}}
         
         # User:
+        Scenario: {scenario}
         List: {list}
         """
 
@@ -182,8 +183,8 @@ class Chain4Grouping:
 
         self.chain = self.prompt_template | self.model | self.parser
 
-    async def invoke(self, nodeList):
-        return self.chain.invoke({"list": nodeList})
+    async def invoke(self, nodeList, scenario):
+        return self.chain.invoke({"list": nodeList, "scenario": scenario})
 
 
 class Chain4Construct:
@@ -195,14 +196,15 @@ class Chain4Construct:
 
         # Steps
             1. **确认group数量**: 理解Groups的结构，确认group的数量，后续提取的意图数量需与group的数量一致。一个group是以group_x为key,一个列表为value的字典。
-            2. **提取意图**: 对每个group提炼出一个相应的意图描述，该意图需要与group中列表里所有Node的共性相符。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述应该为动词短语形式且不超过7个词，确保简短精炼。
-            3. **创建新字典**: 根据Output Format，用提取的意图作为key，对应的group字典中的键作为value。
-            4. **比较替换**:
+            2. **理解场景**: 理解Scenario的含义，分析该场景下用户的潜在意图。
+            3. **提取意图**: 对每个group提炼出一个相应的意图描述，该意图需要与group中列表里所有Node的共性相符。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述应该为动词短语形式且不超过7个词，确保简短精炼。
+            4. **创建新字典**: 根据Output Format，用提取的意图作为key，对应的group字典中的键作为value。
+            5. **比较替换**:
                 - 使用`IntentsList`中的意图与提取出的字典键进行比较，寻找最相似的意图。
                 - 找到最相似意图时，将字典中的意图替换为`IntentsList`中的意图。
                 - 如果某个意图没有足够相似的替换项，则保留不变。
-            5. **添加剩余意图**: 对于`IntentsList`中未使用的意图，视为remaining_intent。将这些剩余意图作为key添加到第四步中构建的新字典中，其对应值为空字符串。如果没未替换的意图则跳过这一步。
-            6. **添加描述**： 对于新字典中的每一个意图，给出一个具体的描述，解释为了满足意图用户需要哪些后续信息。
+            6. **添加剩余意图**: 对于`IntentsList`中未使用的意图，视为remaining_intent。将这些剩余意图作为key添加到第四步中构建的新字典中，其对应值为空字符串。如果没未替换的意图则跳过这一步。
+            7. **添加描述**： 对于新字典中的每一个意图，给出一个具体的描述，解释为了满足意图用户需要哪些后续信息。
         
         # Output Format
             - The output should be structured in JSON format as following {format_instructions}.
