@@ -261,7 +261,7 @@ chain4Grouping = extractModule.Chain4Grouping(model)
 
 
 @app.post("/group/")
-async def group_nodes(nodesList: NodesList, scenario: str="learn prompt engineering techniques"):
+async def group_nodes(nodesList: NodesList, scenario: str):
     """对nodes进行分组"""
     try:
         # 转换输入数据
@@ -476,7 +476,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         # 以下是原有逻辑
         intentTree = ragRequest.intentTree
         webContent = ragRequest.webContent
-        print(webContent)
         k = ragRequest.k
         top_threshold = ragRequest.top_threshold
         bottom_threshold = ragRequest.bottom_threshold
