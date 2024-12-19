@@ -38,7 +38,6 @@ def filterNodes(
 
     return result
 
-
 def split2Sentences(content):
     # 使用正则表达式分句
     sentence_endings = re.compile(r"(?<=[。！？!?.\n])")
@@ -101,6 +100,25 @@ def get_intent_records(intentTree, intent):
     # 从根节点开始递归遍历
     return traverse_and_match(intentTree)
 
+def merge_dicts(data):
+    merged_dict = {"top_k": {}, "bottom_k": {}}
+
+    for item in data:
+        # 合并 top_k
+        for key, value in item["top_k"].items():
+            if key not in merged_dict["top_k"]:
+                merged_dict["top_k"][key] = []
+            merged_dict["top_k"][key].extend(value)
+            merged_dict["top_k"][key] = list(set(merged_dict["top_k"][key]))
+
+        # 合并 bottom_k
+        for key, value in item["bottom_k"].items():
+            if key not in merged_dict["bottom_k"]:
+                merged_dict["bottom_k"][key] = []
+            merged_dict["bottom_k"][key].extend(value)
+            merged_dict["bottom_k"][key] = list(set(merged_dict["bottom_k"][key]))
+
+    return merged_dict
 
 if __name__ == "__main__":
     intentTree = {
