@@ -25,7 +25,7 @@ def filterNodes(
         and not tree.get("isLeafNode", True)
     ):
         intent = tree.get("intent")
-        result.append(intent)
+        result.append({intent: tree.get('description')})
 
     if current_level == target_level:
         return result
@@ -41,10 +41,12 @@ def filterNodes(
 
 def split2Sentences(content):
     # 使用正则表达式分句
-    sentence_endings = re.compile(r"(?<=[。！？!?.])")
+    sentence_endings = re.compile(r"(?<=[。！？!?.\n])")
     sentences = sentence_endings.split(content)
     # 去除空白句子
-    sentences = [s.strip() for s in sentences if s.strip()]
+    sentences = [s.strip() for s in sentences if s.strip() and not all(c in "。！？!?.\n" for c in s)]
+    # 去除过短的句子
+    sentences = [s for s in sentences if len(s.split(" ")) > 3]
     return sentences
 
 

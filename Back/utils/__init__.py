@@ -25,6 +25,7 @@ class Intent(BaseModel):
     child_num: int
     priority: int
     intent: str
+    description: str
 
 
 # Define the main Pydantic model
@@ -36,10 +37,13 @@ class IntentTree(BaseModel):
         if name not in self.model_fields:
             return []
         return super().__getattr__(name)
-    
+
+class IntentTreeIndexItem(BaseModel):
+    group: str
+    description: str
+
 class IntentTreeIndex(BaseModel):
-    item: dict[str, str]
-    
+    item: dict[str, IntentTreeIndexItem]    
 
 class RecordwithVector(BaseModel):
     id: int
@@ -72,6 +76,19 @@ class NodesList(BaseModel):
 
 class NodeGroupsIndex(BaseModel):
     item: list[dict[str, list[int]]]
+
+class sentenceGroupsIndex(BaseModel):
+    top_k: list[int]
+    bottom_k: list[int]
+
+# 定义子模型
+class DataItem(BaseModel):
+    intent: str
+    topKIndices: list[int]
+
+# 定义主模型
+class TopKIndexList(BaseModel):
+    data: list[DataItem]
     
 class NodeGroups(BaseModel):
     item: list[dict[str, list[Union[Record, Intent]]]]

@@ -144,6 +144,18 @@ function initializeRecordsArea() {
             // 调用后端 construct API
             console.log("networkManager status: ", networkManager);
             console.log("lastIntentTree: ", lastIntentTree);
+            const intentTreeData = networkManager ? networkManager.getIntentTreeWithStates() : lastIntentTree;
+            
+            // 验证数据格式
+            if (intentTreeData && intentTreeData.child) {
+                intentTreeData.child = intentTreeData.child.map(item => ({
+                    ...item,
+                    description: item.description || item.intent,
+                    child_num: Array.isArray(item.child) ? item.child.length : 0,
+                    child: Array.isArray(item.child) ? item.child : []
+                }));
+            }
+
             const constructResponse = await fetch('http://localhost:8000/construct/', {
                 method: 'POST',
                 headers: {
@@ -154,7 +166,7 @@ function initializeRecordsArea() {
                     groupsOfNodes: {
                         item: groupsOfNodes.item || []
                     },
-                    intentTree: networkManager ? networkManager.getIntentTreeWithStates() : lastIntentTree,
+                    intentTree: intentTreeData,
                     target_level: 3
                 })
             });

@@ -56,7 +56,7 @@ if "OPENAI_API_KEY" in os.environ:
 else:
     os.environ["OPENAI_API_KEY"] = ""
 
-modelName = "gpt-4o-mini"
+modelName = "gpt-4o"
 model = ChatOpenAI(model=modelName)
 
 # Add CORS middleware
@@ -261,7 +261,7 @@ chain4Grouping = extractModule.Chain4Grouping(model)
 
 
 @app.post("/group/")
-async def group_nodes(nodesList: NodesList):
+async def group_nodes(nodesList: NodesList, scenario: str):
     """对nodes进行分组"""
     try:
         # 转换输入数据
@@ -269,18 +269,18 @@ async def group_nodes(nodesList: NodesList):
         
         # 根据节点类型生成文本描述
         if isinstance(nodesList.data[0], Record):
-            nodesTxt = "\n\n".join([
+            nodesTxt = [
                 f"id: {i+1}\n- 选中文本: {node['content']}\n- 上下文: {node['context']}\n- 注释: {node['comment']}"
                 for i, node in enumerate(root)
-            ])
+            ]
         else:
-            nodesTxt = "\n\n".join([
+            nodesTxt = [
                 f"id: {node['id']}\n- intent: {node['intent']}"
                 for node in root
-            ])
+            ]
 
         # 调用分组模型
-        groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt)
+        groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt, scenario)
         
         # 转换输出格式
         groupsOfNodes = {
@@ -298,8 +298,6 @@ async def group_nodes(nodesList: NodesList):
 
 
 chain4Construct = extractModule.Chain4Construct(model)
-
-
 @app.post("/construct/")
 async def incremental_construct_intent(request: dict):
     """增量构建意图树"""
@@ -312,53 +310,138 @@ async def incremental_construct_intent(request: dict):
         
         if not all([scenario, groupsOfNodes]):
             raise HTTPException(status_code=422, detail="Missing required parameters")
-            
+        
         # 标准化分组数据
-        standardized_groups = NodeGroups(
-            item=[{
-                group_name: [
-                    Record(**node) for node in nodes
-                ]
-            } for group in groupsOfNodes["item"]
-            for group_name, nodes in group.items()]
-        )
+        try:
+            standardized_groups = NodeGroups(
+                item=[{
+                    group_name: [
+                        Record(**node) for node in nodes
+                    ]
+                } for group in groupsOfNodes["item"]
+                for group_name, nodes in group.items()]
+            )
+        except Exception as e:
+            print(f"Error: Failed to standardize groups - {str(e)}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Error in standardizing groups: {str(e)}"
+            )
         
         # 创建或转换意图树
-        initial_tree = IntentTree(
-            scenario=scenario,
-            child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
-        )
+        try:
+            initial_tree = IntentTree(
+                scenario=scenario,
+                child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
+            )
+        except Exception as e:
+            print(f"Error: Failed to create initial tree - {str(e)}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Error in creating initial tree: {str(e)}"
+            )
 
         # 获取不可变意图列表
         immutableIntents = []
         if intentTree:
-            immutableIntents = filterNodes(
-                initial_tree.model_dump(), 
-                target_level,
-                key="immutable",
-                value=True
-            )
+            try:
+                immutableIntents = filterNodes(
+                    initial_tree.model_dump(), 
+                    target_level,
+                    key="immutable",
+                    value=True
+                )
+            except Exception as e:
+                print(f"Error: Failed to filter immutable intents - {str(e)}")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Error in filtering immutable intents: {str(e)}"
+                )
         
         # 构建新的意图树
-        newIntentTreeIndex = await chain4Construct.invoke(
-            scenario,
-            standardized_groups.model_dump_json(),
-            str(immutableIntents)
-        )
+        max_retries = 3
+        retry_count = 0
+        last_error = None
+        last_response = None
         
+        while retry_count < max_retries:
+            try:
+                newIntentTreeIndex = await chain4Construct.invoke(
+                    scenario,
+                    standardized_groups.model_dump_json(),
+                    str(immutableIntents)
+                )
+                last_response = newIntentTreeIndex  # 保存最后一次响应
+                
+                # 检查返回的是否是 JSON Schema 定义
+                if isinstance(newIntentTreeIndex, dict):
+                    if "properties" in newIntentTreeIndex:
+                        print(f"Info: Attempt {retry_count + 1}/{max_retries} - Received schema instead of data")
+                        retry_count += 1
+                        if retry_count >= max_retries:
+                            raise ValueError("Maximum retries reached, still receiving schema")
+                        continue
+                    
+                    # 尝试规范化响应格式
+                    if "item" not in newIntentTreeIndex:
+                        if all(isinstance(key, str) for key in newIntentTreeIndex.keys()):
+                            newIntentTreeIndex = {"item": newIntentTreeIndex}
+                        else:
+                            raise ValueError("Invalid response format (no item)")
+                    
+                    # 如果成功获取到正确格式的数据，跳出重试循环
+                    break
+                else:
+                    raise ValueError("Response is not a dictionary")
+                    
+            except Exception as e:
+                last_error = e
+                retry_count += 1
+                if retry_count >= max_retries:
+                    if last_response:
+                        print(f"Error: LLM raw response after {max_retries} attempts:")
+                        print(json.dumps(last_response, indent=2))
+                    print(f"Error: All {max_retries} attempts failed")
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Error in constructing new intent tree after {max_retries} attempts: {str(last_error)}"
+                    )
+
         # 转换输出格式
-        newIntentTree = newIntentTreeIndex["item"]
-        for key, indices in newIntentTreeIndex["item"].items():
-            if indices == "":
-                newIntentTree[key] = []
-            else:
-                for group in standardized_groups.model_dump()["item"]:
-                    if indices in group.keys():
-                        newIntentTree[key] = group[indices]
+        try:
+            newIntentTree = newIntentTreeIndex["item"]
+            for key, indices in newIntentTreeIndex["item"].items():
+                if not isinstance(indices, dict):
+                    continue
+                    
+                if "group" not in indices:
+                    newIntentTree[key]["group"] = []
+                    continue
+                    
+                if indices["group"] == "":
+                    newIntentTree[key]["group"] = []
+                else:
+                    for group in standardized_groups.model_dump()["item"]:
+                        if indices["group"] in group.keys():
+                            newIntentTree[key]["group"] = group[indices["group"]]
+                            break
+                    else:
+                        newIntentTree[key]["group"] = []
+                        
+        except Exception as e:
+            if last_response:
+                print(f"Error: LLM raw response:")
+                print(json.dumps(last_response, indent=2))
+            print(f"Error: Failed to convert output format - {str(e)}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Error in converting output format: {str(e)}"
+            )
                     
         return {"item": newIntentTree}
 
     except Exception as e:
+        print(f"Error: Unexpected error in construct API - {str(e)}")
         raise HTTPException(
             status_code=422,
             detail=f"Error constructing intent tree: {str(e)}"
@@ -366,6 +449,8 @@ async def incremental_construct_intent(request: dict):
 
 model4Embed = OpenAIEmbeddings(model="text-embedding-ada-002")
 embedModel = embedModule.EmbedGPTModel(model4Embed)
+import RAGModule
+model4RAG = RAGModule.Chain4RAG(model)
 @app.post("/rag/")
 async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     """
@@ -409,71 +494,154 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         sentences_embeddings = await embedModel.embeddingList(sentences)
 
         # Step 3: 筛选意图并向量化它们
-        intents = filterNodes(
+        intentsDict = filterNodes(
             intentTree,  # 转换 IntentTree 为字典
             target_level=1
         )
-        intents_embeddings = await embedModel.embeddingList(intents)
 
-        # Step 4: 计算每个意图的 top-k 相关句子，并继续筛选与每个意图中records最不一样的句子
+        # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
+
+        # Step 4: 计算每个意图的 top-k 相关句子
         intent_to_top_k_sentences = {}
         intent_to_bottom_k_sentences = {}
 
-        for intent, intent_e in zip(intents, intents_embeddings):
-            # 计算意图向量和所有句子向量之间的余弦相似度
-            similarities = [
-                cosine_similarity(intent_e, sentence_e)
-                for sentence_e in sentences_embeddings
-            ]
-            # 筛选相似度高于阈值的句子及其索引
-            filtered_indices = [
-                i for i, sim in enumerate(similarities) if sim >= top_threshold
-            ]
-            filtered_sentences = [sentences[i] for i in filtered_indices]
-            filtered_sentences_embeddings = [sentences_embeddings[i] for i in filtered_indices]
-            
-            # 从筛选结果中选取 top-k
-            filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
-            top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
-            top_k_sentences = [sentences[i[0]] for i in top_k_indices]
+        print("call LLM")
+        
+        # 调用LLM
+        response = await model4RAG.invoke(
+                scenario,
+                intentsDict=intentsDict,
+                sentenceList=sentences,
+                top_threshold=top_threshold,
+            )
+        # 重构响应，替换索引
+        print("response", response)
+        intent_to_top_k_sentences = {}
+        for item in response["data"]:
+            intent = item["intent"]
+            intent_to_top_k_sentences[intent] = [sentences[i] for i in item["topKIndices"]]
 
-            print(f"意图：{intent}\ntop-k预览：{top_k_indices}")
-            print(top_k_sentences)
-            
-            # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
             intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
             print("records num: ", len(intent_records))
-            # 如果intent没有records，直接返回top-k
+
+             # 如果intent没有records，直接返回top-k
             if len(intent_records) == 0:
+                intent_to_bottom_k_sentences[intent] = intent_to_top_k_sentences[intent][:k]
                 intent_to_top_k_sentences[intent]= []
-                intent_to_bottom_k_sentences[intent] = top_k_sentences
             else:
                 intent_records_embeddings = await embedModel.embeddingList(intent_records)
                 # 对超过top_threshold的每个句子计算与每个 record 的最小相似度
                 record_max_similarities = []
-                for sentence_e in filtered_sentences_embeddings:
-                    max_sim = max(
-                        cosine_similarity(record_e, sentence_e)
-                        for record_e in intent_records_embeddings
-                    )
-                    record_max_similarities.append(max_sim)
-                print("min record sim: ", min(record_max_similarities))
-                # 筛选低于 bottom_k_threshold 的句子及其索引
-                bottom_filtered_indices = [
-                    i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
-                ]
-                bottom_filtered_similarities = [
-                    (i, record_max_similarities[i]) for i in bottom_filtered_indices
-                ]
-                bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
-                bottom_k_sentences = [filtered_sentences[i[0]] for i in bottom_k_indices]
+                top_sentences_embeddings = [sentences_embeddings[i] for i in item["topKIndices"]]
+                if top_sentences_embeddings:
+                    for sentence_e in top_sentences_embeddings:
+                        max_sim = max(
+                            cosine_similarity(record_e, sentence_e)
+                            for record_e in intent_records_embeddings
+                        )
+                        record_max_similarities.append(max_sim)
+                    print("min record sim: ", min(record_max_similarities))
 
-                print("bottom-k预览：",bottom_filtered_indices)
-                print(bottom_k_sentences)
+                    # 筛选低于 bottom_k_threshold 的句子及其索引
+                    bottom_filtered_indices = [
+                        i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
+                    ]
+                    bottom_filtered_similarities = [
+                        (i, record_max_similarities[i]) for i in bottom_filtered_indices
+                    ]
+                    bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
+                    bottom_k_sentences = [sentences[i[0]] for i in bottom_k_indices]
 
-                # 保存结果
-                intent_to_top_k_sentences[intent]= top_k_sentences
-                intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+                    print("bottom-k预览：",bottom_filtered_indices)
+                    print(bottom_k_sentences)
+
+                    intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+                else:
+                    intent_to_bottom_k_sentences[intent] = []
+
+
+        # for combinedIntent, conbinedIntent_e in zip(combinedIntents, combinedIntents_embeddings):
+        #     [intent, description] = combinedIntent.split("-")
+        #     # 计算意图向量和所有句子向量之间的余弦相似度
+        #     similarities = [
+        #         cosine_similarity(conbinedIntent_e, sentence_e)
+        #         for sentence_e in sentences_embeddings
+        #     ]
+        #     # 筛选相似度高于阈值的句子及其索引
+        #     filtered_indices = [
+        #         i for i, sim in enumerate(similarities) if sim >= top_threshold
+        #     ]
+        #     filtered_sentences = [sentences[i] for i in filtered_indices]
+
+        #     # # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
+        #     intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
+        #     print("records num: ", len(intent_records))
+
+            # indicesDict = await model4RAG.invoke(
+            #     scenario,
+            #     intent=intent,
+            #     description=description,
+            #     recordList=intent_records,
+            #     sentenceList=filtered_sentences,
+            #     k=k,
+            # )
+            # top_k_indices = indicesDict["top_k"]
+            # bottom_k_indices = indicesDict["bottom_k"]
+
+            # top_k_sentences = [filtered_sentences[i] for i in top_k_indices]
+            # bottom_k_sentences = [filtered_sentences[i] for i in bottom_k_indices]
+            # print("top-k", top_k_sentences)
+            # print("bottom-k",bottom_k_sentences)
+
+            # # 保存结果
+            # intent_to_top_k_sentences[intent]= top_k_sentences
+            # intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+
+            #### 原逻辑
+        
+            # # 从筛选结果中选取 top-k
+            # filtered_similarities = [(i, similarities[i]) for i in filtered_indices]
+            # top_k_indices = sorted(filtered_similarities, key=lambda x: x[1], reverse=True)[:k]
+            # top_k_sentences = [sentences[i[0]] for i in top_k_indices]
+
+            # print(f"意图：{intent}\ntop-k预览：{top_k_indices}")
+            # print(top_k_sentences)
+
+            # # Step 5: 计算意图的记录向量（如果有记录）与句子相似度
+            # intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
+            # print("records num: ", len(intent_records))
+
+            # # 如果intent没有records，直接返回top-k
+            # if len(intent_records) == 0:
+            #     intent_to_top_k_sentences[intent]= []
+            #     intent_to_bottom_k_sentences[intent] = top_k_sentences
+            # else:
+            #     intent_records_embeddings = await embedModel.embeddingList(intent_records)
+            #     # 对超过top_threshold的每个句子计算与每个 record 的最小相似度
+            #     record_max_similarities = []
+            #     for sentence_e in filtered_sentences_embeddings:
+            #         max_sim = max(
+            #             cosine_similarity(record_e, sentence_e)
+            #             for record_e in intent_records_embeddings
+            #         )
+            #         record_max_similarities.append(max_sim)
+            #     print("min record sim: ", min(record_max_similarities))
+            #     # 筛选低于 bottom_k_threshold 的句子及其索引
+            #     bottom_filtered_indices = [
+            #         i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
+            #     ]
+            #     bottom_filtered_similarities = [
+            #         (i, record_max_similarities[i]) for i in bottom_filtered_indices
+            #     ]
+            #     bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
+            #     bottom_k_sentences = [filtered_sentences[i[0]] for i in bottom_k_indices]
+
+            #     print("bottom-k预览：",bottom_filtered_indices)
+            #     print(bottom_k_sentences)
+
+            #   # 保存结果
+            #    intent_to_top_k_sentences[intent]= top_k_sentences
+            #    intent_to_bottom_k_sentences[intent] = bottom_k_sentences
 
         # Step 6: 返回每个意图的 top-k 和 bottom-k 最相关句子
         return {
