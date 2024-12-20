@@ -364,15 +364,18 @@ Comment: ${comment}`;
         menu.id = 'nodeMenu';
         Object.assign(menu.style, {
             position: 'fixed',
-            transform: 'translate(-50%, -100%)', // 水平居中并向上偏移菜单自身高度
+            transform: 'translate(-50%, -100%)',
             left: x + 'px',
             top: y + 'px',
             backgroundColor: 'white',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            padding: '5px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            zIndex: '10001'
+            border: 'none',
+            borderRadius: '8px',
+            padding: '8px 0',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: '10001',
+            minWidth: '150px',
+            backdropFilter: 'blur(8px)',
+            transition: 'opacity 0.2s ease-in-out'
         });
     }
 
@@ -440,13 +443,40 @@ Comment: ${comment}`;
     createMenuItem(nodeId, text, color, hoverColor) {
         const item = document.createElement('div');
         Object.assign(item.style, {
-            padding: '5px 10px',
+            padding: '8px 16px',
             cursor: 'pointer',
             color: color,
+            fontSize: '14px',
             fontWeight: '500',
-            borderBottom: text.includes('Confirmed') ? '1px solid #eee' : 'none'
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            userSelect: 'none'
         });
-        item.textContent = text;
+        
+        // 添加图标和文本的容器
+        const content = document.createElement('div');
+        content.style.display = 'flex';
+        content.style.alignItems = 'center';
+        content.style.gap = '8px';
+        
+        // 根据操作类型添加不同的图标
+        const icon = document.createElement('span');
+        icon.style.fontSize = '16px';
+        if (text.includes('Delete')) {
+            icon.innerHTML = '';
+        } else if (text.includes('Add')) {
+            icon.innerHTML = '';
+        } else if (text.includes('Edit')) {
+            icon.innerHTML = '';
+        } else {
+            icon.innerHTML = '';
+        }
+        
+        content.appendChild(icon);
+        content.appendChild(document.createTextNode(text));
+        item.appendChild(content);
 
         this.setupMenuItemEvents(item, color, hoverColor);
         this.setupMenuItemAction(item, nodeId, text);
@@ -457,12 +487,19 @@ Comment: ${comment}`;
     // 设置菜单项事件
     setupMenuItemEvents(item, color, hoverColor) {
         item.addEventListener('mouseover', () => {
-            item.style.backgroundColor = '#f0f0f0';
-            item.style.color = hoverColor;
+            Object.assign(item.style, {
+                backgroundColor: '#f5f5f5',
+                color: hoverColor,
+                transform: 'translateX(4px)'
+            });
         });
+        
         item.addEventListener('mouseout', () => {
-            item.style.backgroundColor = 'white';
-            item.style.color = color;
+            Object.assign(item.style, {
+                backgroundColor: 'transparent',
+                color: color,
+                transform: 'translateX(0)'
+            });
         });
     }
 
@@ -997,7 +1034,7 @@ Comment: ${comment}`;
 
     // 设置关闭按钮样式
     setupCloseButtonStyle(closeBtn) {
-        closeBtn.textContent = "×";
+        closeBtn.textContent = "";
         Object.assign(closeBtn.style, {
             position: "absolute",
             right: "10px",
