@@ -3,10 +3,11 @@ class NetworkManager {
     static activeNodeMenu = false;  // 跟踪节点菜单状态
     static immutableIntents = new Set();  // 存储所有 immutable 的意图名称
 
-    constructor(intentTree, containerArea = null, mode = 'standalone') {
+    constructor(intentTree, containerArea = null, mode = 'standalone', layout = 'force') {
         this.intentTree = intentTree;
         this.containerArea = containerArea;
         this.displayMode = mode;
+        this.layout = layout;
         this.nodes = new vis.DataSet();
         this.edges = new vis.DataSet();
         this.nodeStates = new Map();
@@ -712,33 +713,69 @@ Comment: ${comment}`;
                     color: '#333'
                 },
                 borderWidth: 2,
-                shadow: true
+                shadow: true,
+                fixed: false  // 默认节点不固定
             },
             edges: {
                 width: 2,
                 smooth: {
-                    type: 'continuous'
+                    type: this.layout === 'hierarchical' ? 'cubicBezier' : 'continuous'
                 },
                 arrows: {
                     to: { enabled: true, scaleFactor: 0.5 }
                 }
             },
-            physics: {
+            interaction: {
+                dragNodes: true,
+                dragView: true,
+                zoomView: true,
+                hover: true,
+                selectable: true
+            }
+        };
+
+        // 根据布局类型设置不同的布局参数
+        if (this.layout === 'hierarchical') {
+            baseOptions.layout = {
+                hierarchical: {
+                    direction: 'LR',
+                    sortMethod: 'directed',
+                    levelSeparation: 100,
+                    nodeSpacing: 100,
+                    treeSpacing: 150
+                }
+            };
+            // 在层级布局中禁用物理引擎以允许自由拖动
+            baseOptions.physics = {
+                enabled: false
+            };
+        } else {
+            // 力导向布局的物理引擎参数
+            baseOptions.physics = {
                 enabled: true,
+                barnesHut: {
+                    gravitationalConstant: -2000,
+                    centralGravity: 0.1,
+                    springLength: 95,
+                    springConstant: 0.04,
+                    damping: 0.09
+                },
                 stabilization: {
                     enabled: true,
                     iterations: 1000
-                },
-                hierarchicalRepulsion: {
-                    nodeDistance: 120
                 }
-            },
-            interaction: {
-                dragNodes: function (node) {
-                    return node.id !== 'root'; // 禁止拖动根节点
-                }
+            };
+        }
+
+        // 设置根节点固定
+        this.nodes.get().forEach(node => {
+            if (node.id === 'root') {
+                this.nodes.update({
+                    id: node.id,
+                    fixed: true
+                });
             }
-        };
+        });
 
         // 为侧边栏模式添加特殊配置
         if (this.displayMode === 'sidepanel') {
@@ -746,33 +783,11 @@ Comment: ${comment}`;
                 ...baseOptions,
                 nodes: {
                     ...baseOptions.nodes,
-                    size: 12, // 更小的节点
+                    size: 12,
                     font: {
-                        size: 12, // 更小的字体
+                        size: 12,
                         color: '#333'
                     }
-                },
-                physics: {
-                    ...baseOptions.physics,
-                    stabilization: {
-                        enabled: true,
-                        iterations: 500 // 减少迭代次数以加快加载
-                    },
-                    barnesHut: {
-                        gravitationalConstant: -2000,
-                        centralGravity: 0.1,
-                        springLength: 95,
-                        springConstant: 0.04,
-                        damping: 0.09
-                    }
-                },
-                interaction: {
-                    dragNodes: true,
-                    dragView: true,
-                    zoomView: true,
-                    hover: true,
-                    multiselect: false,
-                    keyboard: false
                 }
             };
         }
@@ -1194,7 +1209,12 @@ async function saveIntentTree(intentTree) {
 
 
 // 主函数
-async function showNetworkVisualization(intentTree, containerArea = null, mode = 'standalone') {
+/**
+ * @param {string} layout - 布局方式：
+ *   'force' - 力导向图布局（默认），节点位置由物理引擎动态计算
+ *   'hierarchical' - 层级树状图布局，自上而下展示层级关系
+ */
+async function showNetworkVisualization(intentTree, containerArea = null, mode = 'standalone', layout = 'force') {
     try {
         if (typeof vis === 'undefined') {
             console.error('Vis.js not loaded');
@@ -1204,12 +1224,13 @@ async function showNetworkVisualization(intentTree, containerArea = null, mode =
 
         console.log('Visualization data:', intentTree);
         console.log('networkVisualizationContainer mode:', mode);
+        console.log('Layout mode:', layout);
 
         // save intentTree
         await saveIntentTree(intentTree);
         
         this.intentTree = intentTree;
-        const networkManager = new NetworkManager(intentTree, containerArea, mode);
+        const networkManager = new NetworkManager(intentTree, containerArea, mode, layout);
         networkManager.initContainer();
         networkManager.initializeNodes();
         networkManager.initializeNetwork();
