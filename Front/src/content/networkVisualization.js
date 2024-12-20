@@ -973,33 +973,7 @@ class NetworkManager {
                 },
                 borderWidth: 2,
                 shadow: true,
-                fixed: false,  // 默认节点不固定
-                chosen: {
-                    node: (values, id, selected, hovering) => {
-                        if (hovering) {
-                            values.shadow = true;
-                            values.shadowColor = 'rgba(0, 0, 0, 0.2)';
-                            values.shadowSize = 10;
-                            values.borderWidth = 3;
-                        }
-                    },
-                    label: (values, id, selected, hovering) => {
-                        if (hovering) {
-                            values.size = 15;
-                            if (values.background === undefined) {
-                                values.background = {};
-                            }
-                            values.background.enabled = true;
-                            values.background.color = 'rgba(255, 255, 255, 0.95)';
-                            values.background.size = 6;
-                        } else {
-                            const node = this.nodes.get(id);
-                            if (node && node.type === 'root') {
-                                values.background = { enabled: false };
-                            }
-                        }
-                    }
-                }
+                fixed: false
             },
             edges: {
                 width: 2,
@@ -1022,6 +996,10 @@ class NetworkManager {
                 multiselect: false,
                 selectConnectedEdges: true,
                 hoverConnectedEdges: true
+            },
+            layout: {
+                randomSeed: 1,
+                improvedLayout: true
             }
         };
 
@@ -1031,9 +1009,12 @@ class NetworkManager {
                 hierarchical: {
                     direction: 'LR',
                     sortMethod: 'directed',
-                    levelSeparation: 100,
+                    levelSeparation: 150,
                     nodeSpacing: 100,
-                    treeSpacing: 150
+                    treeSpacing: 150,
+                    blockShifting: true,
+                    edgeMinimization: true,
+                    parentCentralization: true
                 }
             };
             // 在层级布局中禁用物理引擎以允许自由拖动
@@ -1045,25 +1026,31 @@ class NetworkManager {
             baseOptions.physics = {
                 enabled: true,
                 barnesHut: {
-                    gravitationalConstant: -2000,
-                    centralGravity: 0.1,
-                    springLength: 95,
-                    springConstant: 0.04,
-                    damping: 0.09
+                    gravitationalConstant: -3000,
+                    centralGravity: 0.5,
+                    springLength: 130,
+                    springConstant: 0.08,
+                    damping: 0.09,
+                    avoidOverlap: 1
                 },
                 stabilization: {
                     enabled: true,
-                    iterations: 1000
+                    iterations: 1000,
+                    updateInterval: 50
                 }
             };
         }
 
-        // 设置根节点固定
+        // 设置根节点固定在左侧
+        const containerWidth = this.visContainer.clientWidth;
+        const containerHeight = this.visContainer.clientHeight;
         this.nodes.get().forEach(node => {
             if (node.id === 'root') {
                 this.nodes.update({
                     id: node.id,
-                    fixed: true
+                    fixed: true,
+                    x: -containerWidth * 0.3,  // 将根节点固定在容器左侧30%的位置
+                    y: containerHeight * 0.5    // 垂直居中
                 });
             }
         });
