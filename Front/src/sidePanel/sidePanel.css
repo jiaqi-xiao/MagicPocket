@@ -258,8 +258,10 @@ body {
 }
 
 .record-item.active {
-    border: 2px solid #4CAF50;
-    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+    border-left: 3px solid #2E7D32;
+    background-color: #fafafa;
+    padding-left: 7px;  /* 补偿左边框造成的偏移 */
+    transition: all 0.2s ease;
 }
 
 .scroll-indicator {

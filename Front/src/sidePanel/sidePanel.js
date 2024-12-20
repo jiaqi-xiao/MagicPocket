@@ -192,7 +192,8 @@ function initializeRecordsArea() {
                 networkManager = await window.showNetworkVisualization(
                     intentTree, 
                     document.getElementById('networkVisualizationContainer'),
-                    'sidepanel'
+                    'sidepanel',
+                    'hierarchical'
                 );
             } else {
                 networkManager.updateData(intentTree);
