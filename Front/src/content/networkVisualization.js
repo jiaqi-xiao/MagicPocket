@@ -201,7 +201,7 @@ class NetworkManager {
             
             nodes.push({
                 id: intentId,
-                label: this.wrapLabel(intentName, 15),
+                label: this.wrapLabel(intentName, 15, 'intent'),
                 type: 'intent',
                 color: this.getNodeColor('intent'),
                 size: this.getNodeSize('intent'),
@@ -225,7 +225,7 @@ class NetworkManager {
                     const recordId = `record_${nodeId++}`;
                     const recordNode = {
                         id: recordId,
-                        label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12),
+                        label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12, 'record'),
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
@@ -308,7 +308,7 @@ class NetworkManager {
         return lines.join('\n');
     }
 
-    wrapLabel(text, maxLength) {
+    wrapLabel(text, maxLength, nodeType) {
         if (!text) return 'No content';
         
         // Split text into words
@@ -339,8 +339,8 @@ class NetworkManager {
             lines.push(currentLine);
         }
         
-        // Limit to max 2 lines and add ellipsis if needed
-        if (lines.length > 2) {
+        // For record nodes, limit to max 2 lines and add ellipsis if needed
+        if (nodeType !== 'intent' && lines.length > 2) {
             lines.length = 2;
             lines[1] = lines[1].substring(0, maxLength - 3) + '...';
         }
