@@ -11,8 +11,25 @@ function initializeExtension() {
 
 function addGlobalEventListeners() {
     console.log("Adding global event listeners");
-    document.addEventListener("mouseup", handleMouseUp);
-    document.addEventListener("mousedown", handleGlobalMouseDown);
+    
+    // 使用事件委托，只处理非视频播放器区域的事件
+    document.addEventListener("mouseup", (e) => {
+        // 检查是否在视频播放器区域
+        if (!e.target.closest('.xgplayer') && 
+            !e.target.closest('video') && 
+            !e.target.closest('.xgplayer-controls')) {
+            handleMouseUp(e);
+        }
+    });
+    
+    document.addEventListener("mousedown", (e) => {
+        // 检查是否在视频播放器区域
+        if (!e.target.closest('.xgplayer') && 
+            !e.target.closest('video') && 
+            !e.target.closest('.xgplayer-controls')) {
+            handleGlobalMouseDown(e);
+        }
+    });
 }
 
 if (document.readyState === 'loading') {
