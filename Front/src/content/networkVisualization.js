@@ -161,15 +161,28 @@ class NetworkManager {
 
         // 添加根节点
         const rootId = 'root';
+        const rootSize = this.getNodeSize('root');
+        const padding = 30;
         const rootNode = {
             id: rootId,
-            label: intentTree.scenario || 'Current Task',
+            label: this.wrapLabelVertical(intentTree.scenario || 'Current Task'),
             type: 'root',
             color: this.getNodeColor('root'),
-            size: this.getNodeSize('root'),
+            size: rootSize,
             opacity: 1,
             fixed: true,
-            physics: false
+            physics: false,
+            font: { 
+                size: 14,
+                align: 'center',
+                multi: true,
+                face: 'system-ui, -apple-system, sans-serif',
+                color: '#333333',
+                yalign: 'middle',
+                ygap: 3,
+                x: -(rootSize + padding),
+                y: 0
+            }
         };
         nodes.push(rootNode);
         
@@ -188,7 +201,7 @@ class NetworkManager {
             
             nodes.push({
                 id: intentId,
-                label: intentName,
+                label: this.wrapLabel(intentName, 15),
                 type: 'intent',
                 color: this.getNodeColor('intent'),
                 size: this.getNodeSize('intent'),
@@ -212,7 +225,7 @@ class NetworkManager {
                     const recordId = `record_${nodeId++}`;
                     const recordNode = {
                         id: recordId,
-                        label: this.truncateText(record.content || record.text || record.description || 'No content', 30),
+                        label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12),
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
@@ -249,6 +262,93 @@ class NetworkManager {
         return { nodes, edges };
     }
 
+    wrapLabelVertical(text) {
+        if (!text) return 'No content';
+        
+        const lines = [];
+        let currentSegment = '';
+        
+        // 遍历字符串中的每个字符
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            const nextChar = text[i + 1];
+            
+            if (char === ' ') {
+                // 如果是空格，处理当前积累的片段
+                if (currentSegment) {
+                    lines.push(currentSegment);
+                    currentSegment = '';
+                }
+            } else if (/[\u4e00-\u9fa5]/.test(char)) {
+                // 如果当前字符是中文
+                if (currentSegment) {
+                    // 如果之前有积累的英文片段，先添加
+                    lines.push(currentSegment);
+                    currentSegment = '';
+                }
+                // 中文字符单独成行
+                lines.push(char);
+            } else {
+                // 英文字符，累积到当前片段
+                currentSegment += char;
+                
+                // 如果下一个字符是中文，当前片段结束
+                if (nextChar && /[\u4e00-\u9fa5]/.test(nextChar)) {
+                    lines.push(currentSegment);
+                    currentSegment = '';
+                }
+            }
+        }
+        
+        // 处理最后可能剩余的片段
+        if (currentSegment) {
+            lines.push(currentSegment);
+        }
+        
+        return lines.join('\n');
+    }
+
+    wrapLabel(text, maxLength) {
+        if (!text) return 'No content';
+        
+        // Split text into words
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+        
+        // Process each word
+        for (const word of words) {
+            // If adding this word would exceed maxLength
+            if ((currentLine + ' ' + word).length > maxLength) {
+                // If current line is not empty, push it and start new line
+                if (currentLine) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    // If word itself is too long, truncate it
+                    currentLine = word.substring(0, maxLength - 3) + '...';
+                }
+            } else {
+                // Add word to current line
+                currentLine = currentLine ? currentLine + ' ' + word : word;
+            }
+        }
+        
+        // Add the last line if not empty
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+        
+        // Limit to max 2 lines and add ellipsis if needed
+        if (lines.length > 2) {
+            lines.length = 2;
+            lines[1] = lines[1].substring(0, maxLength - 3) + '...';
+        }
+        
+        // Join lines with newline character
+        return lines.join('\n');
+    }
+
     // 辅助方法：截断文本
     truncateText(text, maxLength) {
         if (!text) {
@@ -261,13 +361,125 @@ class NetworkManager {
 
     // 辅助方法：格式化记录的悬停提示
     formatRecordTooltip(record) {
-        const content = record.content?.trim() || 'N/A';
-        const context = record.context?.trim() || 'N/A';
-        const comment = record.comment?.trim() || 'N/A';
+        const tooltipContainer = document.createElement('div');
         
-        return `Content: ${content}
-Context: ${context}
-Comment: ${comment}`;
+        // 获取network容器的大小
+        const networkContainer = this.container;
+        const containerRect = networkContainer.getBoundingClientRect();
+        const maxHeight = Math.min(300, containerRect.height * 0.8); // 最大高度为容器高度的80%
+        const maxWidth = Math.min(400, containerRect.width * 0.8);  // 最大宽度为容器宽度的80%
+
+        Object.assign(tooltipContainer.style, {
+            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            padding: '12px',
+            maxWidth: maxWidth + 'px',
+            maxHeight: maxHeight + 'px',
+            fontSize: '14px',
+            lineHeight: '1.5',
+            color: '#333',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(0, 0, 0, 0.1)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            position: 'relative'
+        });
+
+        // 添加滚动事件处理
+        let isScrolling = false;
+        tooltipContainer.addEventListener('wheel', (e) => {
+            const canScroll = tooltipContainer.scrollHeight > tooltipContainer.clientHeight;
+            if (canScroll) {
+                e.stopPropagation();
+                e.preventDefault();
+                tooltipContainer.scrollTop += e.deltaY;
+                
+                // 标记正在滚动
+                isScrolling = true;
+                clearTimeout(this._scrollTimeout);
+                this._scrollTimeout = setTimeout(() => {
+                    isScrolling = false;
+                }, 150);
+
+                // 当正在滚动时临时禁用network的缩放
+                if (this.network) {
+                    this.network.setOptions({
+                        interaction: {
+                            zoomView: !isScrolling
+                        }
+                    });
+                }
+            }
+        }, { passive: false });
+
+        // 创建并添加内容部分
+        if (record.content) {
+            const contentSection = this.createTooltipSection('Content', record.content, '#2196F3');
+            tooltipContainer.appendChild(contentSection);
+        }
+
+        // 创建并添加评论部分
+        if (record.comment) {
+            const commentSection = this.createTooltipSection('Comment', record.comment, '#FF9800');
+            tooltipContainer.appendChild(commentSection);
+        }
+
+        return tooltipContainer;
+    }
+
+    // 辅助方法：格式化记录的悬停提示部分
+    createTooltipSection(title, content, color) {
+        const section = document.createElement('div');
+        Object.assign(section.style, {
+            marginBottom: title === 'Comment' ? '0' : '16px'
+        });
+
+        // 创建标题
+        const titleElement = document.createElement('div');
+        Object.assign(titleElement.style, {
+            fontWeight: '600',
+            color: color,
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            position: 'sticky',
+            top: '0',
+            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+            paddingBottom: '4px',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
+        });
+
+        // 添加图标
+        const icon = document.createElement('span');
+        icon.textContent = title === 'Content' ? '📝' : '💭';
+        icon.style.fontSize = '14px';
+        titleElement.appendChild(icon);
+
+        // 添加标题文本
+        const titleText = document.createElement('span');
+        titleText.textContent = title;
+        titleElement.appendChild(titleText);
+
+        // 创建内容
+        const contentElement = document.createElement('div');
+        Object.assign(contentElement.style, {
+            color: '#666',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(0, 0, 0, 0.02)',
+            borderRadius: '6px',
+            whiteSpace: 'pre-wrap',  // 保留换行和空格
+            wordBreak: 'break-word'  // 长单词换行
+        });
+        contentElement.textContent = content;
+
+        section.appendChild(titleElement);
+        section.appendChild(contentElement);
+
+        return section;
     }
 
     // 获取节点颜色
@@ -283,11 +495,11 @@ Comment: ${comment}`;
     // 获取节点大小
     getNodeSize(type) {
         const sizes = {
-            root: 30,    // 根节点最大
-            intent: 25,  // 意图节点中等
-            record: 20   // 记录节点最小
+            root: 40,    // 增大根节点尺寸
+            intent: 30,  // 意图节点中等
+            record: 25   // 记录节点最小
         };
-        return sizes[type] || 15;
+        return sizes[type] || 20;
     }
 
     // 更新节点状态
@@ -747,11 +959,47 @@ Comment: ${comment}`;
                 size: 16,
                 font: {
                     size: 14,
-                    color: '#333'
+                    color: '#333333',
+                    face: 'system-ui, -apple-system, sans-serif',
+                    multi: true,
+                    background: {
+                        enabled: true,
+                        color: 'rgba(255, 255, 255, 0.85)',
+                        size: 6,
+                        strokeWidth: 0
+                    },
+                    align: 'center',
+                    vadjust: 8
                 },
                 borderWidth: 2,
                 shadow: true,
-                fixed: false  // 默认节点不固定
+                fixed: false,  // 默认节点不固定
+                chosen: {
+                    node: (values, id, selected, hovering) => {
+                        if (hovering) {
+                            values.shadow = true;
+                            values.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                            values.shadowSize = 10;
+                            values.borderWidth = 3;
+                        }
+                    },
+                    label: (values, id, selected, hovering) => {
+                        if (hovering) {
+                            values.size = 15;
+                            if (values.background === undefined) {
+                                values.background = {};
+                            }
+                            values.background.enabled = true;
+                            values.background.color = 'rgba(255, 255, 255, 0.95)';
+                            values.background.size = 6;
+                        } else {
+                            const node = this.nodes.get(id);
+                            if (node && node.type === 'root') {
+                                values.background = { enabled: false };
+                            }
+                        }
+                    }
+                }
             },
             edges: {
                 width: 2,
@@ -767,7 +1015,13 @@ Comment: ${comment}`;
                 dragView: true,
                 zoomView: true,
                 hover: true,
-                selectable: true
+                selectable: true,
+                hideEdgesOnDrag: false,
+                hideEdgesOnZoom: false,
+                hover: true,
+                multiselect: false,
+                selectConnectedEdges: true,
+                hoverConnectedEdges: true
             }
         };
 
@@ -834,14 +1088,66 @@ Comment: ${comment}`;
 
     // 设置网络事件
     setupNetworkEvents() {
+        let isTooltipVisible = false;
+        let tooltipNode = null;
+
         // 点击节点显示菜单
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
-                // 直接使用节点位置创建菜单
                 this.createNodeMenu(nodeId);
             }
         });
+
+        // 监听悬停事件
+        this.network.on('hoverNode', (params) => {
+            tooltipNode = params.node;
+            isTooltipVisible = true;
+            // 禁用缩放
+            this.network.setOptions({
+                interaction: {
+                    zoomView: false
+                }
+            });
+        });
+
+        // 监听悬停结束事件
+        this.network.on('blurNode', (params) => {
+            if (params.node === tooltipNode) {
+                tooltipNode = null;
+                isTooltipVisible = false;
+                // 恢复缩放
+                this.network.setOptions({
+                    interaction: {
+                        zoomView: true
+                    }
+                });
+            }
+        });
+
+        // 监听滚轮事件
+        this.visContainer.addEventListener('wheel', (event) => {
+            if (isTooltipVisible) {
+                // 如果提示框可见，检查事件目标
+                let target = event.target;
+                let isInsideTooltip = false;
+
+                // 检查事件是否发生在提示框内
+                while (target && target !== this.visContainer) {
+                    if (target.classList.contains('vis-tooltip')) {
+                        isInsideTooltip = true;
+                        break;
+                    }
+                    target = target.parentElement;
+                }
+
+                // 如果不在提示框内，阻止事件
+                if (!isInsideTooltip) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }
+        }, { passive: false });
 
         // 添加拖动开始事件
         this.network.on('dragStart', (params) => {
