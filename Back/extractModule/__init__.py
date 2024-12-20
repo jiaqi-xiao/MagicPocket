@@ -204,7 +204,7 @@ class Chain4Construct:
                 - 找到最相似意图时，将字典中的意图替换为`IntentsList`中的意图。
                 - 如果某个意图没有足够相似的替换项，则保留不变。
             6. **添加剩余意图**: 对于`IntentsList`中未使用的意图，视为remaining_intent。将这些剩余意图作为key添加到第四步中构建的新字典中，其对应值为空字符串。如果没未替换的意图则跳过这一步。
-            7. **添加描述**： 对于新字典中的每一个意图，给出一个具体的描述，解释为了满足意图用户需要哪些后续信息。
+            7. **添加描述**： 对于新字典中的每一个意图，给出一个具体的描述，解释此意图背后的主题以及group中已经包含了哪些子主题。
         
         # Output Format
             - The output should be structured in JSON format as following {format_instructions}.

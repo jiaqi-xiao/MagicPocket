@@ -77,9 +77,10 @@ class NodesList(BaseModel):
 class NodeGroupsIndex(BaseModel):
     item: list[dict[str, list[int]]]
 
+
 class sentenceGroupsIndex(BaseModel):
-    top_k: list[int]
-    bottom_k: list[int]
+    top_all: dict[str, list[int]]
+    bottom_all: dict[str, list[int]]
 
 # 定义子模型
 class DataItem(BaseModel):
