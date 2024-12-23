@@ -495,11 +495,11 @@ class NetworkManager {
     // 获取节点大小
     getNodeSize(type) {
         const sizes = {
-            root: 40,    // 增大根节点尺寸
-            intent: 30,  // 意图节点中等
-            record: 25   // 记录节点最小
+            root: 30,
+            intent: 15,
+            record: 10
         };
-        return sizes[type] || 20;
+        return sizes[type] || 10;
     }
 
     // 更新节点状态
@@ -956,7 +956,7 @@ class NetworkManager {
         const baseOptions = {
             nodes: {
                 shape: 'dot',
-                size: 16,
+                size: 12,  // 将默认大小从16减小到12
                 font: {
                     size: 14,
                     color: '#333333',
@@ -995,7 +995,8 @@ class NetworkManager {
                 hover: true,
                 multiselect: false,
                 selectConnectedEdges: true,
-                hoverConnectedEdges: true
+                hoverConnectedEdges: true,
+                zoomSpeed: 0.3  // 添加这个配置来减慢缩放速度
             },
             layout: {
                 randomSeed: 1,
@@ -1254,8 +1255,7 @@ class NetworkManager {
                 this.containerArea.classList.remove('with-network');
                 // 重置容器区域样式
                 Object.assign(this.containerArea.style, {
-                    width: "40vw",
-                    maxWidth: "600px"
+                    width: "40vw"
                 });
                 
                 // 重置记录列表容器样式
