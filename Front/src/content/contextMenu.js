@@ -114,6 +114,15 @@ function saveSelectionWithComment(comment) {
 }
 
 function handleGlobalMouseDown(e) {
+    // 检查点击目标是否是视频播放器或其相关元素
+    if (e.target.closest('.xgplayer') || // 视频播放器容器
+        e.target.closest('video') ||      // 视频元素
+        e.target.closest('.xgplayer-controls') // 控制栏
+    ) {
+        // 如果是视频播放器相关元素，不处理事件
+        return;
+    }
+
     console.log("Global mousedown detected", e.target);
     if (contextMenu) {
         if (contextMenu.contains(e.target)) {
@@ -128,7 +137,6 @@ function handleGlobalMouseDown(e) {
         }
     }
 }
-
 
 function saveSelection() {
     console.log("Saving selection:", selectedText);
@@ -287,4 +295,3 @@ async function placeInfoWithLocation(textQuery, longitude, latitude) {
         return null;
     }
 }
-

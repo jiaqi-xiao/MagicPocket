@@ -2,6 +2,7 @@
 class NetworkManager {
     static activeNodeMenu = false;  // 跟踪节点菜单状态
     static immutableIntents = new Set();  // 存储所有 immutable 的意图名称
+    static hierarchicalDirection = 'LR';  // 存储层级布局方向配置
 
     constructor(intentTree, containerArea = null, mode = 'standalone', layout = 'force') {
         this.intentTree = intentTree;
@@ -495,11 +496,11 @@ class NetworkManager {
     // 获取节点大小
     getNodeSize(type) {
         const sizes = {
-            root: 40,    // 增大根节点尺寸
-            intent: 30,  // 意图节点中等
-            record: 25   // 记录节点最小
+            root: 30,
+            intent: 15,
+            record: 10
         };
-        return sizes[type] || 20;
+        return sizes[type] || 10;
     }
 
     // 更新节点状态
@@ -956,7 +957,7 @@ class NetworkManager {
         const baseOptions = {
             nodes: {
                 shape: 'dot',
-                size: 16,
+                size: 12,  // 将默认大小从16减小到12
                 font: {
                     size: 14,
                     color: '#333333',
@@ -973,12 +974,22 @@ class NetworkManager {
                 },
                 borderWidth: 2,
                 shadow: true,
-                fixed: false
+                fixed: false,
+                scaling: {
+                    label: {
+                        enabled: true,
+                        min: 12,
+                        max: 16
+                    }
+                }
             },
             edges: {
                 width: 2,
                 smooth: {
-                    type: this.layout === 'hierarchical' ? 'cubicBezier' : 'continuous'
+                    type: 'cubicBezier',
+                    forceDirection: this.layout === 'hierarchical' ? 
+                        (NetworkManager.hierarchicalDirection === 'LR' ? 'horizontal' : 'vertical') : 
+                        'none'
                 },
                 arrows: {
                     to: { enabled: true, scaleFactor: 0.5 }
@@ -995,7 +1006,8 @@ class NetworkManager {
                 hover: true,
                 multiselect: false,
                 selectConnectedEdges: true,
-                hoverConnectedEdges: true
+                hoverConnectedEdges: true,
+                zoomSpeed: 0.3  // 添加这个配置来减慢缩放速度
             },
             layout: {
                 randomSeed: 1,
@@ -1007,7 +1019,7 @@ class NetworkManager {
         if (this.layout === 'hierarchical') {
             baseOptions.layout = {
                 hierarchical: {
-                    direction: 'LR',
+                    direction: NetworkManager.hierarchicalDirection, // 使用静态变量
                     sortMethod: 'directed',
                     levelSeparation: 150,
                     nodeSpacing: 100,
@@ -1254,8 +1266,7 @@ class NetworkManager {
                 this.containerArea.classList.remove('with-network');
                 // 重置容器区域样式
                 Object.assign(this.containerArea.style, {
-                    width: "40vw",
-                    maxWidth: "600px"
+                    width: "40vw"
                 });
                 
                 // 重置记录列表容器样式
@@ -1277,6 +1288,163 @@ class NetworkManager {
             position: "relative",
             overflow: "hidden"
         });
+        
+        // 添加工具栏
+        const toolbar = document.createElement("div");
+        Object.assign(toolbar.style, {
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            zIndex: "1000",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "5px",
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            borderRadius: "6px",
+            boxShadow: "0 2px 6px rgba(0, 0, 0, 0.1)"
+        });
+
+        // 添加方向切换开关
+        const directionSwitch = document.createElement("div");
+        Object.assign(directionSwitch.style, {
+            display: "flex",
+            alignItems: "center",
+            background: "#f5f5f5",
+            borderRadius: "6px",
+            padding: "2px",
+            cursor: "pointer",
+            userSelect: "none",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
+        });
+
+        const horizontalSvg = `
+        <svg width="16" height="16" viewBox="0 0 80 70" fill="none">
+            <!-- Root node -->
+            <circle cx="10" cy="35" r="4" fill="currentColor"/>
+            <!-- Leaf nodes -->
+            <circle cx="70" cy="15" r="4" fill="currentColor"/>
+            <circle cx="70" cy="35" r="4" fill="currentColor"/>
+            <circle cx="70" cy="55" r="4" fill="currentColor"/>
+            <!-- Curved paths -->
+            <path d="M 14 35 C 35 35, 45 15, 66 15" stroke="currentColor" fill="none" stroke-width="2"/>
+            <path d="M 14 35 C 35 35, 45 35, 66 35" stroke="currentColor" fill="none" stroke-width="2"/>
+            <path d="M 14 35 C 35 35, 45 55, 66 55" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>`;
+
+        const verticalSvg = `
+        <svg width="16" height="16" viewBox="0 0 70 80" fill="none">
+            <!-- Root node -->
+            <circle cx="35" cy="10" r="4" fill="currentColor"/>
+            <!-- Leaf nodes -->
+            <circle cx="15" cy="70" r="4" fill="currentColor"/>
+            <circle cx="35" cy="70" r="4" fill="currentColor"/>
+            <circle cx="55" cy="70" r="4" fill="currentColor"/>
+            <!-- Curved paths -->
+            <path d="M 35 14 C 35 35, 15 45, 15 66" stroke="currentColor" fill="none" stroke-width="2"/>
+            <path d="M 35 14 C 35 35, 35 45, 35 66" stroke="currentColor" fill="none" stroke-width="2"/>
+            <path d="M 35 14 C 35 35, 55 45, 55 66" stroke="currentColor" fill="none" stroke-width="2"/>
+        </svg>`;
+
+        const horizontalBtn = document.createElement("div");
+        const verticalBtn = document.createElement("div");
+
+        const btnStyle = {
+            padding: "2px 4px",
+            fontSize: "12px",
+            borderRadius: "4px",
+            transition: "all 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "16px",
+            height: "16px"
+        };
+
+        Object.assign(horizontalBtn.style, {
+            ...btnStyle,
+            backgroundColor: NetworkManager.hierarchicalDirection === 'LR' ? "#fff" : "transparent",
+            color: NetworkManager.hierarchicalDirection === 'LR' ? "#333" : "#666",
+            boxShadow: NetworkManager.hierarchicalDirection === 'LR' ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none"
+        });
+        horizontalBtn.innerHTML = horizontalSvg;
+        horizontalBtn.title = "Horizontal Layout";
+
+        Object.assign(verticalBtn.style, {
+            ...btnStyle,
+            backgroundColor: NetworkManager.hierarchicalDirection === 'UD' ? "#fff" : "transparent",
+            color: NetworkManager.hierarchicalDirection === 'UD' ? "#333" : "#666",
+            boxShadow: NetworkManager.hierarchicalDirection === 'UD' ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none"
+        });
+        verticalBtn.innerHTML = verticalSvg;
+        verticalBtn.title = "Vertical Layout";
+
+        const updateButtonStyles = (isHorizontal) => {
+            Object.assign(horizontalBtn.style, {
+                backgroundColor: isHorizontal ? "#fff" : "transparent",
+                color: isHorizontal ? "#333" : "#666",
+                boxShadow: isHorizontal ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none"
+            });
+            Object.assign(verticalBtn.style, {
+                backgroundColor: !isHorizontal ? "#fff" : "transparent",
+                color: !isHorizontal ? "#333" : "#666",
+                boxShadow: !isHorizontal ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none"
+            });
+        };
+
+        horizontalBtn.addEventListener("click", () => {
+            if (NetworkManager.hierarchicalDirection !== 'LR') {
+                NetworkManager.hierarchicalDirection = 'LR';
+                updateButtonStyles(true);
+                
+                // 如果当前是层级布局，立即更新视图
+                if (this.layout === 'hierarchical' && this.network) {
+                    this.network.setOptions({
+                        layout: {
+                            hierarchical: {
+                                direction: NetworkManager.hierarchicalDirection
+                            }
+                        },
+                        edges: {
+                            smooth: {
+                                type: 'cubicBezier',
+                                forceDirection: 'horizontal'
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
+        verticalBtn.addEventListener("click", () => {
+            if (NetworkManager.hierarchicalDirection !== 'UD') {
+                NetworkManager.hierarchicalDirection = 'UD';
+                updateButtonStyles(false);
+                
+                // 如果当前是层级布局，立即更新视图
+                if (this.layout === 'hierarchical' && this.network) {
+                    this.network.setOptions({
+                        layout: {
+                            hierarchical: {
+                                direction: NetworkManager.hierarchicalDirection
+                            }
+                        },
+                        edges: {
+                            smooth: {
+                                type: 'cubicBezier',
+                                forceDirection: 'vertical'
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
+        directionSwitch.appendChild(horizontalBtn);
+        directionSwitch.appendChild(verticalBtn);
+        toolbar.appendChild(directionSwitch);
+        
+        this.container.appendChild(toolbar);
         this.container.appendChild(this.visContainer);
         
         const loader = document.createElement("div");
