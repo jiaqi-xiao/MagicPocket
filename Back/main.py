@@ -495,12 +495,14 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
         result = []
 
+        # Step 1: 筛选意图
+        intentsDict = filterNodes(
+            intentTree,  # 转换 IntentTree 为字典
+            target_level=1
+        )
+        
         for chunk in contentChunks:
-            # Step 1: 筛选意图
-            intentsDict = filterNodes(
-                intentTree,  # 转换 IntentTree 为字典
-                target_level=1
-            )
+
             # Step 4: 计算每个意图的 top-k 相关句子
             intent_to_top_k_sentences = {}
             intent_to_bottom_k_sentences = {}
