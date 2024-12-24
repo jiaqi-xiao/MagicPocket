@@ -451,6 +451,7 @@ model4Embed = OpenAIEmbeddings(model="text-embedding-ada-002")
 embedModel = embedModule.EmbedGPTModel(model4Embed)
 import RAGModule
 model4RAG = RAGModule.Chain4RAG(model)
+model4Split = RAGModule.Chain4Split(model)
 @app.post("/rag/")
 async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     """
@@ -488,7 +489,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             ).model_dump()
         
         # Step 1: 将 webContent 分句
-        sentences = split2Sentences(webContent)
+        sentences = await model4Split.invoke(scenario, webContent)
+        sentences = [sentence for sentence in sentences["data"] if len(sentence.split(" "))  > 3]
+        # sentences = split2Sentences(webContent)
         print("该网页句子数量：", len(sentences))
 
         contentChunks = np.array_split(sentences, chunk_num)
@@ -502,7 +505,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         )
         
         for chunk in contentChunks:
-
+            print("chunk里句子的数量：", len(chunk))
             # Step 4: 计算每个意图的 top-k 相关句子
             intent_to_top_k_sentences = {}
             intent_to_bottom_k_sentences = {}
