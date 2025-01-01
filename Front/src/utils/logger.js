@@ -31,6 +31,36 @@ function getFormattedLocalTime() {
 }
 
 /**
+ * 将日志数据转换为 CSV 格式
+ * @param {Array} logs - 日志数组
+ * @returns {string} CSV 格式的日志数据
+ */
+function convertLogsToCSV(logs) {
+    // CSV 头部
+    const headers = ['Local Time', 'Timestamp', 'Category', 'Action', 'URL', 'Details'];
+    
+    // 将日志转换为 CSV 行
+    const rows = logs.map(log => {
+        const url = log.data.url || '';
+        // 移除 url 后将其他数据转换为 JSON 字符串
+        const { url: _, ...otherData } = log.data;
+        const details = JSON.stringify(otherData).replace(/"/g, '""'); // 转义双引号
+
+        return [
+            log.localTime,
+            log.timestamp,
+            log.category,
+            log.action,
+            url,
+            details
+        ].map(value => `"${value}"`).join(',');
+    });
+
+    // 组合头部和数据行
+    return [headers.join(','), ...rows].join('\n');
+}
+
+/**
  * Logger - 用户行为日志记录工具
  * 用于记录用户在扩展中的各类行为，包括UI交互、页面访问、网络请求等
  */
@@ -131,7 +161,7 @@ const Logger = {
     },
 
     /**
-     * 导出日志为JSON文件
+     * 导出日志为CSV文件
      * @returns {Promise<void>}
      */
     exportLogs: async function() {
@@ -147,20 +177,28 @@ const Logger = {
         // 按时间戳排序
         logs.sort((a, b) => a.timestamp - b.timestamp);
         
-        const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
+        // 转换为 CSV 格式
+        const csvContent = convertLogsToCSV(logs);
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         
         const timestamp = getFormattedLocalTime().replace(/[: ]/g, '-');
-        const filename = `user-behavior-logs-${timestamp}.json`;
+        const filename = `user-behavior-logs-${timestamp}.csv`;
+
+        // 创建下载链接
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = filename;
+        downloadLink.style.display = 'none';
         
-        await chrome.downloads.download({
-            url: url,
-            filename: filename,
-            saveAs: true
-        });
+        // 添加到文档并触发点击
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        
+        // 清理
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(downloadLink.href);
         
         console.log(`[Logger] Exported ${logs.length} logs to ${filename}`);
-        URL.revokeObjectURL(url);
     },
 
     /**
