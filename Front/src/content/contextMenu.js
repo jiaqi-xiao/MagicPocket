@@ -38,6 +38,11 @@ function handleMouseUp(e) {
     
     if (selectedText) {
         console.log("Text selected:", selectedText);
+        window.Logger.log(window.LogCategory.UI, 'text_selected', {
+            text_length: selectedText.length,
+            text_preview: selectedText,
+            url: window.location.href
+        });
         const rect = range.getBoundingClientRect();
 
         const x = rect.left + window.scrollX;
@@ -51,6 +56,9 @@ function handleMouseUp(e) {
 
 function showContextMenu(x, y) {
     console.log("Showing context menu");
+    window.Logger.log(window.LogCategory.UI, 'show_context_menu', {
+        url: window.location.href
+    });
     removeContextMenu();
 
     contextMenu = document.createElement("div");
@@ -76,10 +84,28 @@ function showContextMenu(x, y) {
 
     console.log("Context menu created and added to DOM");
 
+    saveButton.addEventListener("click", () => {
+        window.Logger.log(window.LogCategory.UI, 'context_menu_save_btn_clicked', {
+            url: window.location.href
+        });
+        saveSelection();
+    });
+
     commentButton.addEventListener("click", () => {
+        window.Logger.log(window.LogCategory.UI, 'context_menu_comment_btn_clicked', {
+            url: window.location.href
+        });
         const comment = prompt("Enter your comment:");
         if (comment !== null) {
+            window.Logger.log(window.LogCategory.UI, 'context_menu_add_comment', {
+                has_comment: true,
+                comment_length: comment.length
+            });
             saveSelectionWithComment(comment);
+        } else {
+            window.Logger.log(window.LogCategory.UI, 'context_menu_add_comment_cancelled', {
+                has_comment: false
+            });
         }
     });
 }
