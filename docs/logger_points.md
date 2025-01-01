@@ -40,3 +40,12 @@
 | `context_menu_comment_btn_clicked` | 用户点击评论按钮时触发 |
 | `context_menu_add_comment` | 用户成功添加评论时触发 |
 | `context_menu_add_comment_cancelled` | 用户取消添加评论时触发 |
+
+### 浮动窗口（floatingWindow.js）
+
+| 埋点名称 | 描述 |
+|---------|------|
+| `floating_window_btn_clicked` | 用户点击浮动窗口按钮时触发 |
+| `record_item_clicked` | 用户点击记录列表项时触发 |
+| `record_item_delete_btn_clicked` | 用户点击记录删除按钮时触发 |
+| `floating_window_recordslist_shown` | 记录列表显示时触发 |
