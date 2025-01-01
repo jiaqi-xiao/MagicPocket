@@ -85,3 +85,36 @@
 | `popup_logs_cleared` | 日志清除成功时触发 |
 | `popup_logs_clear_failed` | 日志清除失败时触发 |
 | `popup_clear_logs_cancelled` | 用户取消清除日志时触发 |
+
+### 侧边栏（sidePanel.js）
+
+#### UI 交互日志
+| 埋点名称 | 描述 |
+|---------|------|
+| `side_panel_clear_all_btn_clicked` | 点击清除所有按钮时触发 |
+| `side_panel_records_cleared` | 记录清除完成时触发 |
+| `side_panel_highlight_text_btn_clicked` | 点击高亮文本按钮时触发 |
+| `side_panel_analyze_btn_clicked` | 点击分析按钮时触发 |
+| `side_panel_analyze_cancelled` | 取消分析（隐藏意图树）时触发 |
+| `side_panel_analyze_started` | 开始分析时触发 |
+| `side_panel_analyze_completed` | 分析完成时触发 |
+| `side_panel_analyze_failed` | 分析失败时触发，记录错误信息（error） |
+| `side_panel_record_item_clicked` | 点击记录项时触发，记录记录ID（record_id） |
+| `side_panel_record_item_delete_btn_clicked` | 点击记录删除按钮时触发，记录记录ID（record_id） |
+| `side_panel_record_item_deleted` | 记录删除完成时触发，记录记录ID（record_id） |
+| `side_panel_network_visualization_shown` | 网络可视化显示时触发 |
+| `side_panel_network_visualization_hidden` | 网络可视化隐藏时触发 |
+| `side_panel_scroll_indicator_clicked` | 点击滚动指示器时触发 |
+
+#### 系统日志
+| 埋点名称 | 描述 |
+|---------|------|
+| `side_panel_text_highlighted` | 文本高亮状态改变时触发，记录高亮文本和URL |
+| `side_panel_groups_generated` | 节点分组生成完成时触发，记录原始响应数据（raw_response） |
+| `side_panel_intent_tree_generated` | 意图树生成完成时触发，记录原始响应数据（raw_response） |
+
+#### 网络日志
+| 埋点名称 | 描述 |
+|---------|------|
+| `side_panel_group_api_called` | 调用分组API时触发，记录请求耗时（duration_ms）和记录数量（records_count） |
+| `side_panel_construct_api_called` | 调用构建API时触发，记录请求耗时（duration_ms）和分组数量（groups_count） |

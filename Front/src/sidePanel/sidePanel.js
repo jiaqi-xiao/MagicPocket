@@ -64,11 +64,16 @@ function initializeRecordsArea() {
 
     // 设置按钮事件监听器
     clearAllBtn.addEventListener('click', () => {
-        chrome.storage.local.set({ records: [] }, updateRecordsList);
+        window.Logger.log(window.LogCategory.UI, 'side_panel_clear_all_btn_clicked', {});
+        chrome.storage.local.set({ records: [] }, () => {
+            updateRecordsList();
+            window.Logger.log(window.LogCategory.UI, 'side_panel_records_cleared', {});
+        });
         hideNetworkVisualization();
     });
 
     highlightBtn.addEventListener('click', async () => {
+        window.Logger.log(window.LogCategory.UI, 'side_panel_highlight_text_btn_clicked', {});
         // 获取当前活动标签
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
@@ -91,14 +96,17 @@ function initializeRecordsArea() {
     });
 
     analyzeBtn.addEventListener('click', async () => {
+        window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_btn_clicked', {});
         // 如果网络可视化已经显示，则隐藏它
         if (networkManager) {
             hideNetworkVisualization();
             analyzeBtn.textContent = "Analyze";
+            window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_cancelled', {});
             return;
         }
 
         try {
+            window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_started', {});
             // 获取当前任务描述
             const taskDescription = await new Promise((resolve) => {
                 chrome.storage.local.get("currentTask", (data) => {
@@ -118,6 +126,7 @@ function initializeRecordsArea() {
             showLoadingState();
 
             // 调用后端 group_nodes API
+            const startTime = performance.now();
             const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
             const host = selectedHost || 'http://localhost:8000/';
             const groupResponse = await fetch(`${host}group/?scenario=${encodeURIComponent(taskDescription)}`, {
@@ -136,14 +145,24 @@ function initializeRecordsArea() {
                 })
             });
 
+            const groupApiTime = performance.now() - startTime;
+            window.Logger.log(window.LogCategory.NETWORK, 'side_panel_group_api_called', {
+                duration_ms: Math.round(groupApiTime),
+                records_count: records.length
+            });
+
             if (!groupResponse.ok) {
                 const errorData = await groupResponse.json();
                 throw new Error(`Group API error (${groupResponse.status}): ${JSON.stringify(errorData.detail)}`);
             }
             
             const groupsOfNodes = await groupResponse.json();
+            window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_groups_generated', {
+                raw_response: JSON.stringify(groupsOfNodes)
+            });
 
             // 调用后端 construct API
+            const constructStartTime = performance.now();
             console.log("networkManager status: ", networkManager);
             console.log("lastIntentTree: ", lastIntentTree);
             const intentTreeData = networkManager ? networkManager.getIntentTreeWithStates() : lastIntentTree;
@@ -173,6 +192,12 @@ function initializeRecordsArea() {
                 })
             });
             
+            const constructApiTime = performance.now() - constructStartTime;
+            window.Logger.log(window.LogCategory.NETWORK, 'side_panel_construct_api_called', {
+                duration_ms: Math.round(constructApiTime),
+                groups_count: groupsOfNodes.item.length
+            });
+            
             if (!constructResponse.ok) {
                 const errorData = await constructResponse.json();
                 throw new Error(`Construct API error: ${JSON.stringify(errorData.detail)}`);
@@ -186,8 +211,13 @@ function initializeRecordsArea() {
             // 添加场景信息
             intentTree.scenario = taskDescription;
             
+            window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_intent_tree_generated', {
+                raw_response: JSON.stringify(intentTree)
+            });
+
             // 显示网络视化容器
             showNetworkContainer();
+            window.Logger.log(window.LogCategory.UI, 'side_panel_network_visualization_shown', {});
             
             // 初始化或更新网络可视化
             if (!networkManager) {
@@ -203,12 +233,15 @@ function initializeRecordsArea() {
 
             // 更新按钮文本
             analyzeBtn.textContent = "Hide Intent Tree";
+            window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_completed', {});
             
         } catch (error) {
-            console.error('Visualization error:', error);
-            alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
-            hideNetworkVisualization();
-            analyzeBtn.textContent = "Analyze";
+            console.error('Error:', error);
+            alert('An error occurred during analysis: ' + error.message);
+            hideLoadingState();
+            window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_failed', {
+                error: error.message
+            });
         } finally {
             hideLoadingState();
         }
@@ -311,10 +344,14 @@ async function updateRecordsList() {
     await Promise.all(records.map(async (record, index) => {
         const item = document.createElement("div");
         item.className = "record-item";
+        item.setAttribute('data-record-id', record.id || index);
         
         // 添加点击事件和样式
         item.style.cursor = "pointer";
         item.addEventListener('click', async (e) => {
+            window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_clicked', {
+                record_id: record.id || index
+            });
             // 确保点击不是来自删除按钮或跳转按钮
             if (!e.target.closest('.delete-btn') && !e.target.closest('.goto-page-btn')) {
                 const url = chrome.runtime.getURL(`records.html?index=${index}`);
@@ -408,11 +445,17 @@ async function updateRecordsList() {
     // 添加删除按钮事件监听器
     scrollArea.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
+            window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_delete_btn_clicked', {
+                record_id: e.currentTarget.dataset.id
+            });
             const id = e.currentTarget.dataset.id;
             const records = await getRecords();
             const updatedRecords = records.filter(record => record.id !== id);
             await chrome.storage.local.set({ records: updatedRecords });
             updateRecordsList();
+            window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_deleted', {
+                record_id: id
+            });
         });
     });
 }
@@ -440,7 +483,7 @@ function showNetworkContainer() {
 
 function hideNetworkVisualization() {
     if (networkManager) {
-        // 保存当前的 intentTree 状态
+        window.Logger.log(window.LogCategory.UI, 'side_panel_network_visualization_hidden', {});
         lastIntentTree = networkManager.getIntentTreeWithStates();
         networkManager.cleanup();
         networkManager = null;
@@ -497,6 +540,7 @@ function initializeScrollIndicators() {
 
     // 添加点击事件
     upIndicator.addEventListener('click', () => {
+        window.Logger.log(window.LogCategory.UI, 'side_panel_scroll_indicator_clicked', {});
         const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
         if (activeItems.length > 0) {
             const scrollArea = document.getElementById("recordsScrollArea");
@@ -511,6 +555,7 @@ function initializeScrollIndicators() {
     });
 
     downIndicator.addEventListener('click', () => {
+        window.Logger.log(window.LogCategory.UI, 'side_panel_scroll_indicator_clicked', {});
         const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
         if (activeItems.length > 0) {
             const scrollArea = document.getElementById("recordsScrollArea");
@@ -901,4 +946,14 @@ function initializeResizer() {
             networkManager.updateSize();
         }
     });
+}
+
+// 计算节点总数的辅助函数
+function countNodes(node) {
+    if (!node) return 0;
+    let count = 1; // 计算当前节点
+    if (node.child && Array.isArray(node.child)) {
+        count += node.child.reduce((sum, child) => sum + countNodes(child), 0);
+    }
+    return count;
 }
