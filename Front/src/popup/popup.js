@@ -1,5 +1,6 @@
 // popup.js
 
+
 function displayRecords() {
     chrome.storage.local.get("records", async (data) => {
         const records = data.records || [];
@@ -67,6 +68,21 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
         window.close();
+    });
+
+    // 日志导出功能
+    document.getElementById('mp-popup-export-logs-btn').addEventListener('click', async () => {
+        await Logger.exportLogs();
+        window.close(); // 导出后关闭弹出窗口
+    });
+
+    // 日志清空功能
+    document.getElementById('mp-popup-clear-logs-btn').addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
+            await Logger.clearLogs();
+            alert('Logs cleared successfully');
+            window.close();
+        }
     });
 });
 
