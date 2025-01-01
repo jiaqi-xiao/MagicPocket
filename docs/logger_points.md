@@ -61,3 +61,27 @@
 | `options_host_selection_changed` | 用户更改域名选择时触发 |
 | `options_save_settings_btn_clicked` | 用户点击保存设置按钮时触发 |
 | `options_settings_saved` | 设置保存成功时触发 |
+
+### 新建任务（new_task.js）
+
+| 埋点名称 | 描述 |
+|---------|------|
+| `new_task_description_create_btn_clicked` | 用户输入新任务并点击创建任务按钮时触发 |
+
+### 弹出窗口（popup.js）
+
+| 埋点名称 | 描述 |
+|---------|------|
+| `popup_new_task_btn_clicked` | 用户点击新建任务按钮时触发 |
+| `popup_new_task_confirmed` | 用户确认创建新任务时触发 |
+| `popup_new_task_cancelled` | 用户取消创建新任务时触发 |
+| `popup_screenshot_btn_clicked` | 用户点击截图按钮时触发 |
+| `popup_side_panel_btn_clicked` | 用户点击侧边栏按钮时触发 |
+| `popup_side_panel_open_failed` | 侧边栏打开失败时触发 |
+| `popup_export_logs_btn_clicked` | 用户点击导出日志按钮时触发 |
+| `popup_logs_exported` | 日志导出成功时触发 |
+| `popup_logs_export_failed` | 日志导出失败时触发 |
+| `popup_clear_logs_btn_clicked` | 用户点击清除日志按钮时触发 |
+| `popup_logs_cleared` | 日志清除成功时触发 |
+| `popup_logs_clear_failed` | 日志清除失败时触发 |
+| `popup_clear_logs_cancelled` | 用户取消清除日志时触发 |

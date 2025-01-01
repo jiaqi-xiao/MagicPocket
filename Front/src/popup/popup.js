@@ -55,16 +55,24 @@ function deleteRecord(index) {
 
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("mp-popup-new-task-btn").addEventListener("click", () => {
+        window.Logger.log(window.LogCategory.UI, 'popup_new_task_btn_clicked', {});
         if (confirm("Are you sure you want to start a new task? This will clear all current records.")) {
+            window.Logger.log(window.LogCategory.UI, 'popup_new_task_confirmed', {});
             chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
             window.close();
+        } else {
+            window.Logger.log(window.LogCategory.UI, 'popup_new_task_cancelled', {});
         }
     });
 
     document.getElementById("mp-popup-side-panel-btn").addEventListener("click", () => {
+        window.Logger.log(window.LogCategory.UI, 'popup_side_panel_btn_clicked', {});
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             chrome.sidePanel.open({tabId: tabs[0].id}).catch(error => {
                 console.error('Error opening side panel:', error);
+                window.Logger.log(window.LogCategory.UI, 'popup_side_panel_open_failed', {
+                    error: error.message
+                });
             });
         });
         window.close();
@@ -72,16 +80,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 日志导出功能
     document.getElementById('mp-popup-export-logs-btn').addEventListener('click', async () => {
-        await Logger.exportLogs();
-        window.close(); // 导出后关闭弹出窗口
+        window.Logger.log(window.LogCategory.UI, 'popup_export_logs_btn_clicked', {});
+        try {
+            await Logger.exportLogs();
+            window.Logger.log(window.LogCategory.UI, 'popup_logs_exported', {});
+        } catch (error) {
+            window.Logger.log(window.LogCategory.UI, 'popup_logs_export_failed', {
+                error: error.message
+            });
+        }
+        window.close();
     });
 
     // 日志清空功能
     document.getElementById('mp-popup-clear-logs-btn').addEventListener('click', async () => {
+        window.Logger.log(window.LogCategory.UI, 'popup_clear_logs_btn_clicked', {});
         if (confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
-            await Logger.clearLogs();
-            alert('Logs cleared successfully');
+            try {
+                await Logger.clearLogs();
+                window.Logger.log(window.LogCategory.UI, 'popup_logs_cleared', {});
+                alert('Logs cleared successfully');
+            } catch (error) {
+                window.Logger.log(window.LogCategory.UI, 'popup_logs_clear_failed', {
+                    error: error.message
+                });
+            }
             window.close();
+        } else {
+            window.Logger.log(window.LogCategory.UI, 'popup_clear_logs_cancelled', {});
         }
     });
 });
@@ -95,6 +121,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 document.getElementById("mp-popup-screenshot-btn").addEventListener("click", () => {
+    window.Logger.log(window.LogCategory.UI, 'popup_screenshot_btn_clicked', {});
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         console.log("screenshotBtn clicked in popup.js");
         chrome.tabs.sendMessage(tabs[0].id, {action: "startScreenshot"});
