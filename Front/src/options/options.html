@@ -11,9 +11,17 @@
         <h1>Magic Pocket Settings</h1>
         <div class="form-group">
             <label for="apiKey">Google API Key</label>
-            <input type="text" id="apiKey" placeholder="输入您的Google API Key">
+            <input type="text" id="apiKey" placeholder="Enter your Google API Key">
         </div>
-        <button id="saveButton">保存</button>
+        <div class="form-group">
+            <label for="hostSelect">Host Configuration</label>
+            <select id="hostSelect"></select>
+            <div class="host-input-group">
+                <input type="text" id="newHost" placeholder="Enter new host URL">
+                <button id="addHostButton">Add Host</button>
+            </div>
+        </div>
+        <button id="saveButton">Save</button>
         <p id="status"></p>
     </div>
     <script src="options.js"></script>
