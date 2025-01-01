@@ -39,16 +39,11 @@ function handleMouseUp(e) {
     if (selectedText) {
         console.log("Text selected:", selectedText);
         const rect = range.getBoundingClientRect();
+
         const x = rect.left + window.scrollX;
         const y = rect.top + window.scrollY - 50;
 
-        // 记录文本选择事件
-        window.Logger.log(window.LogCategory.UI, 'TEXT_SELECT', {
-            text: selectedText,
-            url: window.location.href
-        });
-
-        showContextMenu(x, y);
+        setTimeout(() => showContextMenu(x, y), 0);
     } else {
         removeContextMenu();
     }
@@ -57,11 +52,6 @@ function handleMouseUp(e) {
 function showContextMenu(x, y) {
     console.log("Showing context menu");
     removeContextMenu();
-
-    // 记录上下文菜单显示事件
-    window.Logger.log(window.LogCategory.UI, 'CONTEXT_MENU_SHOW', {
-        url: window.location.href
-    });
 
     contextMenu = document.createElement("div");
     contextMenu.className = "wcr-context-menu";
@@ -86,24 +76,40 @@ function showContextMenu(x, y) {
 
     console.log("Context menu created and added to DOM");
 
-    saveButton.addEventListener("click", () => {
-        window.Logger.log(window.LogCategory.UI, 'SAVE_SELECTION', {
-            content: selectedText,
-            url: window.location.href
-        });
-        saveSelection();
-    });
-
     commentButton.addEventListener("click", () => {
         const comment = prompt("Enter your comment:");
         if (comment !== null) {
-            window.Logger.log(window.LogCategory.UI, 'ADD_COMMENT', {
-                text: selectedText,
-                comment: comment,
-                url: window.location.href
-            });
             saveSelectionWithComment(comment);
         }
+    });
+}
+
+function saveSelectionWithComment(comment) {
+    console.log("Saving selection with comment:", selectedText, comment);
+    const paragraph = window.getSelection().anchorNode.parentElement;
+    let data = {
+        type: "text",
+        content: selectedText,
+        comment: comment,
+        paragraph: paragraph.textContent,
+        context: paragraph.textContent,
+        url: window.location.href,
+        timestamp: new Date().toISOString()
+    };
+
+    loadExtraContextFromGoogleMaps(data)
+    .then(data => {
+        console.log("Data to save:", data);
+        chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("Error sending message:", chrome.runtime.lastError);
+            } else {
+                console.log("Save response:", response);
+                removeContextMenu();
+                // 清除选中状态
+                window.getSelection().removeAllRanges();
+            }
+        });
     });
 }
 
@@ -149,39 +155,38 @@ function saveSelection() {
         console.log("Data to save:", data);
 
         chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
-            console.log("Save response:", response);
-            removeContextMenu();
-            // 清除选中状态
-            window.getSelection().removeAllRanges();
-        });
-    });
-}
-
-function saveSelectionWithComment(comment) {
-    console.log("Saving selection with comment:", selectedText, comment);
-    const paragraph = window.getSelection().anchorNode.parentElement;
-    let data = {
-        type: "text",
-        content: selectedText,
-        comment: comment,
-        paragraph: paragraph.textContent,
-        context: paragraph.textContent,
-        url: window.location.href,
-        timestamp: new Date().toISOString()
-    };
-
-    loadExtraContextFromGoogleMaps(data)
-    .then(data => {
-        console.log("Data to save:", data);
-        chrome.runtime.sendMessage({
-            action: "saveRecord",
-            data: data
-        }, response => {
-            console.log("Save response:", response);
+            if (chrome.runtime.lastError) {
+                console.error("Error sending message:", chrome.runtime.lastError);
+            } else {
+                console.log("Save response:", response);
+                removeContextMenu();
+                // 清除选中状态
+                window.getSelection().removeAllRanges();
+            }
         });
     });
 
-    removeContextMenu();
+    // console.log("Data to save:", data);
+
+    // chrome.runtime.sendMessage({ action: "saveData", data: data }, (response) => {
+    //     if (chrome.runtime.lastError) {
+    //         console.error("Error sending message:", chrome.runtime.lastError);
+    //     } else {
+    //         console.log("Save response:", response);
+    //         removeContextMenu();
+    //         // 清除选中状态
+    //         window.getSelection().removeAllRanges();
+    //         // 输出当前已经保存的记录数
+    //         chrome.storage.local.get("records", (data) => {
+    //             if (data && data.records) {
+    //                 console.log("[After save]Current records number:", data.records.length);
+    //             } else {
+    //                 console.log("[After save]No records");
+    //             }
+    //         });
+    //     }
+    // });
+
 }
 
 function removeContextMenu() {
@@ -192,123 +197,101 @@ function removeContextMenu() {
     }
 }
 
-function loadExtraContextFromGoogleMaps(data) {
+async function loadExtraContextFromGoogleMaps(data) {
     const url = window.location.href;
 
     if (!url.startsWith("https://www.google.com/maps/place/")) {
-        return Promise.resolve(data);
+        return data;
     }
 
-    // https://www.google.com/maps/place/Bas%C3%AClica+de+la+Sagrada+Fam%C3%ADlia/@41.3909016,2.1316527,14z/data=!4m6!3m5!1s0x12a4a2dcd83dfb93:0x9bd8aac21bc3c950!8m2!3d41.4036299!4d2.1743558!16zL20vMGc2bjM?entry=ttu&g_ep=EgoyMDI0MTAwOS4wIKXMDSoASAFQAw%3D%3D
+    // https://www.google.com/maps/place/Bas%C3%ADlica+de+la+Sagrada+Fam%C3%ADlia/@41.3909016,2.1316527,14z/data=!4m6!3m5!1s0x12a4a2dcd83dfb93:0x9bd8aac21bc3c950!8m2!3d41.4036299!4d2.1743558!16zL20vMGc2bjM?entry=ttu&g_ep=EgoyMDI0MTAwOS4wIKXMDSoASAFQAw%3D%3D
     const textQuery = decodeURIComponent(url.match(/place\/([^/@]+)/)?.[1] || '');
     const [latitude, longitude] = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/i)?.slice(1).map(Number) || [null, null];
 
-    const apiKey = getGoogleAPIKey();
-        
-    if (!apiKey) {
-        throw new Error("Google API Key 未设置");
-    }
-    // DOC: https://developers.google.com/maps/documentation/places/web-service/text-search
-    const response = fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id,places.editorialSummary'
-        },
-        body: JSON.stringify({
-            textQuery: textQuery,
-            openNow: true,
-            pageSize: 1,
-            languageCode: 'en',
-            locationBias: {
-                circle: {
-                    center: {latitude: latitude, longitude: longitude},
-                    radius: 500.0
-                }
-            }
-        })
-    });
+    // console.log("textQuery: ", textQuery);
+    // console.log("latitude: ", latitude);
+    // console.log("longitude: ", longitude);  
 
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    const res = await placeInfoWithLocation(textQuery, latitude, longitude)
 
-    const dataJson = response.json();
-    console.log("Google Maps API Return Info:", dataJson);
+    if (res) {
+        data.extraGMLocationContext = {
+            PlaceDisplayName: res.PlaceDisplayName,
+            PlaceFormattedAddress: res.PlaceFormattedAddress,
+            PlaceID: res.PlaceID,
+            PlaceEditorialSummary: res.PlaceEditorialSummary
+        };
+    }   
+    return data;
 
-    if (dataJson.places && dataJson.places.length > 0) {
-        const res = {};
-        res.PlaceDisplayName = dataJson.places[0].displayName.text;
-        res.PlaceFormattedAddress = dataJson.places[0].formattedAddress;
-        res.PlaceID = dataJson.places[0].placeID;
-        res.PlaceEditorialSummary = dataJson.places[0].editorialSummary.text;
-
-        console.log(`Name: ${res.PlaceDisplayName}`);
-        console.log(`Address: ${res.PlaceFormattedAddress}`);
-        console.log("PlaceID: ", res.PlaceID);
-        console.log("PlaceEditorialSummary: ", res.PlaceEditorialSummary);
-        console.log('---');
-
-        data.extraGMLocationContext = res;
-    } else {
-        console.log("没有找到符合条件的地点");
-    }
-
-    return Promise.resolve(data);
 }
 
-function placeInfoWithLocation(textQuery, longitude, latitude) {
-    const apiKey = getGoogleAPIKey();
+async function placeInfoWithLocation(textQuery, longitude, latitude) {
+    try {
+        const apiKey = await getGoogleAPIKey();
+        // console.log("Google API Key: ", apiKey);
+
+        let res = {};
         
-    if (!apiKey) {
-        throw new Error("Google API Key 未设置");
-    }
-    // DOC: https://developers.google.com/maps/documentation/places/web-service/text-search
-    const response = fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id,places.editorialSummary'
-        },
-        body: JSON.stringify({
-            textQuery: textQuery,
-            openNow: true,
-            pageSize: 1,
-            languageCode: 'en',
-            locationBias: {
-                circle: {
-                    center: {latitude: latitude, longitude: longitude},
-                    radius: 500.0
+        if (!apiKey) {
+            throw new Error("Google API Key 未设置");
+        }
+        // DOC: https://developers.google.com/maps/documentation/places/web-service/text-search
+        const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': apiKey,
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id,places.editorialSummary'
+                // 'X-Goog-FieldMask': '*'
+            },
+            body: JSON.stringify({
+                textQuery: textQuery,
+                openNow: true,
+                pageSize: 1,
+                languageCode: 'en',
+                locationBias: {
+                    circle: {
+                        center: {latitude: latitude, longitude: longitude},
+                        radius: 500.0
+                    }
                 }
-            }
-        })
-    });
+            })
+        });
 
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-    const dataJson = response.json();
-    console.log("Google Maps API Return Info:", dataJson);
+        const data = await response.json();
+        console.log("Google Maps API Return Info:", data);
 
-    if (dataJson.places && dataJson.places.length > 0) {
-        const res = {};
-        res.PlaceDisplayName = dataJson.places[0].displayName.text;
-        res.PlaceFormattedAddress = dataJson.places[0].formattedAddress;
-        res.PlaceID = dataJson.places[0].placeID;
-        res.PlaceEditorialSummary = dataJson.places[0].editorialSummary.text;
+        if (data.places && data.places.length > 0) {
+            // data.places.forEach((place, index) => {
+            //     console.log(`地点 ${index + 1}:`);
+            //     console.log(`名称: ${place.displayName}`);
+            //     console.log(`地址: ${place.formattedAddress}`);
+            //     console.log("ID: ", place.id);
+            //     console.log('---');
+            // });
 
-        console.log(`Name: ${res.PlaceDisplayName}`);
-        console.log(`Address: ${res.PlaceFormattedAddress}`);
-        console.log("PlaceID: ", res.PlaceID);
-        console.log("PlaceEditorialSummary: ", res.PlaceEditorialSummary);
-        console.log('---');
+            res.PlaceDisplayName = data.places[0].displayName.text;
+            res.PlaceFormattedAddress = data.places[0].formattedAddress;
+            res.PlaceID = data.places[0].placeID;
+            res.PlaceEditorialSummary = data.places[0].editorialSummary.text;
 
+            console.log(`Name: ${res.PlaceDisplayName}`);
+            console.log(`Address: ${res.PlaceFormattedAddress}`);
+            console.log("PlaceID: ", res.PlaceID);
+            console.log("PlaceEditorialSummary: ", res.PlaceEditorialSummary);
+            console.log('---');
+
+        } else {
+            console.log("没有找到符合条件的地点");
+        }
         return res;
-    } else {
-        console.log("没有找到符合条件的地点");
+    } catch (error) {
+        console.error("获取地点信息时出错:", error);
         return null;
     }
 }
