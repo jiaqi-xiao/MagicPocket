@@ -42,8 +42,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add new host
     addHostButton.addEventListener('click', () => {
+        window.Logger.log(window.LogCategory.UI, 'options_add_host_btn_clicked', {});
+
         const newHost = newHostInput.value.trim();
-        if (!newHost) return;
+        if (!newHost) {
+            window.Logger.log(window.LogCategory.UI, 'options_add_host_cancelled', {
+                reason: 'empty_input'
+            });
+            return;
+        }
 
         // Ensure URL has protocol and trailing slash
         let formattedHost = newHost;
@@ -67,12 +74,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateHostSelect(hosts);
                     newHostInput.value = '';
                     status.textContent = 'New host added';
+                    window.Logger.log(window.LogCategory.UI, 'options_host_added', {
+                        host: formattedHost
+                    });
                     setTimeout(() => {
                         status.textContent = '';
                     }, 1000);
                 });
             } else {
                 status.textContent = 'Host already exists';
+                window.Logger.log(window.LogCategory.UI, 'options_add_host_failed', {
+                    reason: 'host_exists',
+                    host: formattedHost
+                });
                 setTimeout(() => {
                     status.textContent = '';
                 }, 1000);
@@ -82,6 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save the selected host when it changes
     hostSelect.addEventListener('change', () => {
+        window.Logger.log(window.LogCategory.UI, 'options_host_selection_changed', {
+            selected_host: hostSelect.value
+        });
         chrome.storage.sync.set({ selectedHost: hostSelect.value }, () => {
             status.textContent = 'Host selection saved';
             setTimeout(() => {
@@ -92,12 +109,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save settings
     saveButton.addEventListener('click', () => {
+        window.Logger.log(window.LogCategory.UI, 'options_save_settings_btn_clicked', {});
         const apiKey = apiKeyInput.value;
         chrome.storage.sync.set({ 
             googleApiKey: apiKey,
             selectedHost: hostSelect.value
         }, () => {
             status.textContent = 'Settings saved';
+            window.Logger.log(window.LogCategory.UI, 'options_settings_saved', {
+                has_api_key: !!apiKey,
+                selected_host: hostSelect.value
+            });
             setTimeout(() => {
                 status.textContent = '';
             }, 1000);

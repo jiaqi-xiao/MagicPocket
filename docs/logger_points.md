@@ -49,3 +49,15 @@
 | `record_item_clicked` | 用户点击记录列表项时触发 |
 | `record_item_delete_btn_clicked` | 用户点击记录删除按钮时触发 |
 | `floating_window_recordslist_shown` | 记录列表显示时触发 |
+
+### 选项页面（options.js）
+
+| 埋点名称 | 描述 |
+|---------|------|
+| `options_add_host_btn_clicked` | 用户点击添加域名按钮时触发 |
+| `options_add_host_cancelled` | 用户取消添加域名时触发（空输入） |
+| `options_host_added` | 新域名添加成功时触发 |
+| `options_add_host_failed` | 添加域名失败时触发（域名已存在） |
+| `options_host_selection_changed` | 用户更改域名选择时触发 |
+| `options_save_settings_btn_clicked` | 用户点击保存设置按钮时触发 |
+| `options_settings_saved` | 设置保存成功时触发 |
