@@ -414,10 +414,12 @@ class FloatingContainer {
                     }
 
                     // 添加调试信息
-                    console.log('Attempting to connect to backend at http://localhost:8000/group/');
+                    const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+                    const host = selectedHost || 'http://localhost:8000/';
+                    console.log('Attempting to connect to backend at ' + host + 'group/');
                     
                     // 调用后端 group_nodes API
-                    const groupResponse = await fetch('http://localhost:8000/group/', {
+                    const groupResponse = await fetch(`${host}group/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -432,7 +434,7 @@ class FloatingContainer {
                             }))
                         })
                     }).catch(error => {
-                        throw new Error(`Network error: ${error.message}. Please ensure the backend server is running at http://localhost:8000`);
+                        throw new Error(`Network error: ${error.message}. Please ensure the backend server is running at ${host}`);
                     });
                     
                     if (!groupResponse.ok) {
@@ -451,7 +453,7 @@ class FloatingContainer {
                     
                     console.log("Construct API request body:", JSON.stringify(constructRequestBody, null, 2));
                     
-                    const constructResponse = await fetch('http://localhost:8000/construct/', {
+                    const constructResponse = await fetch(`${host}construct/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -479,7 +481,7 @@ class FloatingContainer {
                     
                 } catch (error) {
                     console.error('Visualization error details:', error);
-                    alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+                    alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(${host})\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
                 }
             }
         });
@@ -858,13 +860,15 @@ async function handleShowNetwork() {
         
     } catch (error) {
         console.error('Visualization error details:', error);
-        alert(`无法加载网络可���化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+        alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
     }
 }
 
 // API调用函数
 async function callGroupAPI(records) {
-    const response = await fetch('http://localhost:8000/group/', {
+    const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+    const host = selectedHost || 'http://localhost:8000/';
+    const response = await fetch(`${host}group/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -886,7 +890,9 @@ async function callGroupAPI(records) {
 }
 
 async function callConstructAPI(data) {
-    const response = await fetch('http://localhost:8000/construct/', {
+    const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+    const host = selectedHost || 'http://localhost:8000/';
+    const response = await fetch(`${host}construct/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

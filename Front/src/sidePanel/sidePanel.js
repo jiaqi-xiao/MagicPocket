@@ -118,7 +118,9 @@ function initializeRecordsArea() {
             showLoadingState();
 
             // 调用后端 group_nodes API
-            const groupResponse = await fetch(`http://localhost:8000/group/?scenario=${encodeURIComponent(taskDescription)}`, {
+            const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+            const host = selectedHost || 'http://localhost:8000/';
+            const groupResponse = await fetch(`${host}group/?scenario=${encodeURIComponent(taskDescription)}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -156,7 +158,7 @@ function initializeRecordsArea() {
                 }));
             }
 
-            const constructResponse = await fetch('http://localhost:8000/construct/', {
+            const constructResponse = await fetch(`${host}construct/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -204,7 +206,7 @@ function initializeRecordsArea() {
             
         } catch (error) {
             console.error('Visualization error:', error);
-            alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+            alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
             hideNetworkVisualization();
             analyzeBtn.textContent = "Analyze";
         } finally {
