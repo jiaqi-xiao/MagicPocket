@@ -118,3 +118,19 @@
 |---------|------|
 | `side_panel_group_api_called` | 调用分组API时触发，记录请求耗时（duration_ms）和记录数量（records_count） |
 | `side_panel_construct_api_called` | 调用构建API时触发，记录请求耗时（duration_ms）和分组数量（groups_count） |
+
+### 网络可视化（networkVisualization.js）
+
+#### UI 交互日志
+| 埋点名称 | 描述 |
+|---------|------|
+| `network_visualization_initialized` | 网络可视化初始化完成时触发 |
+| `network_node_clicked` | 点击节点时触发 |
+| `network_node_menu_opened` | 节点菜单打开时触发 |
+| `network_node_menu_item_clicked` | 点击节点菜单项时触发 |
+| `network_node_added` | 添加新节点时触发 |
+| `network_node_edited` | 编辑节点时触发 |
+| `network_node_deleted` | 删除节点时触发 |
+| `network_node_state_changed` | 节点状态改变时触发 |
+| `network_direction_changed` | 层级布局方向改变时触发 |
+| `network_tooltip_shown` | 显示节点悬停提示时触发 |
