@@ -547,6 +547,14 @@ class NetworkManager {
         NetworkManager.activeNodeMenu = true;
         
         const menu = document.createElement('div');
+        const node = this.nodes.get(nodeId);
+        
+        // 记录菜单打开日志
+        window.Logger.log(window.LogCategory.UI, 'network_node_menu_opened', {
+            node_id: nodeId,
+            type: node.type,
+            label: node.label
+        });
         
         // 获取节点的DOM位置
         const nodePosition = this.network.getPositions([nodeId])[nodeId];
@@ -560,7 +568,6 @@ class NetworkManager {
         const menuY = domPosition.y + containerRect.top;
         
         // 获取节点的大小信息
-        const node = this.nodes.get(nodeId);
         const nodeSize = node.size || 16;
         
         this.setupNodeMenu(menu, menuX, menuY);
@@ -718,16 +725,46 @@ class NetworkManager {
 
     // 设置菜单项动作
     setupMenuItemAction(item, nodeId, text) {
-        if (text.includes('Node')) {
-            item.onclick = () => this.deleteNode(nodeId, item);
-        } else {
-            item.onclick = () => this.toggleNodeState(nodeId, item);
+        const node = this.nodes.get(nodeId);
+        if (text.includes('Delete')) {
+            item.onclick = () => {
+                // 记录菜单项点击日志
+                window.Logger.log(window.LogCategory.UI, 'network_node_menu_item_clicked', {
+                    node_id: nodeId,
+                    type: node.type,
+                    label: node.label,
+                    confirmed: this.nodeStates.get(nodeId),
+                    action: 'delete'
+                });
+                this.deleteNode(nodeId, item);
+            };
+        } else if (text.includes('Set as')) {
+            item.onclick = () => {
+                // 记录菜单项点击日志
+                window.Logger.log(window.LogCategory.UI, 'network_node_menu_item_clicked', {
+                    node_id: nodeId,
+                    type: node.type,
+                    label: node.label,
+                    confirmed: this.nodeStates.get(nodeId),
+                    action: 'toggle_state'
+                });
+                this.toggleNodeState(nodeId, item);
+            };
         }
     }
 
     // 设置添加子意图节点的动作
     setupAddChildIntentAction(menuItem, nodeId) {
+        const node = this.nodes.get(nodeId);
         menuItem.onclick = async () => {
+            // 记录菜单项点击日志
+            window.Logger.log(window.LogCategory.UI, 'network_node_menu_item_clicked', {
+                node_id: nodeId,
+                type: node.type,
+                label: node.label,
+                action: 'add_child'
+            });
+
             const defaultValue = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
             
             this.createDialog('Add New Intent', defaultValue, async (intentName) => {
@@ -749,6 +786,15 @@ class NetworkManager {
                     to: newNodeId,
                     arrows: 'to',
                     dashes: false
+                });
+
+                // 记录节点添加日志
+                window.Logger.log(window.LogCategory.UI, 'network_node_added', {
+                    node_id: newNodeId,
+                    type: 'intent',
+                    label: intentName,
+                    parent_id: nodeId,
+                    parent_label: node.label
                 });
 
                 // 设置新节点状态为已确认
@@ -783,11 +829,27 @@ class NetworkManager {
 
     // 编辑意图节点的动作
     setupEditIntentAction(menuItem, nodeId) {
+        const node = this.nodes.get(nodeId);
         menuItem.onclick = async () => {
-            const node = this.nodes.get(nodeId);
+            // 记录菜单项点击日志
+            window.Logger.log(window.LogCategory.UI, 'network_node_menu_item_clicked', {
+                node_id: nodeId,
+                type: node.type,
+                label: node.label,
+                action: 'edit'
+            });
+
             const intentName = node.label;
             
             this.createDialog('Edit Intent', intentName, async (newIntentName) => {
+                // 记录节点编辑日志
+                window.Logger.log(window.LogCategory.SYSTEM, 'network_node_edited', {
+                    node_id: nodeId,
+                    type: node.type,
+                    old_label: intentName,
+                    new_label: newIntentName
+                });
+                
                 // 更新意图树数据
                 if (this.intentTree.item) {
                     const intentData = this.intentTree.item[intentName];
@@ -831,10 +893,16 @@ class NetworkManager {
         if (nodeId === 'root') {
             return; // 不允许删除根节点
         }
-
+        const node = this.nodes.get(nodeId);
+        // 记录节点删除日志
+        window.Logger.log(window.LogCategory.UI, 'network_node_deleted', {
+            node_id: nodeId,
+            type: node.type,
+            label: node.label
+        });
+        
         try {
             // 获取要删除的节点信息
-            const node = this.nodes.get(nodeId);
             if (!node) {
                 throw new Error('Node not found');
             }
@@ -949,6 +1017,15 @@ class NetworkManager {
                         easingFunction: 'easeInOutQuad'
                     }
                 });
+            });
+
+            // 添加网络可视化初始化完成的日志
+            const nodes = this.nodes.get();
+            window.Logger.log(window.LogCategory.UI, 'network_visualization_initialized', {
+                total_nodes: nodes.length,
+                edges_count: this.edges.length,
+                intent_nodes: nodes.filter(node => node.type === 'intent').length,
+                record_nodes: nodes.filter(node => node.type === 'record').length
             });
         }, 100);
     }
@@ -1094,6 +1171,16 @@ class NetworkManager {
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
+                const node = this.nodes.get(nodeId);
+                
+                // 记录节点点击日志
+                window.Logger.log(window.LogCategory.UI, 'network_node_clicked', {
+                    node_id: nodeId,
+                    type: node.type,
+                    label: node.label,
+                    confirmed: this.nodeStates.get(nodeId)
+                });
+
                 this.createNodeMenu(nodeId);
             }
         });
@@ -1380,6 +1467,15 @@ class NetworkManager {
         verticalBtn.title = "Vertical Layout";
 
         const updateButtonStyles = (isHorizontal) => {
+            const oldDirection = NetworkManager.hierarchicalDirection;
+            NetworkManager.hierarchicalDirection = isHorizontal ? 'LR' : 'UD';
+
+            // 记录布局方向改变日志
+            window.Logger.log(window.LogCategory.UI, 'network_direction_changed', {
+                old_direction: oldDirection,
+                new_direction: NetworkManager.hierarchicalDirection
+            });
+
             Object.assign(horizontalBtn.style, {
                 backgroundColor: isHorizontal ? "#fff" : "transparent",
                 color: isHorizontal ? "#333" : "#666",
@@ -1394,7 +1490,6 @@ class NetworkManager {
 
         horizontalBtn.addEventListener("click", () => {
             if (NetworkManager.hierarchicalDirection !== 'LR') {
-                NetworkManager.hierarchicalDirection = 'LR';
                 updateButtonStyles(true);
                 
                 // 如果当前是层级布局，立即更新视图
@@ -1418,7 +1513,6 @@ class NetworkManager {
 
         verticalBtn.addEventListener("click", () => {
             if (NetworkManager.hierarchicalDirection !== 'UD') {
-                NetworkManager.hierarchicalDirection = 'UD';
                 updateButtonStyles(false);
                 
                 // 如果当前是层级布局，立即更新视图

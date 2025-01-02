@@ -65,6 +65,9 @@ class FloatingWindow {
 
         // 侧边栏控制
         this.element.addEventListener("click", () => {
+            window.Logger.log(window.LogCategory.UI, 'floating_window_btn_clicked', {
+                url: window.location.href
+            });
             chrome.runtime.sendMessage({
                 action: 'closeSidePanel'
             }, response => {
@@ -124,6 +127,10 @@ class FloatingWindow {
         //     this.containerArea.style.width = "95vw";
         //     this.containerArea.style.right = "2.5vw";
         // }
+
+        window.Logger.log(window.LogCategory.UI, 'floating_window_recordslist_shown', {
+            url: window.location.href
+        });
         
         this.containers.forEach(container => {
             container.show();
@@ -414,10 +421,12 @@ class FloatingContainer {
                     }
 
                     // 添加调试信息
-                    console.log('Attempting to connect to backend at http://localhost:8000/group/');
+                    const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+                    const host = selectedHost || 'http://localhost:8000/';
+                    console.log('Attempting to connect to backend at ' + host + 'group/');
                     
                     // 调用后端 group_nodes API
-                    const groupResponse = await fetch('http://localhost:8000/group/', {
+                    const groupResponse = await fetch(`${host}group/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -432,7 +441,7 @@ class FloatingContainer {
                             }))
                         })
                     }).catch(error => {
-                        throw new Error(`Network error: ${error.message}. Please ensure the backend server is running at http://localhost:8000`);
+                        throw new Error(`Network error: ${error.message}. Please ensure the backend server is running at ${host}`);
                     });
                     
                     if (!groupResponse.ok) {
@@ -451,7 +460,7 @@ class FloatingContainer {
                     
                     console.log("Construct API request body:", JSON.stringify(constructRequestBody, null, 2));
                     
-                    const constructResponse = await fetch('http://localhost:8000/construct/', {
+                    const constructResponse = await fetch(`${host}construct/`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -479,7 +488,7 @@ class FloatingContainer {
                     
                 } catch (error) {
                     console.error('Visualization error details:', error);
-                    alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+                    alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(${host})\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
                 }
             }
         });
@@ -632,30 +641,26 @@ function getButtonTextColor(id) {
 }
 
 function updateRecordsList(scrollArea, buttonArea) {
-    chrome.storage.local.get("records", async (data) => {
-        const records = data.records || [];
-        console.log("records numbers: ", records.length);
-
-        // 清空容器内容
-        scrollArea.innerHTML = "";
-        // buttonArea.innerHTML = "";
-
-        // // 创建按钮
-        // const clearAllBtn = createButton("Clear All", "clearAllBtn");
-        // const startGenerateBtn = createButton("Start Generation", "startGenerateBtn");
-        // const highlightTextBtn = createButton("Highlight Text", "highlightTextBtn");
-
-        // // 添加按钮到按钮区域
-        // buttonArea.appendChild(clearAllBtn);
-        // buttonArea.appendChild(startGenerateBtn);
-        // buttonArea.appendChild(highlightTextBtn);
-
-        // // 每次都重新绑定事件监听器
-        // setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn);
-
-        // 渲染记录
-        await renderRecords(records, scrollArea);
-    });
+    try {
+        chrome.storage.local.get("records", (data) => {
+            if (chrome.runtime.lastError) {
+                console.log('Extension context invalidated:', chrome.runtime.lastError);
+                return;
+            }
+            const records = data.records || [];
+            renderRecords(records, scrollArea);
+            
+            // 更新按钮区域的显示/隐藏状态
+            if (buttonArea) {
+                const buttons = buttonArea.querySelectorAll('button');
+                buttons.forEach(button => {
+                    button.style.display = records.length > 0 ? '' : 'none';
+                });
+            }
+        });
+    } catch (error) {
+        console.log('Error in updateRecordsList:', error);
+    }
 }
 
 async function renderRecords(records, scrollArea) {
@@ -730,31 +735,72 @@ function createRecordItemHtml(record, contentHtml, index) {
 
 function setupRecordItemEvents(item, index) {
     item.addEventListener("click", (e) => {
-        if (e.target.closest('.delete-btn')) {
-            e.stopPropagation();
-            deleteRecord(index).then(() => {
-                const scrollArea = item.closest('.container-content').querySelector('div');
-                const buttonArea = scrollArea.nextElementSibling.querySelector('div');
-                updateRecordsList(scrollArea, buttonArea);
-            });
-        } else {
-            const url = chrome.runtime.getURL(`records.html?index=${index}`);
-            window.open(url, "_blank");
+        try {
+            if (e.target.closest('.delete-btn')) {
+                e.stopPropagation();
+                window.Logger.log(window.LogCategory.UI, 'record_item_delete_btn_clicked', {
+                    record_index: index,
+                    url: window.location.href
+                });
+                deleteRecord(index).then(() => {
+                    try {
+                        const scrollArea = item.closest('.container-content').querySelector('div');
+                        const buttonArea = scrollArea.nextElementSibling.querySelector('div');
+                        updateRecordsList(scrollArea, buttonArea);
+                    } catch (error) {
+                        console.log('Error updating records list after delete:', error);
+                    }
+                }).catch(error => {
+                    console.log('Error deleting record:', error);
+                });
+            } else {
+                window.Logger.log(window.LogCategory.UI, 'record_item_clicked', {
+                    record_index: index,
+                    url: window.location.href
+                });
+                try {
+                    const url = chrome.runtime.getURL(`records.html?index=${index}`);
+                    if (chrome.runtime.lastError) {
+                        console.log('Extension context invalidated:', chrome.runtime.lastError);
+                        return;
+                    }
+                    window.open(url, "_blank");
+                } catch (error) {
+                    console.log('Error opening record in new tab:', error);
+                }
+            }
+        } catch (error) {
+            console.log('Error in record item click handler:', error);
         }
     });
 }
 
 async function deleteRecord(index) {
-    return new Promise((resolve) => {
-        chrome.storage.local.get("records", (data) => {
-            const records = data.records || [];
-            records.splice(index, 1);
-            chrome.storage.local.set({ records: records }, () => {
-                console.log("Record deleted at index:", index);
-                resolve();
+    try {
+        return new Promise((resolve, reject) => {
+            chrome.storage.local.get("records", (data) => {
+                if (chrome.runtime.lastError) {
+                    console.log('Extension context invalidated:', chrome.runtime.lastError);
+                    reject(chrome.runtime.lastError);
+                    return;
+                }
+                const records = data.records || [];
+                records.splice(index, 1);
+                chrome.storage.local.set({ records: records }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.log('Error saving records:', chrome.runtime.lastError);
+                        reject(chrome.runtime.lastError);
+                        return;
+                    }
+                    console.log("Record deleted at index:", index);
+                    resolve();
+                });
             });
         });
-    });
+    } catch (error) {
+        console.log('Error in deleteRecord:', error);
+        throw error;
+    }
 }
 
 function setupButtonListeners(clearAllBtn, startGenerateBtn, highlightTextBtn) {
@@ -858,13 +904,15 @@ async function handleShowNetwork() {
         
     } catch (error) {
         console.error('Visualization error details:', error);
-        alert(`无法加载网络可���化：${error.message}\n\n请确保：\n1. 后端服务器正在运行(http://localhost:8000)\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
+        alert(`无法加载网络可视化：${error.message}\n\n请确保：\n1. 后端服务器正在运行\n2. 没有网络连接问题\n3. 浏览器控制台中查看详细错误信息`);
     }
 }
 
 // API调用函数
 async function callGroupAPI(records) {
-    const response = await fetch('http://localhost:8000/group/', {
+    const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+    const host = selectedHost || 'http://localhost:8000/';
+    const response = await fetch(`${host}group/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -886,7 +934,9 @@ async function callGroupAPI(records) {
 }
 
 async function callConstructAPI(data) {
-    const response = await fetch('http://localhost:8000/construct/', {
+    const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
+    const host = selectedHost || 'http://localhost:8000/';
+    const response = await fetch(`${host}construct/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

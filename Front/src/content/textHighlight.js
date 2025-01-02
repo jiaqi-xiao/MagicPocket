@@ -238,8 +238,25 @@ function highlightMatchingText(ragResult) {
     const { top_k, bottom_k } = ragResult;
     const sentencesToHighlight = new Map();
     
+    // 用于记录高亮统计的对象
+    const highlightStats = {
+        // 接口返回的文本
+        top_k_texts: new Set(),
+        bottom_k_texts: new Set(),
+        // 实际高亮的文本
+        highlighted_top_k_texts: new Set(),
+        highlighted_bottom_k_texts: new Set()
+    };
+
     // 辅助函数：处理多行文本
     const processSentence = (sentence, className) => {
+        // 记录接口返回的原始文本
+        if (className === TOP_K_HIGHLIGHT_CLASS) {
+            highlightStats.top_k_texts.add(sentence);
+        } else if (className === BOTTOM_K_HIGHLIGHT_CLASS) {
+            highlightStats.bottom_k_texts.add(sentence);
+        }
+
         // 分割多行文本并清理
         const cleanedSentences = sentence
             .split(/[\n\r\t]+/)  // 按换行符和制表符分割
@@ -252,6 +269,12 @@ function highlightMatchingText(ragResult) {
             const classes = sentencesToHighlight.get(cleanedSentence) || [];
             if (!classes.includes(className)) {
                 classes.push(className);
+                // 记录实际高亮的文本
+                if (className === TOP_K_HIGHLIGHT_CLASS) {
+                    highlightStats.highlighted_top_k_texts.add(cleanedSentence);
+                } else if (className === BOTTOM_K_HIGHLIGHT_CLASS) {
+                    highlightStats.highlighted_bottom_k_texts.add(cleanedSentence);
+                }
             }
             sentencesToHighlight.set(cleanedSentence, classes);
         });
@@ -343,6 +366,21 @@ function highlightMatchingText(ragResult) {
             fragments.forEach(fragment => container.appendChild(fragment));
             textNode.parentNode.replaceChild(container, textNode);
         }
+    });
+
+    // 在完成所有高亮后记录日志
+    window.Logger.log(window.LogCategory.UI, 'text_highlight_updated', {
+        url: window.location.href,
+        // 接口返回的文本统计
+        top_k_count: highlightStats.top_k_texts.size,
+        bottom_k_count: highlightStats.bottom_k_texts.size,
+        top_k_texts: Array.from(highlightStats.top_k_texts),
+        bottom_k_texts: Array.from(highlightStats.bottom_k_texts),
+        // 实际高亮的文本统计
+        highlighted_top_k_count: highlightStats.highlighted_top_k_texts.size,
+        highlighted_bottom_k_count: highlightStats.highlighted_bottom_k_texts.size,
+        highlighted_top_k_texts: Array.from(highlightStats.highlighted_top_k_texts),
+        highlighted_bottom_k_texts: Array.from(highlightStats.highlighted_bottom_k_texts)
     });
 }
 

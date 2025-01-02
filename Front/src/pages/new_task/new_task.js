@@ -6,6 +6,10 @@ document.getElementById('createTaskBtn').addEventListener('click', () => {
         return;
     }
 
+    window.Logger.log(window.LogCategory.UI, 'new_task_description_create_btn_clicked', {
+        task_description: taskDescription
+    });
+
     // 清除现有记录并保存新任务
     chrome.storage.local.set({
         records: [],

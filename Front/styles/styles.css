@@ -397,3 +397,21 @@
 #mp-popup-side-panel-btn:hover {
     background-color: #4a49b3;
 }
+
+.mp-popup-btn.export-logs {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.mp-popup-btn.export-logs:hover {
+    background-color: #45a049;
+}
+
+.mp-popup-btn.clear-logs {
+    background-color: #f44336;
+    color: white;
+}
+
+.mp-popup-btn.clear-logs:hover {
+    background-color: #da190b;
+}

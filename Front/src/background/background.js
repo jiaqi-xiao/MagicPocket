@@ -58,19 +58,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === "fetchRAG") {
-        fetch('http://localhost:8000/rag', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(request.data)
-        })
-        .then(response => response.json())
-        .then(result => {
-            sendResponse({ result });
-        })
-        .catch(error => {
-            sendResponse({ error: error.message });
+        chrome.storage.sync.get(['selectedHost'], async (result) => {
+            const host = result.selectedHost || 'http://localhost:8000/';
+            fetch(`${host}rag`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(request.data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                sendResponse({ result });
+            })
+            .catch(error => {
+                sendResponse({ error: error.message });
+            });
         });
         return true; // 保持消息通道开放
     }

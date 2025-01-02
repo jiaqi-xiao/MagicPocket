@@ -10,7 +10,8 @@
     "desktopCapture",
     "unlimitedStorage",
     "sidePanel",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
   "background": {
     "service_worker": "src/background/background.js"
@@ -24,6 +25,7 @@
         "lib/html2canvas.min.js",
         "src/utils/storage.js",
         "src/utils/imageStorage.js",
+        "src/utils/logger.js",
         "src/content/contextMenu.js",
         "src/content/floatingWindow.js",
         "src/content/screenshot.js",
