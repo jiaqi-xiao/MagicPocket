@@ -109,7 +109,6 @@
 #### 系统日志
 | 埋点名称 | 描述 |
 |---------|------|
-| `side_panel_text_highlighted` | 文本高亮状态改变时触发，记录高亮文本和URL |
 | `side_panel_groups_generated` | 节点分组生成完成时触发，记录原始响应数据（raw_response） |
 | `side_panel_intent_tree_generated` | 意图树生成完成时触发，记录原始响应数据（raw_response） |
 
@@ -134,3 +133,10 @@
 | `network_node_state_changed` | 节点状态改变时触发 |
 | `network_direction_changed` | 层级布局方向改变时触发 |
 | `network_tooltip_shown` | 显示节点悬停提示时触发 |
+
+### 文本高亮（textHighlight.js）
+
+#### UI 交互日志
+| 埋点名称 | 描述 |
+|---------|------|
+| `text_highlight_updated` | 文本高亮更新时触发 |
