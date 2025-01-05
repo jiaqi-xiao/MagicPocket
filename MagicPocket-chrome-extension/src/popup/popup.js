@@ -120,11 +120,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-document.getElementById("mp-popup-screenshot-btn").addEventListener("click", () => {
-    window.Logger.log(window.LogCategory.UI, 'popup_screenshot_btn_clicked', {});
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        console.log("screenshotBtn clicked in popup.js");
-        chrome.tabs.sendMessage(tabs[0].id, {action: "startScreenshot"});
-    });
-    window.close();
-});
+// document.getElementById("mp-popup-screenshot-btn").addEventListener("click", () => {
+//     window.Logger.log(window.LogCategory.UI, 'popup_screenshot_btn_clicked', {});
+//     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+//         console.log("screenshotBtn clicked in popup.js");
+//         chrome.tabs.sendMessage(tabs[0].id, {action: "startScreenshot"});
+//     });
+//     window.close();
+// });
