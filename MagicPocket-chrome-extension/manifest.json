@@ -33,6 +33,7 @@
         "src/content/networkVisualization.js",
         "src/content/content.js",
         "lib/vis-network.js",
+        "src/content/tooltipManager.js",
         "src/content/textHighlight.js"
       ],
       "css": [

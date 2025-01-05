@@ -236,6 +236,19 @@ function highlightMatchingText(ragResult) {
     removeHighlights();
     console.log("ragResult: ", ragResult);
     const { top_k, bottom_k } = ragResult;
+
+    // 测试代码：将top_k中的第一个intent的第一个句子添加到bottom_k中
+    // TODO: 测试后删除这段代码
+    // const firstTopIntent = Object.keys(top_k)[0];
+    // if (firstTopIntent && top_k[firstTopIntent].length > 0) {
+    //     const testSentence = top_k[firstTopIntent][0];
+    //     if (!bottom_k["Test_Overlap_Intent"]) {
+    //         bottom_k["Test_Overlap_Intent"] = [];
+    //     }
+    //     bottom_k["Test_Overlap_Intent"].push(testSentence);
+    //     console.log("Added test overlap:", testSentence);
+    // }
+
     const sentencesToHighlight = new Map();
     
     // 用于记录高亮统计的对象
@@ -318,7 +331,7 @@ function highlightMatchingText(ragResult) {
 
     console.log(sentencesToHighlight);
 
-    // 修改文本节���处理逻辑
+    // 修改文本节点处理逻辑
     textNodes.forEach(textNode => {
         if (!textNode || !textNode.parentNode) {
             console.warn('Invalid text node encountered, skipping...');
@@ -348,6 +361,48 @@ function highlightMatchingText(ragResult) {
                 const span = document.createElement('span');
                 span.className = classNames.join(' ');
                 span.textContent = sentence;
+
+                // 找到所有对应的intent和颜色
+                const intentColors = [];
+                
+                // 检查top_k中的intents
+                if (classNames.includes(TOP_K_HIGHLIGHT_CLASS)) {
+                    for (const [intent, sentences] of Object.entries(top_k)) {
+                        if (sentences.includes(sentence)) {
+                            intentColors.push({
+                                intent,
+                                color: highlightConfig.topK.color
+                            });
+                        }
+                    }
+                }
+                
+                // 检查bottom_k中的intents
+                if (classNames.includes(BOTTOM_K_HIGHLIGHT_CLASS)) {
+                    for (const [intent, sentences] of Object.entries(bottom_k)) {
+                        if (sentences.includes(sentence)) {
+                            intentColors.push({
+                                intent,
+                                color: highlightConfig.bottomK.color
+                            });
+                        }
+                    }
+                }
+
+                // 如果找到了intent
+                if (intentColors.length > 0) {
+                    // 存储intent信息为JSON字符串
+                    span.dataset.intents = JSON.stringify(intentColors);
+                    
+                    span.addEventListener('mouseenter', (e) => {
+                        const intents = JSON.parse(e.target.dataset.intents);
+                        window.tooltipManager.showMultiple(intents, e.target);
+                    });
+                    span.addEventListener('mouseleave', () => {
+                        window.tooltipManager.hide();
+                    });
+                }
+
                 fragments.push(span);
                 
                 lastIndex = index + sentence.length;
