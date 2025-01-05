@@ -664,6 +664,9 @@ function updateRecordsList(scrollArea, buttonArea) {
 }
 
 async function renderRecords(records, scrollArea) {
+    // 清空现有内容
+    scrollArea.innerHTML = '';
+    
     if (records.length === 0) {
         scrollArea.innerHTML = "<p>No records</p>";
         return;

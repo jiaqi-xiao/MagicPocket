@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     function displayRecordDetails(record, selectedItem) {
+        console.log("Displaying record details for record:", record);
         const items = document.querySelectorAll("#recordsList li");
         items.forEach(item => item.classList.remove("selected"));
         selectedItem.classList.add("selected");
@@ -52,47 +53,55 @@ document.addEventListener("DOMContentLoaded", async () => {
         const imageElement = document.getElementById("recordImage");
         
         if (record.type === "text") {
-            recordTextElement.textContent = record.content;
-            recordTextElement.style.display = "inline";
-            imageElement.style.display = "none";
+            if (recordTextElement) {
+                recordTextElement.textContent = record.content;
+                recordTextElement.style.display = "inline";
+            }
+            if (imageElement) {
+                imageElement.style.display = "none";
+            }
         } else if (record.type === "image") {
             console.log("record image id:", record.content);
-            recordTextElement.style.display = "none";
-            imageElement.style.display = "block";
-            
-            // 添加错误处理事件监听器
-            imageElement.onerror = function(error) {
-                console.error("图片加载失败:", error);
-                imageElement.style.display = "none";
-            };
-
-            if (!window.indexedDB) {
-                console.log("browser not support indexedDB");
+            if (recordTextElement) {
+                recordTextElement.style.display = "none";
             }
-
-            // 使用 imageStorage 获取图片数据
-            imageStorage.getImage(record.content)
-                .then(imageData => {
-                    if (imageData) {
-                        console.log("成功获取图片数据");
-                        imageElement.src = imageData;
-                    } else {
-                        console.warn("未找到图片数据，ID:", record.content);
-                        imageElement.style.display = "none";
-                    }
-                })
-                .catch(error => {
-                    console.error("获取图片数据失败:", error);
+            if (imageElement) {
+                imageElement.style.display = "block";
+                
+                // 添加错误处理事件监听器
+                imageElement.onerror = function(error) {
+                    console.error("图片加载失败:", error);
                     imageElement.style.display = "none";
-                });
+                };
+
+                if (!window.indexedDB) {
+                    console.log("browser not support indexedDB");
+                }
+
+                // 使用 imageStorage 获取图片数据
+                imageStorage.getImage(record.content)
+                    .then(imageData => {
+                        if (imageData) {
+                            console.log("成功获取图片数据");
+                            imageElement.src = imageData;
+                        } else {
+                            console.warn("未找到图片数据，ID:", record.content);
+                            imageElement.style.display = "none";
+                        }
+                    })
+                    .catch(error => {
+                        console.error("获取图片数据失败:", error);
+                        imageElement.style.display = "none";
+                    });
+            }
         }
 
         document.getElementById("recordParagraph").textContent = record.paragraph || "--";
         document.getElementById("recordComment").textContent = record.comment || "--";
         document.getElementById("recordUrl").textContent = record.url;
         document.getElementById("recordId").textContent = record.id;
-        document.getElementById("placeFormattedAddress").textContent = record.extraGMLocationContext?.PlaceFormattedAddress || "--";
-        document.getElementById("placeEditorialSummary").textContent = record.extraGMLocationContext?.PlaceEditorialSummary || "--";
+        // document.getElementById("placeFormattedAddress").textContent = record.extraGMLocationContext?.PlaceFormattedAddress || "--";
+        // document.getElementById("placeEditorialSummary").textContent = record.extraGMLocationContext?.PlaceEditorialSummary || "--";
         
     }
 

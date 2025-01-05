@@ -173,6 +173,7 @@ class NetworkManager {
             opacity: 1,
             fixed: true,
             physics: false,
+            level: this.layout === 'hierarchical' ? 0 : undefined,
             font: { 
                 size: 14,
                 align: 'center',
@@ -206,6 +207,7 @@ class NetworkManager {
                 type: 'intent',
                 color: this.getNodeColor('intent'),
                 size: this.getNodeSize('intent'),
+                level: this.layout === 'hierarchical' ? 1 : undefined,
                 opacity: isImmutable ? 1 : 0.3  // 如果是 immutable，设置为不透明
             });
             // 设置意图节点的初始状态
@@ -230,6 +232,7 @@ class NetworkManager {
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
+                        level: this.layout === 'hierarchical' ? 2 : undefined,
                         opacity: isImmutable ? 1 : 0.3,
                         title: this.formatRecordTooltip({
                             content: record.content || record.text || record.description || 'No content',
@@ -777,7 +780,10 @@ class NetworkManager {
                     type: 'intent',
                     color: this.getNodeColor('intent'),
                     size: this.getNodeSize('intent'),
-                    opacity: 1
+                    level: this.layout === 'hierarchical' ? 1 : undefined,
+                    opacity: 1,
+                    fixed: false,
+                    physics: false
                 });
 
                 // 添加连接边
@@ -1319,22 +1325,28 @@ class NetworkManager {
             child: []
         };
         
-        if (this.intentTree.item) {
+        if (this.intentTree?.item) {
             let idCounter = 1;
             Object.keys(this.intentTree.item).forEach(intentName => {
-                if (intentName.startsWith('remaining_intent_')) {
+                if (!intentName || intentName.startsWith('remaining_intent_')) {
                     return;
                 }
 
                 const intentData = this.intentTree.item[intentName];
+                if (!intentData) {
+                    console.warn(`Intent data is missing for intent: ${intentName}`);
+                    return;
+                }
+
+                const description = intentData?.description || intentName;
                 const intentObj = {
                     id: idCounter++,
                     intent: intentName,
-                    description: intentData.description || intentName,
+                    description: description,
                     isLeafNode: false,
-                    immutable: NetworkManager.immutableIntents.has(intentName),
-                    child: intentData.group || [],
-                    child_num: (intentData.group || []).length,
+                    immutable: NetworkManager.immutableIntents?.has(intentName) || false,
+                    child: Array.isArray(intentData.group) ? intentData.group : [],
+                    child_num: Array.isArray(intentData.group) ? intentData.group.length : 0,
                     priority: 1
                 };
 
