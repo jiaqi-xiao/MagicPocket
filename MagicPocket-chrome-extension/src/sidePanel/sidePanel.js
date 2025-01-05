@@ -908,10 +908,10 @@ function initializeResizer() {
             scrollArea.style.height = `${newScrollAreaHeight}px`;
             networkContainer.style.height = `${newNetworkHeight}px`;
             
-            // 更新网络可视化
-            if (networkManager) {
-                networkManager.updateSize();
-            }
+            // // 更新网络可视化
+            // if (networkManager) {
+            //     networkManager.updateSize();
+            // }
         });
     }
     
@@ -942,9 +942,9 @@ function initializeResizer() {
         scrollArea.style.height = `${equalHeight}px`;
         networkContainer.style.height = `${equalHeight}px`;
         
-        if (networkManager) {
-            networkManager.updateSize();
-        }
+        // if (networkManager) {
+        //     networkManager.updateSize();
+        // }
     });
 }
 
