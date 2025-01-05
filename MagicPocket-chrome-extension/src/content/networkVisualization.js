@@ -136,8 +136,6 @@ class NetworkManager {
             return;
         }
 
-        console.log('intentTree:', JSON.stringify(this.intentTree, null, 2));
-
         try {
             const networkData = this.transformIntentTreeToNetwork(this.intentTree);
             this.nodes.add(networkData.nodes);
@@ -204,6 +202,7 @@ class NetworkManager {
             nodes.push({
                 id: intentId,
                 label: this.wrapLabel(intentName, 15, 'intent'),
+                originalLabel: intentName, // 添加原始标签
                 type: 'intent',
                 color: this.getNodeColor('intent'),
                 size: this.getNodeSize('intent'),
@@ -222,7 +221,6 @@ class NetworkManager {
             });
 
             // 处理记录
-            console.log(`Processing records for intent "${intentName}":`, intentData);
             if (intentData.group && Array.isArray(intentData.group)) {
                 intentData.group.forEach(record => {
                     const recordId = `record_${nodeId++}`;
@@ -513,7 +511,7 @@ class NetworkManager {
         // 如果是意图节点且被确认，添加到 immutable 集合中
         const node = this.nodes.get(nodeId);
         if (node && node.type === 'intent' && confirmed) {
-            NetworkManager.immutableIntents.add(node.label);
+            NetworkManager.immutableIntents.add(node.originalLabel || node.label);
         }
         
         this.nodes.update({
@@ -756,18 +754,60 @@ class NetworkManager {
         }
     }
 
+    // 编辑意图节点的动作
+    setupEditIntentAction(menuItem, nodeId) {
+        const node = this.nodes.get(nodeId);
+        menuItem.onclick = async () => {
+            const intentName = node.originalLabel || node.label;
+            
+            this.createDialog('Edit Intent', intentName, async (newIntentName) => {
+                // 记录节点编辑日志
+                window.Logger.log(window.LogCategory.SYSTEM, 'network_node_edited', {
+                    node_id: nodeId,
+                    type: node.type,
+                    old_label: intentName,
+                    new_label: newIntentName
+                });
+                
+                // 更新意图树数据
+                if (this.intentTree.item && this.intentTree.item[intentName] !== undefined) {
+                    // 更新意图树
+                    const originalData = this.intentTree.item[intentName];
+                    this.intentTree.item[newIntentName] = JSON.parse(JSON.stringify(originalData));
+                    delete this.intentTree.item[intentName];
+                    
+                    // 持久化更新后的意图树
+                    try {
+                        await saveIntentTree(this.intentTree);
+                        
+                        // 更新节点显示
+                        this.nodes.update({
+                            id: nodeId,
+                            label: this.wrapLabel(newIntentName, 20, 'intent'),
+                            originalLabel: newIntentName
+                        });
+
+                        // 设置为已确认
+                        this.updateNodeState(nodeId, true);
+                    } catch (error) {
+                        console.error('Error saving intent tree:', error);
+                        alert('Failed to save the edited intent. Please try again.');
+                        
+                        // 回滚更改
+                        this.intentTree.item[intentName] = JSON.parse(JSON.stringify(this.intentTree.item[newIntentName]));
+                        delete this.intentTree.item[newIntentName];
+                    }
+                } else {
+                    console.error('Intent not found in the tree:', intentName);
+                }
+            });
+        };
+    }
+
     // 设置添加子意图节点的动作
     setupAddChildIntentAction(menuItem, nodeId) {
         const node = this.nodes.get(nodeId);
         menuItem.onclick = async () => {
-            // 记录菜单项点击日志
-            window.Logger.log(window.LogCategory.UI, 'network_node_menu_item_clicked', {
-                node_id: nodeId,
-                type: node.type,
-                label: node.label,
-                action: 'add_child'
-            });
-
             const defaultValue = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
             
             this.createDialog('Add New Intent', defaultValue, async (intentName) => {
@@ -776,7 +816,8 @@ class NetworkManager {
                 // 添加新节点到数据集
                 this.nodes.add({
                     id: newNodeId,
-                    label: intentName,
+                    label: this.wrapLabel(intentName, 15, 'intent'),
+                    originalLabel: intentName,
                     type: 'intent',
                     color: this.getNodeColor('intent'),
                     size: this.getNodeSize('intent'),
@@ -815,7 +856,6 @@ class NetworkManager {
                 // 持久化更新后的意图树
                 try {
                     await saveIntentTree(this.intentTree);
-                    console.log('Intent tree updated and saved successfully');
                 } catch (error) {
                     console.error('Error saving intent tree:', error);
                     alert('Failed to save the new intent. Please try again.');
@@ -827,67 +867,6 @@ class NetworkManager {
                     NetworkManager.immutableIntents.delete(intentName);
                     if (this.intentTree.item[intentName]) {
                         delete this.intentTree.item[intentName];
-                    }
-                }
-            });
-        };
-    }
-
-    // 编辑意图节点的动作
-    setupEditIntentAction(menuItem, nodeId) {
-        const node = this.nodes.get(nodeId);
-        menuItem.onclick = async () => {
-            // 记录菜单项点击日志
-            window.Logger.log(window.LogCategory.UI, 'network_node_menu_item_clicked', {
-                node_id: nodeId,
-                type: node.type,
-                label: node.label,
-                action: 'edit'
-            });
-
-            const intentName = node.label;
-            
-            this.createDialog('Edit Intent', intentName, async (newIntentName) => {
-                // 记录节点编辑日志
-                window.Logger.log(window.LogCategory.SYSTEM, 'network_node_edited', {
-                    node_id: nodeId,
-                    type: node.type,
-                    old_label: intentName,
-                    new_label: newIntentName
-                });
-                
-                // 更新意图树数据
-                if (this.intentTree.item) {
-                    const intentData = this.intentTree.item[intentName];
-                    delete this.intentTree.item[intentName];
-                    this.intentTree.item[newIntentName] = intentData;
-                }
-
-                // 更新节点数据
-                this.nodes.update({
-                    id: nodeId,
-                    label: newIntentName
-                });
-
-                // 编辑意图节点后，设置为已确认
-                this.updateNodeState(nodeId, true);
-
-                // 持久化更新后的意图树
-                try {
-                    await saveIntentTree(this.intentTree);
-                    console.log('Intent tree updated and saved successfully');
-                } catch (error) {
-                    console.error('Error saving intent tree:', error);
-                    alert('Failed to save the new intent. Please try again.');
-                    
-                    // 如果保存失败，回滚更改
-                    this.nodes.update({
-                        id: nodeId,
-                        label: intentName
-                    });
-                    if (this.intentTree.item) {
-                        this.intentTree.item[intentName] = this.intentTree.item[newIntentName];
-                        delete this.intentTree.item[newIntentName];
                     }
                 }
             });
@@ -935,7 +914,7 @@ class NetworkManager {
 
             // 如果是意图节点，从意图树中删除相应的数据
             if (node.type === 'intent' && this.intentTree.item) {
-                const intentName = node.label;
+                const intentName = node.originalLabel || node.label;
                 delete this.intentTree.item[intentName];
                 NetworkManager.immutableIntents.delete(intentName);
             }
@@ -963,11 +942,11 @@ class NetworkManager {
                 });
                 // 恢复节点状态
                 if (deletedNode.type === 'intent') {
-                    this.nodeStates.set(nodeId, NetworkManager.immutableIntents.has(deletedNode.label));
+                    this.nodeStates.set(nodeId, NetworkManager.immutableIntents.has(deletedNode.originalLabel || deletedNode.label));
                 }
                 // 恢复意图树数据
                 if (deletedNode.type === 'intent' && this.intentTree.item) {
-                    const intentName = deletedNode.label;
+                    const intentName = deletedNode.originalLabel || deletedNode.label;
                     this.intentTree.item[intentName] = [];
                 }
             } catch (rollbackError) {
