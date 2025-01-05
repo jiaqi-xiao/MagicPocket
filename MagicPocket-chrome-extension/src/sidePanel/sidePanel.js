@@ -129,26 +129,49 @@ function initializeRecordsArea() {
             const startTime = performance.now();
             const { selectedHost } = await chrome.storage.sync.get(['selectedHost']);
             const host = selectedHost || 'http://localhost:8000/';
-            const groupResponse = await fetch(`${host}group/?scenario=${encodeURIComponent(taskDescription)}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    data: records.map(record => ({
-                        id: parseInt(record.id) || Date.now(),
-                        content: record.content || "",
-                        context: record.context || "",
-                        comment: record.comment || "",
-                        isLeafNode: true
-                    }))
-                })
-            });
+            
+            async function makeGroupRequest() {
+                return await fetch(`${host}group/?scenario=${encodeURIComponent(taskDescription)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: records.map(record => ({
+                            id: parseInt(record.id) || Date.now(),
+                            content: record.content || "",
+                            context: record.context || "",
+                            comment: record.comment || "",
+                            isLeafNode: true
+                        }))
+                    })
+                });
+            }
+
+            let groupResponse;
+            try {
+                groupResponse = await makeGroupRequest();
+                if (groupResponse.status === 422) {
+                    window.Logger.log(window.LogCategory.ERROR, 'side_panel_group_api_422_error', {
+                        error: 'First attempt failed with 422',
+                        records_count: records.length
+                    });
+                    // 重试一次
+                    groupResponse = await makeGroupRequest();
+                }
+            } catch (error) {
+                window.Logger.log(window.LogCategory.ERROR, 'side_panel_group_api_error', {
+                    error: error.message,
+                    records_count: records.length
+                });
+                throw error;
+            }
 
             const groupApiTime = performance.now() - startTime;
             window.Logger.log(window.LogCategory.NETWORK, 'side_panel_group_api_called', {
                 duration_ms: Math.round(groupApiTime),
-                records_count: records.length
+                records_count: records.length,
+                status: groupResponse.status
             });
 
             if (!groupResponse.ok) {
