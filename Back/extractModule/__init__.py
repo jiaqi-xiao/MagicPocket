@@ -160,7 +160,7 @@ class ExtractModelCluster:
 class Chain4Grouping:
     def __init__(self, model):
         self.instruction = """
-        你将作为协助用户进行信息调研的助手。请基于给定的Scenario分析用户的潜在意图，并以此为基础将用户提供的List，将List中每个Node分成多个组，确保组间差异尽可能大，组内差异尽可能小。返回一个列表，每个元素是一个子列表，代表一个组，子列表中是Node对应的索引。
+        You are a professional information research assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the indices of the nodes from the original list.
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
@@ -192,33 +192,32 @@ class Chain4Construct:
         ## 对Groups中的每一组提炼一个符合Scenario语境下的意图，以字典形式返回，key为意图，value为group的索引。务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。每个Intent的描述必须简短清晰，最多不超过7个词。
         ## 比较所有生成的意图与IntentsList中的意图，用IntentsList中的意图替换字典中最相似的意图，如果不够相似则不需要替换。如果IntentsList中还有未替换的Intent，则对每个剩余的Intent在字典中创建以该Intent为key，None为value的键值对。
         self.instruction = """
-        你将作为协助用户围绕调研场景Scenario进行信息调研的助手。请对Groups中的每一个字典元素提炼一个符合Scenario的调研意图，以字典形式返回。确保每个意图描述清晰、不重复，并且保证每个intent处于相同颗粒度下。
+        You will act as an assistant to help the user conduct research based on the given Scenario. Please extract a research intent for each dictionary element in Groups and return the results in dictionary format. Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
 
         # Steps
-            1. **确认group数量**: 理解Groups的结构，确认group的数量，后续提取的意图数量需与group的数量一致。一个group是以group_x为key,一个列表为value的字典。
-            2. **理解场景**: 理解Scenario的含义，分析该场景下用户的潜在意图。
-            3. **提取意图**: 对每个group提炼出一个相应的意图描述，该意图需要与group中列表里所有Node的共性相符。提取时，确保每个意图与场景紧密相关，在逻辑上具备差异性，不可重叠或重复。每个意图描述应该为动词短语形式且不超过7个词，确保简短精炼。
-            4. **创建新字典**: 根据Output Format，用提取的意图作为key，对应的group字典中的键作为value。
-            5. **比较替换**:
-                - 使用`IntentsList`中的意图与提取出的字典键进行比较，寻找最相似的意图。
-                - 找到最相似意图时，将字典中的意图替换为`IntentsList`中的意图。
-                - 如果某个意图没有足够相似的替换项，则保留不变。
-            6. **添加剩余意图**: 对于`IntentsList`中未使用的意图，视为remaining_intent。将这些剩余意图作为key添加到第四步中构建的新字典中，其对应值为空字符串。如果没未替换的意图则跳过这一步。
-            7. **添加描述**： 对于新字典中的每一个意图，给出一个具体的描述，解释此意图背后的主题以及group中已经包含了哪些子主题。
+            1. **Confirm the number of groups**: Understand the structure of Groups and confirm the number of groups. The number of extracted intents should match the number of groups. A group is defined as a dictionary with group_x as the key and a list as the value.
+            2. **Understand the scenario**: Analyze the meaning of the Scenario and infer the user's potential intent in this context.
+            3. **Extract intents**: For each group, extract a corresponding intent. The intent should align with the commonalities among all Nodes in the group. Ensure each intent is closely related to the Scenario, logically distinct, and non-overlapping. Each intent should be a concise verb phrase of no more than 7 words. The description should be clear and explain the theme behind the intent and the subtopics already covered in the group.
+            4. **Create a new dictionary**: Following the Output Format, use the extracted intents as keys and the corresponding group dictionary keys as values.
+            5. **Compare and replace**:
+                - Compare the intents in IntentsList with the extracted intents in the dictionary to find the most similar intent.
+                - Replace the dictionary intent with the most similar one from IntentsList if a match is found.
+                - Retain the original intent if no sufficiently similar match is found.
+            6. **Add remaining intents**: For unused intents in IntentsList, treat them as remaining_intent. Add them to the new dictionary created in step 4 with their values set as empty strings. Skip this step if all intents are used.
+            7. **Add descriptions**: For every intent in the new dictionary, provide a specific description explaining the theme behind the intent and the subtopics covered in the group.
         
         # Output Format
             - The output should be structured in JSON format as following {format_instructions}.
             - example: 
-                    {{'item': {{'generated_intent_1': {{"group": "group1", "description": "Reasons for generated_intent_1 and required further information"}}, 'generated_intent_2': {{"group": "group2", "description": "Reasons for generated_intent_2 and required further information"}}, 'remaining_intent_3': {{"group": "", "description": "Reasons for remaining_intent_3 and required further information"}}}}}}
-            - 'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
+                    {{'item': {{'generated_intent_1': {{"group": "group1", "description": "Reasons and theme for generated_intent_1. Existing sub-themes: sub_theme_1, sub_theme_2"}}, 'generated_intent_2': {{"group": "group2", "description": "Reasons and theme for generated_intent_2. Existing sub-themes: sub_theme_3, sub_theme_4"}}, 'remaining_intent_3': {{"group": "", "description": "Reasons and theme for generated_intent_1. Existing sub-themes:"}}}}}}
+            - 'generated_intent_x', 'sub_theme_x' and 'remaining_intent_x' should be replaced with specific intent phrases.
             
         # Notes
-            - 对每个group提炼唯一一个意图，不可以超过一个。意图是对group中列表的所有Node的共性的抽象概括。
-            - 每个意图描述必须具备逻辑独立性，最大程度维持多样性, 且不超过7个词。
-            - 当进行相似度替换时，务必保证只有在相似度足够高的情况下才进行替换。
-            - 如果不存在足够相似的意图，则原意图保持不变，且`IntentsList`中的意图不会被强行替换。
-            - 新字典中的'generated_intent_x'以及'remaining_intent_x'应该用具体的意图文字替换
-            - 检查最终生成的新字典，确保每个intent处于相同颗粒度下，否则调整intent文本。
+            - Extract exactly one unique intent per group. The intent must summarize the commonalities of all Nodes in the group.
+            - Each intent description must be logically independent and maintain diversity to the greatest extent, without exceeding 7 words.
+            - When performing similarity replacement, ensure that replacement is only made if similarity is sufficiently high.
+            - If no sufficiently similar intent exists, the original intent remains unchanged, and unused intents in IntentsList will not be forcibly replaced.
+            - Verify the final generated dictionary to ensure all intents are at the same level of granularity. Adjust intent texts if necessary.
         
         # User:
             Scenario: {scenario}
