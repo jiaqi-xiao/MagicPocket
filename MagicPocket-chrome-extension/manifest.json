@@ -34,7 +34,8 @@
         "src/content/content.js",
         "lib/vis-network.js",
         "src/content/tooltipManager.js",
-        "src/content/textHighlight.js"
+        "src/content/textHighlight.js",
+        "src/content/highlightStats.js"
       ],
       "css": [
         "styles/styles.css",

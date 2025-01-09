@@ -365,6 +365,7 @@ function highlightMatchingText(ragResult) {
             })
         }))
     });
+    updateHighlightStats(highlightStats.top_k_texts.size, highlightStats.bottom_k_texts.size);
 }
 
 /**
@@ -585,14 +586,31 @@ const createRangeFromMatch = (text) => {
 };
 
 function removeHighlights() {
-    [TOP_K_HIGHLIGHT_CLASS, BOTTOM_K_HIGHLIGHT_CLASS].forEach(className => {
-        const highlights = document.getElementsByClassName(className);
-        while (highlights.length > 0) {
-            const highlight = highlights[0];
-            const textNode = document.createTextNode(highlight.textContent);
+    const highlights = document.querySelectorAll(`.${TOP_K_HIGHLIGHT_CLASS}, .${BOTTOM_K_HIGHLIGHT_CLASS}`);
+    highlights.forEach(highlight => {
+        const textNode = document.createTextNode(highlight.textContent);
+        if (highlight.parentNode) {
             highlight.parentNode.replaceChild(textNode, highlight);
         }
     });
+    // updateHighlightStats(0, 0); // Pass 0 for both counts since we're removing all highlights
+    // Dispatch an event to hide the stats window
+    window.dispatchEvent(new CustomEvent('hideHighlightStats'));
+}
+
+let UIhighlightStats = {
+    topK: 0,
+    bottomK: 0
+};
+
+function updateHighlightStats(topKSize, bottomKSize) {
+    // Dispatch custom event with stats
+    window.dispatchEvent(new CustomEvent('highlightStatsUpdated', {
+        detail: {
+            topK: topKSize,
+            bottomK: bottomKSize
+        }
+    }));
 }
 
 window.setHighlightConfig = function(config) {
