@@ -136,24 +136,14 @@ window.toggleHighlight = async function() {
 function formatIntentTree(rawIntentTree) {
     const generateId = () => Math.floor(Math.random() * 1000000);
 
-    // // 创建默认的空记录
-    // const createDefaultRecord = () => ({
-    //     id: generateId(),
-    //     comment: '',
-    //     content: '',
-    //     context: '',
-    //     isLeafNode: true
-    // });
-    
     const formatItems = (items) => {
         return Object.entries(items).map(([intentName, intentData]) => {
-            // intentData 现在包含 description 和 group
             const processedRecords = intentData.group || [];
             
             return {
                 id: generateId(),
                 intent: intentName,
-                description: intentData.description || '',  // 直接使用意图数据中的 description
+                description: intentData.description || '',  
                 isLeafNode: false,
                 immutable: false,
                 priority: 5,
@@ -169,7 +159,6 @@ function formatIntentTree(rawIntentTree) {
         });
     };
 
-    // 处理主���的转换逻辑
     if (rawIntentTree.item) {
         return {
             scenario: rawIntentTree.scenario,
@@ -177,7 +166,6 @@ function formatIntentTree(rawIntentTree) {
         };
     }
 
-    // 如果已经是正确格式，使用原有的formatIntentTree逻辑
     return {
         scenario: rawIntentTree.scenario,
         child: rawIntentTree.child?.map(formatChild).filter(Boolean) || []
@@ -189,18 +177,13 @@ async function processPageContent() {
     const response = await chrome.runtime.sendMessage({ action: "getIntentTree" });
     const intentTree = response.intentTree;
     
-    // 添加错误检查
     if (!intentTree) {
         console.error('No intent tree found');
         return;
     }
 
-    console.log("/rag response raw intentTree: ", intentTree);
-
-    // 确保格式化后的intentTree符合���端要求
     const formattedIntentTree = formatIntentTree(intentTree);
     
-    // 构建符合RAGRequest模型的请求体
     const ragRequest = {
         scenario: formattedIntentTree.scenario,
         k: 3,
@@ -210,13 +193,8 @@ async function processPageContent() {
         webContent: textContent
     };
 
-    // 添加调试日志
-    // console.log("RAG request payload:", ragRequest);
-    // console.log("Formatted intent tree:", formattedIntentTree);
-
     try {
         validateRAGRequest(ragRequest);
-        // 改为通过 background script 发送请求
         const response = await chrome.runtime.sendMessage({
             action: "fetchRAG",
             data: ragRequest
@@ -248,178 +226,116 @@ function highlightMatchingText(ragResult) {
     //     bottom_k["Test_Overlap_Intent"].push(testSentence);
     //     console.log("Added test overlap:", testSentence);
     // }
-
-    const sentencesToHighlight = new Map();
-    
-    // 用于记录高亮统计的对象
     const highlightStats = {
-        // 接口返回的文本
         top_k_texts: new Set(),
         bottom_k_texts: new Set(),
-        // 实际高亮的文本
         highlighted_top_k_texts: new Set(),
         highlighted_bottom_k_texts: new Set()
     };
 
-    // 辅助函数：处理多行文本
-    const processSentence = (sentence, className) => {
-        // 记录接口返回的原始文本
+    const sentencesToHighlight = new Map();
+
+    const processSentence = (sentence, className, intents) => {
         if (className === TOP_K_HIGHLIGHT_CLASS) {
             highlightStats.top_k_texts.add(sentence);
         } else if (className === BOTTOM_K_HIGHLIGHT_CLASS) {
             highlightStats.bottom_k_texts.add(sentence);
         }
 
-        // 分割多行文本并清理
         const cleanedSentences = sentence
-            .split(/[\n\r\t]+/)  // 按换行符和制表符分割
-            .map(s => s.trim())  // 去除首尾空格
-            .filter(s => s.length > 0)  // 过滤空字符串
-            .filter(s => /[a-zA-Z\u4e00-\u9fa5]/.test(s));  // 确保包含至少一个字母或中文字符
-        
-        // 为每个子句添加高亮类
+            .split(/[\n\r\t]+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 0 && /[a-zA-Z\u4e00-\u9fa5]/.test(s));
+
         cleanedSentences.forEach(cleanedSentence => {
-            const classes = sentencesToHighlight.get(cleanedSentence) || [];
-            if (!classes.includes(className)) {
-                classes.push(className);
-                // 记录实际高亮的文本
-                if (className === TOP_K_HIGHLIGHT_CLASS) {
-                    highlightStats.highlighted_top_k_texts.add(cleanedSentence);
-                } else if (className === BOTTOM_K_HIGHLIGHT_CLASS) {
-                    highlightStats.highlighted_bottom_k_texts.add(cleanedSentence);
-                }
+            const existingEntry = sentencesToHighlight.get(cleanedSentence) || {
+                classes: new Set(),  
+                intents: new Set()   
+            };
+            
+            existingEntry.classes.add(className);
+            
+            intents.forEach(intentInfo => {
+                existingEntry.intents.add(JSON.stringify(intentInfo));
+            });
+            
+            if (className === TOP_K_HIGHLIGHT_CLASS) {
+                highlightStats.highlighted_top_k_texts.add(cleanedSentence);
+            } else if (className === BOTTOM_K_HIGHLIGHT_CLASS) {
+                highlightStats.highlighted_bottom_k_texts.add(cleanedSentence);
             }
-            sentencesToHighlight.set(cleanedSentence, classes);
+            
+            sentencesToHighlight.set(cleanedSentence, existingEntry);
         });
     };
-    
-    // 处理 top_k 结果
+
     if (highlightConfig.topK.enabled) {
-        Object.values(top_k).flat().forEach(sentence => {
-            processSentence(sentence, TOP_K_HIGHLIGHT_CLASS);
-        });
-    }
-    
-    // 处理 bottom_k 结果
-    if (highlightConfig.bottomK.enabled) {
-        Object.values(bottom_k).flat().forEach(sentence => {
-            processSentence(sentence, BOTTOM_K_HIGHLIGHT_CLASS);
-        });
-    }
-
-    const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-        {
-            acceptNode: function(node) {
-                if (node.parentElement.tagName === 'SCRIPT' || 
-                    node.parentElement.tagName === 'STYLE' ||
-                    node.parentElement.classList.contains(TOP_K_HIGHLIGHT_CLASS) ||
-                    node.parentElement.classList.contains(BOTTOM_K_HIGHLIGHT_CLASS)) {
-                    return NodeFilter.FILTER_REJECT;
-                }
-                return NodeFilter.FILTER_ACCEPT;
-            }
-        }
-    );
-
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-        textNodes.push(node);
-    }
-
-    console.log(sentencesToHighlight);
-
-    // 修改文本节点处理逻辑
-    textNodes.forEach(textNode => {
-        if (!textNode || !textNode.parentNode) {
-            console.warn('Invalid text node encountered, skipping...');
-            return;
-        }
+        const sentenceIntents = new Map(); // Map<sentence, Set<intentInfo>>
         
-        // 只处理长度大于2的文本节点
-        if (textNode.textContent.trim().length <= 2) {
-            return;
-        }
-        // console.log("Current text node:", textNode.textContent);
-
-        let text = textNode.textContent;
-        let hasMatch = false;
-        let fragments = [];
-        let lastIndex = 0;
-
-        sentencesToHighlight.forEach((classNames, sentence) => {
-            let index = text.indexOf(sentence);
-            while (index !== -1) {
-                hasMatch = true;
-                // 添加匹配前的文本
-                if (index > lastIndex) {
-                    fragments.push(document.createTextNode(text.substring(lastIndex, index)));
-                }
-                // 创建高亮span
-                const span = document.createElement('span');
-                span.className = classNames.join(' ');
-                span.textContent = sentence;
-
-                // 找到所有对应的intent和颜色
-                const intentColors = [];
+        Object.entries(top_k).forEach(([intent, sentences]) => {
+            sentences.forEach(sentence => {
+                const intentInfo = {
+                    intent,
+                    type: 'top_k',
+                    color: highlightConfig.topK.color
+                };
                 
-                // 检查top_k中的intents
-                if (classNames.includes(TOP_K_HIGHLIGHT_CLASS)) {
-                    for (const [intent, sentences] of Object.entries(top_k)) {
-                        if (sentences.includes(sentence)) {
-                            intentColors.push({
-                                intent,
-                                color: highlightConfig.topK.color
-                            });
-                        }
-                    }
+                if (!sentenceIntents.has(sentence)) {
+                    sentenceIntents.set(sentence, new Set());
                 }
-                
-                // 检查bottom_k中的intents
-                if (classNames.includes(BOTTOM_K_HIGHLIGHT_CLASS)) {
-                    for (const [intent, sentences] of Object.entries(bottom_k)) {
-                        if (sentences.includes(sentence)) {
-                            intentColors.push({
-                                intent,
-                                color: highlightConfig.bottomK.color
-                            });
-                        }
-                    }
-                }
-
-                // 如果找到了intent
-                if (intentColors.length > 0) {
-                    // 存储intent信息为JSON字符串
-                    span.dataset.intents = JSON.stringify(intentColors);
-                    
-                    span.addEventListener('mouseenter', (e) => {
-                        const intents = JSON.parse(e.target.dataset.intents);
-                        window.tooltipManager.showMultiple(intents, e.target);
-                    });
-                    span.addEventListener('mouseleave', () => {
-                        window.tooltipManager.hide();
-                    });
-                }
-
-                fragments.push(span);
-                
-                lastIndex = index + sentence.length;
-                index = text.indexOf(sentence, lastIndex);
-            }
+                sentenceIntents.get(sentence).add(JSON.stringify(intentInfo));
+            });
         });
 
-        // 如果有匹配��替换节点
-        if (hasMatch) {
-            // 添加剩余文本
-            if (lastIndex < text.length) {
-                fragments.push(document.createTextNode(text.substring(lastIndex)));
-            }
-            // 创建包含所有片段的容器
-            const container = document.createDocumentFragment();
-            fragments.forEach(fragment => container.appendChild(fragment));
-            textNode.parentNode.replaceChild(container, textNode);
+        sentenceIntents.forEach((intents, sentence) => {
+            processSentence(sentence, TOP_K_HIGHLIGHT_CLASS, Array.from(intents).map(i => JSON.parse(i)));
+        });
+    }
+
+    if (highlightConfig.bottomK.enabled) {
+        const sentenceIntents = new Map();
+        
+        Object.entries(bottom_k).forEach(([intent, sentences]) => {
+            sentences.forEach(sentence => {
+                const intentInfo = {
+                    intent,
+                    type: 'bottom_k',
+                    color: highlightConfig.bottomK.color
+                };
+                
+                if (!sentenceIntents.has(sentence)) {
+                    sentenceIntents.set(sentence, new Set());
+                }
+                sentenceIntents.get(sentence).add(JSON.stringify(intentInfo));
+            });
+        });
+
+        sentenceIntents.forEach((intents, sentence) => {
+            processSentence(sentence, BOTTOM_K_HIGHLIGHT_CLASS, Array.from(intents).map(i => JSON.parse(i)));
+        });
+    }
+
+    sentencesToHighlight.forEach((highlightInfo, text) => {
+        const range = createRangeFromMatch(text);
+        if (range) {
+            highlightRange(range, {
+                classes: Array.from(highlightInfo.classes),
+                intents: Array.from(highlightInfo.intents).map(intentKey => {
+                    try {
+                        return JSON.parse(intentKey);
+                    } catch (e) {
+                        console.warn('Failed to parse intent:', e);
+                        const type = highlightInfo.classes.has(TOP_K_HIGHLIGHT_CLASS) ? 'top_k' : 'bottom_k';
+                        return {
+                            intent: intentKey,
+                            type: type,
+                            color: type === 'top_k' 
+                                ? highlightConfig.topK.color 
+                                : highlightConfig.bottomK.color
+                        };
+                    }
+                })
+            });
         }
     });
 
@@ -435,12 +351,240 @@ function highlightMatchingText(ragResult) {
         highlighted_top_k_count: highlightStats.highlighted_top_k_texts.size,
         highlighted_bottom_k_count: highlightStats.highlighted_bottom_k_texts.size,
         highlighted_top_k_texts: Array.from(highlightStats.highlighted_top_k_texts),
-        highlighted_bottom_k_texts: Array.from(highlightStats.highlighted_bottom_k_texts)
+        highlighted_bottom_k_texts: Array.from(highlightStats.highlighted_bottom_k_texts),
+        // 添加更多调试信息
+        sentencesToHighlight: Array.from(sentencesToHighlight.entries()).map(([text, info]) => ({
+            text,
+            classes: Array.from(info.classes),
+            intents: Array.from(info.intents).map(i => {
+                try {
+                    return JSON.parse(i);
+                } catch (e) {
+                    return i;
+                }
+            })
+        }))
     });
 }
 
+/**
+ * 创建带有事件监听器的高亮span元素
+ * @param {Object} highlightInfo - 包含高亮信息的对象
+ * @param {Array<string>} highlightInfo.classes - 要应用的CSS类名数组
+ * @param {Array<Object>} highlightInfo.intents - 意图信息数组
+ * @returns {HTMLSpanElement} 配置好的span元素
+ */
+const createHighlightSpan = (highlightInfo) => {
+    const span = document.createElement('span');
+    span.className = highlightInfo.classes.join(' ');
+    span.dataset.intents = JSON.stringify(highlightInfo.intents);
+    
+    span.addEventListener('mouseenter', function() {
+        if (window.tooltipManager) {
+            const intents = JSON.parse(this.dataset.intents);
+            window.tooltipManager.showMultiple(intents, this);
+        }
+    });
+    
+    span.addEventListener('mouseleave', function() {
+        if (window.tooltipManager) {
+            window.tooltipManager.hide();
+        }
+    });
+
+    return span;
+};
+
+/**
+ * 处理文本高亮，支持跨节点的复杂情况
+ * 实现了三层处理策略：
+ * 1. 纯文本节点使用surroundContents
+ * 2. 混合节点使用extractContents和递归处理
+ * 3. 失败时使用基础的提取和插入方法
+ * 
+ * @param {Range} range - DOM范围对象，表示要高亮的文本范围
+ * @param {Object} highlightInfo - 高亮配置信息
+ */
+const highlightRange = (range, highlightInfo) => {
+    if (!range) return;
+
+    try {
+        let ancestor = range.commonAncestorContainer;
+        let containsNonText = false;
+        let node = range.startContainer;
+        
+        while (node && node !== range.endContainer) {
+            if (node.nodeType !== Node.TEXT_NODE && node !== ancestor) {
+                containsNonText = true;
+                break;
+            }
+            node = getNextNode(node);
+        }
+
+        if (!containsNonText) {
+            const span = createHighlightSpan(highlightInfo);
+            range.surroundContents(span);
+        } else {
+            const fragment = range.extractContents();
+            const tempDiv = document.createElement('div');
+            tempDiv.appendChild(fragment);
+            
+            const processTextNodes = (node) => {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+                    const span = createHighlightSpan(highlightInfo);
+                    span.textContent = node.textContent;
+                    node.parentNode.replaceChild(span, node);
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    Array.from(node.childNodes).forEach(processTextNodes);
+                }
+            };
+            
+            processTextNodes(tempDiv);
+            range.insertNode(tempDiv);
+            
+            while (tempDiv.firstChild) {
+                tempDiv.parentNode.insertBefore(tempDiv.firstChild, tempDiv);
+            }
+            tempDiv.parentNode.removeChild(tempDiv);
+        }
+    } catch (error) {
+        console.warn('Failed to highlight range:', error);
+        try {
+            const fragment = range.extractContents();
+            const span = createHighlightSpan(highlightInfo);
+            span.appendChild(fragment);
+            range.insertNode(span);
+        } catch (extractError) {
+            console.error('Failed to handle highlight:', extractError);
+        }
+    }
+};
+
+/**
+ * 获取DOM树中的下一个节点
+ * 按照前序遍历的顺序：先子节点，然后兄弟节点，最后父节点的兄弟节点
+ * @param {Node} node - 当前节点
+ * @returns {Node|null} 下一个节点或null
+ */
+const getNextNode = (node) => {
+    if (node.firstChild) return node.firstChild;
+    while (node) {
+        if (node.nextSibling) return node.nextSibling;
+        node = node.parentNode;
+    }
+    return null;
+};
+
+const createRangeFromMatch = (text) => {
+    if (!text || typeof text !== 'string' || text.length === 0) {
+        return null;
+    }
+
+    const normalizedText = text.replace(/\s+/g, ' ').trim();
+    const range = document.createRange();
+    const treeWalker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+            acceptNode: function(node) {
+                const parent = node.parentElement;
+                if (!parent || 
+                    parent.tagName === 'SCRIPT' || 
+                    parent.tagName === 'STYLE' ||
+                    parent.classList.contains(TOP_K_HIGHLIGHT_CLASS) ||
+                    parent.classList.contains(BOTTOM_K_HIGHLIGHT_CLASS)) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        }
+    );
+
+    let node;
+    let nodeCount = 0;
+    let textBuffer = '';
+    let nodeBuffer = [];
+
+    while ((node = treeWalker.nextNode()) !== null) {
+        nodeCount++;
+        const nodeText = node.textContent || '';
+        const normalizedNodeText = nodeText.replace(/\s+/g, ' ');
+        
+        textBuffer += normalizedNodeText;
+        nodeBuffer.push({
+            node,
+            text: normalizedNodeText,
+            startIndex: textBuffer.length - normalizedNodeText.length
+        });
+
+        while (textBuffer.length > normalizedText.length * 3 && nodeBuffer.length > 1) {
+            const removed = nodeBuffer.shift();
+            textBuffer = textBuffer.slice(removed.text.length);
+            nodeBuffer.forEach(item => {
+                item.startIndex -= removed.text.length;
+            });
+        }
+
+        const matchIndex = textBuffer.indexOf(normalizedText);
+        if (matchIndex !== -1) {
+            let startNodeInfo = null;
+            let endNodeInfo = null;
+            let matchEnd = matchIndex + normalizedText.length;
+            let startNodeIndex = -1;
+
+            for (let i = 0; i < nodeBuffer.length; i++) {
+                const nodeInfo = nodeBuffer[i];
+                const nodeStartIndex = nodeInfo.startIndex;
+                const nodeEndIndex = nodeStartIndex + nodeInfo.text.length;
+                
+                if (nodeStartIndex <= matchIndex && nodeEndIndex > matchIndex) {
+                    const localOffset = matchIndex - nodeStartIndex;
+                    if (localOffset <= nodeInfo.text.length) {
+                        startNodeInfo = {
+                            ...nodeInfo,
+                            offset: localOffset
+                        };
+                        startNodeIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (startNodeInfo && startNodeIndex !== -1) {
+                for (let i = startNodeIndex; i < nodeBuffer.length; i++) {
+                    const nodeInfo = nodeBuffer[i];
+                    const nodeStartIndex = nodeInfo.startIndex;
+                    const nodeEndIndex = nodeStartIndex + nodeInfo.text.length;
+                    
+                    if (nodeStartIndex < matchEnd && nodeEndIndex >= matchEnd) {
+                        const localOffset = matchEnd - nodeStartIndex;
+                        if (localOffset <= nodeInfo.text.length) {
+                            endNodeInfo = {
+                                ...nodeInfo,
+                                offset: localOffset
+                            };
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (startNodeInfo && endNodeInfo) {
+                try {
+                    range.setStart(startNodeInfo.node, startNodeInfo.offset);
+                    range.setEnd(endNodeInfo.node, endNodeInfo.offset);
+                    return range;
+                } catch (error) {
+                    console.warn('Failed to set range:', error);
+                    continue;
+                }
+            }
+        }
+    }
+    return null;
+};
+
 function removeHighlights() {
-    // Remove all highlights
     [TOP_K_HIGHLIGHT_CLASS, BOTTOM_K_HIGHLIGHT_CLASS].forEach(className => {
         const highlights = document.getElementsByClassName(className);
         while (highlights.length > 0) {
@@ -451,14 +595,11 @@ function removeHighlights() {
     });
 }
 
-// Export configuration functions
 window.setHighlightConfig = function(config) {
     highlightConfig = { ...highlightConfig, ...config };
-    // Update styles
     updateStyles();
 }
 
-// 添加消息监听器
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'toggleHighlight') {
         window.toggleHighlight();
@@ -472,9 +613,6 @@ function validateRAGRequest(ragRequest) {
     if (!ragRequest.intentTree) {
         throw new Error('Intent tree is required');
     }
-    // if (ragRequest.webContent.length > 1000) {
-    //     throw new Error('Web content exceeds maximum length of 1000 characters');
-    // }
     if (ragRequest.k < 1) {
         throw new Error('k must be greater than 0');
     }
