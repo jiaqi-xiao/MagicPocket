@@ -16,7 +16,65 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRecordsArea();
     initializeScrollIndicators();
     initializeResizer();
+    
+    // Reset highlight button state to default
+    const highlightBtn = document.getElementById('highlightTextBtn');
+    if (highlightBtn) {
+        highlightBtn.textContent = 'Highlight Text';
+    }
 });
+
+async function resetHighlightState() {
+    console.log("Resetting highlight state...");
+    const highlightBtn = document.getElementById('highlightTextBtn');
+    if (!highlightBtn) {
+        console.log("Highlight button not found");
+        return;
+    }
+
+    highlightBtn.textContent = 'Highlight Text';
+    console.log("Set initial button text");
+    
+    try {
+        console.log("Attempting to get current tab...");
+        const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        console.log("Query result:", tab);
+        
+        if (tab) {
+            console.log("Current tab URL:", tab.url);
+            console.log("Getting pageHighlightStates from storage...");
+            const { pageHighlightStates = {} } = await chrome.storage.local.get('pageHighlightStates');
+            console.log("Before update pageHighlightStates:", pageHighlightStates);
+            
+            pageHighlightStates[tab.url] = false;
+            console.log("Setting new state in storage...");
+            
+            try {
+                await new Promise((resolve, reject) => {
+                    chrome.storage.local.set({ pageHighlightStates }, () => {
+                        if (chrome.runtime.lastError) {
+                            console.error("Storage set error:", chrome.runtime.lastError);
+                            reject(chrome.runtime.lastError);
+                        } else {
+                            console.log("After update pageHighlightStates:", pageHighlightStates);
+                            resolve();
+                        }
+                    });
+                });
+                
+                console.log("Storage updated successfully");
+                await updateHighlightButtonState(tab.url);
+                console.log("Highlight button state updated");
+            } catch (storageError) {
+                console.error("Error updating storage:", storageError);
+            }
+        } else {
+            console.log("No active tab found");
+        }
+    } catch (error) {
+        console.error("Error in resetHighlightState:", error);
+    }
+}
 
 function initializeTaskDescription() {
     const taskDescription = document.getElementById("currentTaskDescription");
@@ -273,6 +331,7 @@ function initializeRecordsArea() {
     // 监听来自content script的高亮状态变化
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'highlightStateChanged') {
+            console.log("highlightStateChanged received from content script: ", request);
             const highlightBtn = document.getElementById('highlightTextBtn');
             if (request.isActive) {
                 highlightBtn.textContent = 'Remove Highlight';
@@ -534,6 +593,176 @@ function hideLoadingState() {
     }
 }
 
+// 监听标签页更新
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab.id === tabId) {
+        if (changeInfo.status === 'loading' && !changeInfo.url) {
+            // 页面刷新的情况
+            const highlightBtn = document.getElementById('highlightTextBtn');
+            if (highlightBtn) {
+                highlightBtn.textContent = 'Highlight Text';
+                const { pageHighlightStates = {} } = await chrome.storage.local.get('pageHighlightStates');
+                pageHighlightStates[tab.url] = false;
+                await chrome.storage.local.set({ pageHighlightStates });
+            }
+        }
+    }
+});
+
+// 监听标签页激活
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    await updateHighlightButtonState(tab.url);
+    updateActiveRecordHighlight(tab.url);
+    resetScrollIndicators();
+});
+
+// 更新高亮按钮状态
+async function updateHighlightButtonState(url) {
+    try {
+        const { pageHighlightStates = {} } = await chrome.storage.local.get('pageHighlightStates');
+        const highlightBtn = document.getElementById('highlightTextBtn');
+        
+        if (highlightBtn) {
+            highlightBtn.textContent = pageHighlightStates[url] ? 'Remove Highlight' : 'Highlight Text';
+        }
+    } catch (error) {
+        console.error("Error updating highlight button state:", error);
+    }
+}
+
+// 添加消息监听器来处理高亮状态变化
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'highlightStateChanged') {
+        updateHighlightButtonState(request.url);
+    }
+});
+
+// 更新高亮状态函数
+function updateActiveRecordHighlight(currentUrl) {
+    const scrollArea = document.getElementById("recordsScrollArea");
+    let activeItems = [];
+    
+    // 更新高亮状态并收集所有匹配的items
+    document.querySelectorAll('.record-item').forEach(item => {
+        const recordUrl = item.getAttribute('data-url');
+        if (recordUrl === currentUrl) {
+            item.classList.add('active');
+            activeItems.push(item);
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    // 如果找到匹配的items
+    if (activeItems.length > 0) {
+        // 找到第一个不完全可见的高亮item
+        const firstVisibleActive = activeItems.find(item => {
+            const rect = item.getBoundingClientRect();
+            const containerRect = scrollArea.getBoundingClientRect();
+            return rect.top >= containerRect.top && rect.bottom <= containerRect.bottom;
+        });
+
+        // 如果没有完全可见的高亮item，滚动到第一个高亮item
+        if (!firstVisibleActive && activeItems.length > 0) {
+            const targetItem = activeItems[0];
+            scrollToItem(targetItem, scrollArea);
+        }
+
+        // 更新滚动提示
+        updateScrollIndicators(activeItems, scrollArea);
+    }
+}
+
+// 滚动到指定item，确保完整显示
+function scrollToItem(item, scrollArea) {
+    const scrollAreaHeight = scrollArea.clientHeight;
+    const itemHeight = item.offsetHeight;
+    const itemOffsetTop = item.offsetTop;
+    const scrollAreaScrollHeight = scrollArea.scrollHeight;
+
+    // 添加一些边距，确保内容不会贴边
+    const MARGIN = 10;
+    
+    let targetScrollTop;
+    
+    // 计算如果将item放在顶部，底部是否有足够空间
+    const remainingItemsHeight = scrollAreaScrollHeight - (itemOffsetTop + itemHeight);
+    
+    if (remainingItemsHeight < scrollAreaHeight - itemHeight) {
+        // 如果底部空间不足，将item放在可视区域的底部
+        targetScrollTop = Math.max(
+            0,
+            Math.min(
+                scrollAreaScrollHeight - scrollAreaHeight,
+                itemOffsetTop - (scrollAreaHeight - itemHeight) + MARGIN
+            )
+        );
+    } else {
+        // 如果底部空间充足，将item放在顶部
+        targetScrollTop = Math.max(0, itemOffsetTop - MARGIN);
+    }
+
+    // 确保不会滚动过头
+    targetScrollTop = Math.min(
+        targetScrollTop,
+        scrollAreaScrollHeight - scrollAreaHeight
+    );
+
+    // 使用平滑滚动
+    scrollArea.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth'
+    });
+
+    // 添加滚动完成后的检查
+    setTimeout(() => {
+        const itemRect = item.getBoundingClientRect();
+        const containerRect = scrollArea.getBoundingClientRect();
+        
+        // 检查item是否完全在可视区域内
+        if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+            // 如果不在，进行微调
+            const adjustment = itemRect.top < containerRect.top ? 
+                itemRect.top - containerRect.top - MARGIN : 
+                itemRect.bottom - containerRect.bottom + MARGIN;
+            
+            scrollArea.scrollBy({
+                top: adjustment,
+                behavior: 'smooth'
+            });
+        }
+    }, 300); // 等待初始滚动完成
+}
+
+// 更新查找目标item的逻辑
+function findTargetItem(activeItems, scrollArea, direction) {
+    const containerRect = scrollArea.getBoundingClientRect();
+    
+    if (direction === 'up') {
+        // 找到视野外最上方的完整item
+        return activeItems
+            .filter(item => {
+                const rect = item.getBoundingClientRect();
+                // 检查item是否完全在视野上方或部分在视野上方
+                return rect.bottom < containerRect.top || 
+                       (rect.top < containerRect.top && rect.bottom > containerRect.top);
+            })
+            .sort((a, b) => a.offsetTop - b.offsetTop)[0];
+    } else {
+        // 找到视野外最下方的完整item
+        return activeItems
+            .filter(item => {
+                const rect = item.getBoundingClientRect();
+                // 检查item是否完全在视野下方或部分在视野下方
+                return rect.top > containerRect.bottom || 
+                       (rect.bottom > containerRect.bottom && rect.top < containerRect.bottom);
+            })
+            .sort((a, b) => b.offsetTop - a.offsetTop)[0];
+    }
+}
+
 // 初始化滚动提示元素
 function initializeScrollIndicators() {
     const recordsArea = document.querySelector('.records-area');
@@ -682,170 +911,7 @@ function resetScrollIndicators() {
     if (downIndicator) downIndicator.dataset.shown = 'false';
 }
 
-// 更新监听标签页变化的代码
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    resetScrollIndicators(); // 重置提示状态
-    await updateHighlightButtonState(tab.url);
-    updateActiveRecordHighlight(tab.url);
-});
-
-// 监听URL变化
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.url) {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (activeTab.id === tabId) {
-            await updateHighlightButtonState(changeInfo.url);
-            updateActiveRecordHighlight(changeInfo.url);
-        }
-    }
-});
-
-// 更新高亮按钮状态
-async function updateHighlightButtonState(url) {
-    const { pageHighlightStates = {} } = await chrome.storage.local.get('pageHighlightStates');
-    const highlightBtn = document.getElementById('highlightTextBtn');
-    
-    // 根据当前页面的存储状态更新按钮文本
-    if (pageHighlightStates[url]) {
-        highlightBtn.textContent = 'Remove Highlight';
-    } else {
-        highlightBtn.textContent = 'Highlight Text';
-    }
-}
-
-// 添加消息监听器来处理高亮状态变化
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'highlightStateChanged') {
-        updateHighlightButtonState(request.url);
-    }
-});
-
-// 更新高亮状态函数
-function updateActiveRecordHighlight(currentUrl) {
-    const scrollArea = document.getElementById("recordsScrollArea");
-    let activeItems = [];
-    
-    // 更新高亮状态并收集所有匹配的items
-    document.querySelectorAll('.record-item').forEach(item => {
-        const recordUrl = item.getAttribute('data-url');
-        if (recordUrl === currentUrl) {
-            item.classList.add('active');
-            activeItems.push(item);
-        } else {
-            item.classList.remove('active');
-        }
-    });
-
-    // 如果找到匹配的items
-    if (activeItems.length > 0) {
-        // 找到第一个不完全可见的高亮item
-        const firstVisibleActive = activeItems.find(item => {
-            const rect = item.getBoundingClientRect();
-            const containerRect = scrollArea.getBoundingClientRect();
-            return rect.top >= containerRect.top && rect.bottom <= containerRect.bottom;
-        });
-
-        // 如果没有完全可见的高亮item，滚动到第一个高亮item
-        if (!firstVisibleActive && activeItems.length > 0) {
-            const targetItem = activeItems[0];
-            scrollToItem(targetItem, scrollArea);
-        }
-
-        // 更新滚动提示
-        updateScrollIndicators(activeItems, scrollArea);
-    }
-}
-
-// 滚动到指定item，确保完整显示
-function scrollToItem(item, scrollArea) {
-    const scrollAreaHeight = scrollArea.clientHeight;
-    const itemHeight = item.offsetHeight;
-    const itemOffsetTop = item.offsetTop;
-    const scrollAreaScrollHeight = scrollArea.scrollHeight;
-
-    // 添加一些边距，确保内容不会贴边
-    const MARGIN = 10;
-    
-    let targetScrollTop;
-    
-    // 计算如果将item放在顶部，底部是否有足够空间
-    const remainingItemsHeight = scrollAreaScrollHeight - (itemOffsetTop + itemHeight);
-    
-    if (remainingItemsHeight < scrollAreaHeight - itemHeight) {
-        // 如果底部空间不足，将item放在可视区域的底部
-        targetScrollTop = Math.max(
-            0,
-            Math.min(
-                scrollAreaScrollHeight - scrollAreaHeight,
-                itemOffsetTop - (scrollAreaHeight - itemHeight) + MARGIN
-            )
-        );
-    } else {
-        // 如果底部空间充足，将item放在顶部
-        targetScrollTop = Math.max(0, itemOffsetTop - MARGIN);
-    }
-
-    // 确保不会滚动过头
-    targetScrollTop = Math.min(
-        targetScrollTop,
-        scrollAreaScrollHeight - scrollAreaHeight
-    );
-
-    // 使用平滑滚动
-    scrollArea.scrollTo({
-        top: targetScrollTop,
-        behavior: 'smooth'
-    });
-
-    // 添加滚动完成后的检查
-    setTimeout(() => {
-        const itemRect = item.getBoundingClientRect();
-        const containerRect = scrollArea.getBoundingClientRect();
-        
-        // 检查item是否完全在可视区域内
-        if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
-            // 如果不在，进行微调
-            const adjustment = itemRect.top < containerRect.top ? 
-                itemRect.top - containerRect.top - MARGIN : 
-                itemRect.bottom - containerRect.bottom + MARGIN;
-            
-            scrollArea.scrollBy({
-                top: adjustment,
-                behavior: 'smooth'
-            });
-        }
-    }, 300); // 等待初始滚动完成
-}
-
-// 更新查找目标item的逻辑
-function findTargetItem(activeItems, scrollArea, direction) {
-    const containerRect = scrollArea.getBoundingClientRect();
-    
-    if (direction === 'up') {
-        // 找到视野外最上方的完整item
-        return activeItems
-            .filter(item => {
-                const rect = item.getBoundingClientRect();
-                // 检查item是否完全在视野上方或部分在视野上方
-                return rect.bottom < containerRect.top || 
-                       (rect.top < containerRect.top && rect.bottom > containerRect.top);
-            })
-            .sort((a, b) => a.offsetTop - b.offsetTop)[0];
-    } else {
-        // 找到视野外最下方的完整item
-        return activeItems
-            .filter(item => {
-                const rect = item.getBoundingClientRect();
-                // 检查item是否完全在视野下方或部分在视野下方
-                return rect.top > containerRect.bottom || 
-                       (rect.bottom > containerRect.bottom && rect.top < containerRect.bottom);
-            })
-            .sort((a, b) => b.offsetTop - a.offsetTop)[0];
-    }
-}
-
-// 添加：初始化分隔条
+// 初始化分隔条
 function initializeResizer() {
     const recordsArea = document.querySelector('.records-area');
     const scrollArea = document.getElementById('recordsScrollArea');
