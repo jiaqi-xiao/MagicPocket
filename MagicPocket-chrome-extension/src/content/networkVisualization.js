@@ -811,7 +811,7 @@ class NetworkManager {
             const defaultValue = 'New Intent ' + (Object.keys(this.intentTree.item || {}).length + 1);
             
             this.createDialog('Add New Intent', defaultValue, async (intentName) => {
-                const newNodeId = 'intent_' + (this.nodes.length + 1);
+                const newNodeId = this.generateUniqueNodeId();
                 
                 // 添加新节点到数据集
                 this.nodes.add({
@@ -871,6 +871,19 @@ class NetworkManager {
                 }
             });
         };
+    }
+
+    // 生成唯一的节点ID
+    generateUniqueNodeId() {
+        let counter = 1;
+        while (true) {
+            const newId = 'intent_' + counter;
+            const existingNode = this.nodes.get(newId);
+            if (!existingNode) {
+                return newId;
+            }
+            counter++;
+        }
     }
 
     // 删除节点
