@@ -489,9 +489,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             ).model_dump()
         
         # Step 1: 将 webContent 分句
-        sentences = await model4Split.invoke(scenario, webContent)
-        sentences = [sentence for sentence in sentences["data"] if len(sentence.split(" "))  > 3]
-        # sentences = split2Sentences(webContent)
+        # sentences = await model4Split.invoke(scenario, webContent)
+        # sentences = [sentence for sentence in sentences["data"] if len(sentence.split(" "))  > 3]
+        sentences = split2Sentences(webContent)
         print("该网页句子数量：", len(sentences))
 
         contentChunks = np.array_split(sentences, chunk_num)

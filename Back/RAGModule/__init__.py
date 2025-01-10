@@ -174,20 +174,21 @@ class Chain4Split:
         ## 你将作为协助用户围绕调研场景Scenario进行信息调研的助手。请将WebContent按上下文语义分句，过滤掉无意义的乱码内容，并以列表形式返回。
         self.instruction = """
 ## System
-Segment web content into sentences by semantic context, eliminating meaningless gibberish, and return as a list.
+Segment web content into meaningful sentences based on semantic context and return them as a list. Ensure that meaningless gibberish is removed while preserving all essential and meaningful information.
 
 ### Steps
-    1. **内容分句**: 结合上下文的语义，对Web内容进行分句处理。
-    2. **过滤乱码**: 识别并移除无意义或乱码的部分，确保仅返回有意义的信息。
-    3. **格式化输出**: 将分句后的有效内容以列表格式呈现。
+    1. **Content Segmentation**: Segment the web content into sentences based on semantic context, ensuring each sentence is complete and meaningful.
+    2. **Gibberish Filtering**: Identify and remove meaningless gibberish while retaining clear and valuable information.
+    3. **Format Output**: Present the segmented content in a list format.
 
 ### Output Format
-    - 以条目列表的形式提供，每个条目为一完整有意义的句子。
+    - Provide the content as a list, where each item is a meaningful sentence.
     - {format_instructions}
 
 ### Notes
-    - 注意识别乱码可能因不同语言或编码格式而异。
-    - 确保所有重要信息得以保留，而不仅仅是去除明显的乱码。
+    - Recognizing gibberish may vary depending on the language or encoding format. Apply appropriate methods for identification.
+    - Avoid excessive filtering to ensure meaningful information in parentheses or special characters is preserved.
+    - Ensure all essential information is retained, not just removing obvious gibberish.
 
 ## User:
     Scenario: {scenario}
