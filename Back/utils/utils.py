@@ -39,6 +39,15 @@ def filterNodes(
     return result
 
 
+def is_sentence_valid(s, min_length=3):
+    # 检查是否包含中文字符
+    chinese_chars = re.findall(r'[\u4e00-\u9fff]', s)
+    if chinese_chars:  # 如果包含中文
+        return len(chinese_chars) >= min_length
+    else:  # 如果不包含中文，使用原来的英文单词判断逻辑
+        return len(s.split()) > min_length
+
+
 def split2Sentences(content):
     # 使用正则表达式分句
     sentence_endings = re.compile(r"(?<=[。！？!?.\n])")
@@ -46,7 +55,7 @@ def split2Sentences(content):
     # 去除空白句子
     sentences = [s.strip() for s in sentences if s.strip() and not all(c in "。！？!?.\n" for c in s)]
     # 去除过短的句子
-    sentences = [s for s in sentences if len(s.split(" ")) > 3]
+    sentences = [s for s in sentences if is_sentence_valid(s)]
     return sentences
 
 
