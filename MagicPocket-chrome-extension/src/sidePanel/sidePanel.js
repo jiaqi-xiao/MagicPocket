@@ -352,194 +352,183 @@ function initializeRecordsArea() {
     });
 }
 
-function createButton(text, id) {
-    const button = document.createElement("button");
-    button.id = id;
-    button.textContent = text;
-    Object.assign(button.style, {
-        padding: "6px 12px",
-        borderRadius: "8px",
-        border: "none",
-        fontSize: "13px",
-        fontWeight: "500",
-        cursor: "pointer",
-        transition: "all 0.2s ease",
-        backgroundColor: getButtonColor(id),
-        color: getButtonTextColor(id),
-        height: "32px",
-        lineHeight: "20px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-    });
-
-    // 添加悬停效果
-    button.addEventListener("mouseover", () => {
-        button.style.filter = "brightness(0.95)";
-        button.style.transform = "translateY(-1px)";
-    });
-
-    button.addEventListener("mouseout", () => {
-        button.style.filter = "none";
-        button.style.transform = "translateY(0)";
-    });
-
-    return button;
-}
-
-function getButtonColor(id) {
-    const colors = {
-        clearAllBtn: "#FEE2E2",
-        startGenerateBtn: "#E6FFFA",
-        showIntentBtn: "#EBF4FF",
-        showNetworkBtn: "#F0FFF4",
-        highlightTextBtn: "#FFF5F7"
-    };
-    return colors[id] || "#EDF2F7";
-}
-
-function getButtonTextColor(id) {
-    const colors = {
-        clearAllBtn: "#E53E3E",
-        startGenerateBtn: "#319795",
-        showIntentBtn: "#3182CE",
-        showNetworkBtn: "#38A169",
-        highlightTextBtn: "#D53F8C"
-    };
-    return colors[id] || "#4A5568";
-}
-
 async function updateRecordsList() {
     const scrollArea = document.getElementById("recordsScrollArea");
-    const records = await getRecords();
     
-    scrollArea.innerHTML = "";
-    
-    // 获取当前活动标签的URL
-    const currentTab = await new Promise(resolve => {
-        chrome.tabs.query({active: true, currentWindow: true}, tabs => {
-            resolve(tabs[0]);
-        });
-    });
-    
-    // 使用 Promise.all 来并行处理所有记录
-    await Promise.all(records.map(async (record, index) => {
-        const item = document.createElement("div");
-        item.className = "record-item";
-        item.setAttribute('data-record-id', record.id || index);
+    try {
+        const records = await getRecords();
         
-        // 添加点击事件和样式
-        item.style.cursor = "pointer";
-        item.addEventListener('click', async (e) => {
-            window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_clicked', {
-                record_id: record.id || index
+        scrollArea.innerHTML = "";
+        
+        // 获取当前活动标签的URL
+        const currentTab = await new Promise(resolve => {
+            chrome.tabs.query({active: true, currentWindow: true}, tabs => {
+                resolve(tabs[0]);
             });
-            // 确保点击不是来自删除按钮或跳转按钮
-            if (!e.target.closest('.delete-btn') && !e.target.closest('.goto-page-btn')) {
-                const url = chrome.runtime.getURL(`records.html?index=${index}`);
-                
-                // 查找当前窗口中是否已经打开了 records.html
-                const tabs = await chrome.tabs.query({});
-                const recordsTab = tabs.find(tab => tab.url.includes('records.html'));
-                
-                if (recordsTab) {
-                    // 如果已经打开，更新该标签页的URL并激活它
-                    await chrome.tabs.update(recordsTab.id, { 
-                        url: url,
-                        active: true 
-                    });
-                    // 确保包含该标签页的窗口被激活
-                    chrome.windows.update(recordsTab.windowId, { focused: true });
-                } else {
-                    // 如果没有打开，创建新标签页
-                    chrome.tabs.create({ url: url });
+        });
+        
+        // 使用 Promise.all 来并行处理所有记录
+        await Promise.all(records.map(async (record, index) => {
+            const item = document.createElement("div");
+            item.className = "record-item";
+            item.setAttribute('data-record-id', record.id || index);
+            item.setAttribute('data-index', index);
+            
+            // 添加点击事件和样式
+            item.style.cursor = "pointer";
+            item.addEventListener('click', async (e) => {
+                window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_clicked', {
+                    record_id: record.id || index
+                });
+                // 确保点击不是来自删除按钮或跳转按钮
+                if (!e.target.closest('.delete-btn') && !e.target.closest('.goto-page-btn')) {
+                    const url = chrome.runtime.getURL(`records.html?index=${index}`);
+                    
+                    // 查找当前窗口中是否已经打开了 records.html
+                    const tabs = await chrome.tabs.query({});
+                    const recordsTab = tabs.find(tab => tab.url.includes('records.html'));
+                    
+                    if (recordsTab) {
+                        // 如果已经打开，更新该标签页的URL并激活它
+                        await chrome.tabs.update(recordsTab.id, { 
+                            url: url,
+                            active: true 
+                        });
+                        // 确保包含该标签页的窗口被激活
+                        chrome.windows.update(recordsTab.windowId, { focused: true });
+                    } else {
+                        // 如果没有打开，创建新标签页
+                        chrome.tabs.create({ url: url });
+                    }
+                }
+            });
+            
+            // 设置data-url属性和检查是否需要高亮
+            item.setAttribute('data-url', record.url || '');
+            if (currentTab && currentTab.url === record.url) {
+                item.classList.add('active');
+            }
+            
+            let contentHtml = '';
+            if (record.type === "text") {
+                contentHtml = `<p>${record.content}</p>`;
+            } else if (record.type === "image") {
+                try {
+                    const imageData = await imageStorage.getImage(record.content);
+                    contentHtml = `
+                        <div class="image-preview">
+                            <img src="${imageData}" alt="Screenshot">
+                        </div>
+                    `;
+                } catch (error) {
+                    console.warn('Error loading image:', error);
+                    contentHtml = '<p>Error loading image</p>';
                 }
             }
-        });
-        
-        // 设置data-url属性和检查是否需要高亮
-        item.setAttribute('data-url', record.url || '');
-        if (currentTab && currentTab.url === record.url) {
-            item.classList.add('active');
-        }
-        
-        let contentHtml = '';
-        if (record.type === "text") {
-            contentHtml = `<p>${record.content}</p>`;
-        } else if (record.type === "image") {
-            try {
-                const imageData = await imageStorage.getImage(record.content);
-                contentHtml = `
-                    <div class="image-preview">
-                        <img src="${imageData}" alt="Screenshot">
-                    </div>
-                `;
-            } catch (error) {
-                console.warn('Error loading image:', error);
-                contentHtml = '<p>Error loading image</p>';
-            }
-        }
 
-        item.innerHTML = `
-            <div class="record-item-content">
-                ${contentHtml}
-                ${record.comment ? `<div class="comment">${record.comment}</div>` : ''}
-            </div>
-            <div class="record-item-meta">
-                <div class="record-item-info">
-                    <button class="goto-page-btn" data-url="${record.url || ''}" title="Go to page">
+            item.innerHTML = `
+                <div class="record-item-content">
+                    ${contentHtml}
+                    ${record.comment ? `<div class="comment">${record.comment}</div>` : ''}
+                </div>
+                <div class="record-item-meta">
+                    <div class="record-item-info">
+                        <button class="goto-page-btn" data-url="${record.url || ''}" title="Go to page">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <line x1="10" y1="14" x2="21" y2="3"></line>
+                            </svg>
+                        </button>
+                        <span class="record-time">${new Date(record.timestamp).toLocaleString()}</span>
+                    </div>
+                    <button class="delete-btn" data-index="${index}">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                         </svg>
                     </button>
-                    <span class="record-time">${new Date(record.timestamp).toLocaleString()}</span>
                 </div>
-                <button class="delete-btn" data-id="${record.id}">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                </button>
-            </div>
-        `;
+            `;
 
-        scrollArea.appendChild(item);
+            scrollArea.appendChild(item);
 
-        // 添加跳转按钮事件监听器
-        item.querySelector('.goto-page-btn').addEventListener('click', async (e) => {
-            const url = e.currentTarget.dataset.url;
-            if (!url) return;
-            // 查找当前打开的标签页中是否有匹配的URL
-            chrome.tabs.query({}, function(tabs) {
-                // console.log(tabs);
-                const existingTab = tabs.find(tab => tab.url === url);
-                if (existingTab) {
-                    chrome.tabs.update(existingTab.id, { active: true });
-                    chrome.windows.update(existingTab.windowId, { focused: true });
-                } else {
-                    chrome.tabs.create({ url });
+            // 添加删除按钮事件监听器
+            const deleteBtn = item.querySelector('.delete-btn');
+            deleteBtn.addEventListener('click', async (e) => {
+                const recordIndex = parseInt(e.currentTarget.dataset.index);
+                window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_delete_btn_clicked', {
+                    record_index: recordIndex
+                });
+                
+                try {
+                    const records = await getRecords();
+                    
+                    records.splice(recordIndex, 1);
+                    
+                    await new Promise((resolve, reject) => {
+                        chrome.storage.local.set({ records: records }, () => {
+                            if (chrome.runtime.lastError) {
+                                console.error('[SidePanel] Storage update error:', chrome.runtime.lastError);
+                                reject(chrome.runtime.lastError);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                    
+                    // 直接从 DOM 中移除元素，而不是重新渲染整个列表
+                    const recordItems = scrollArea.querySelectorAll('.record-item');
+                    recordItems.forEach((item, i) => {
+                        if (i >= recordIndex) {
+                            const newIndex = i === recordIndex ? null : i - 1;
+                            if (newIndex !== null) {
+                                item.setAttribute('data-index', newIndex);
+                                const deleteBtn = item.querySelector('.delete-btn');
+                                if (deleteBtn) {
+                                    deleteBtn.setAttribute('data-index', newIndex);
+                                }
+                            } else {
+                                item.remove();
+                            }
+                        }
+                    });
+                    
+                    window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_deleted', {
+                        record_index: recordIndex
+                    });
+                } catch (error) {
+                    console.error('[SidePanel] Error during record deletion:', error);
                 }
             });
-        });
-    }));
 
-    // 添加删除按钮事件监听器
-    scrollArea.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_delete_btn_clicked', {
-                record_id: e.currentTarget.dataset.id
+            // 添加跳转按钮事件监听器
+            item.querySelector('.goto-page-btn').addEventListener('click', async (e) => {
+                const url = e.currentTarget.dataset.url;
+                if (!url) return;
+                // 查找当前打开的标签页中是否有匹配的URL
+                chrome.tabs.query({}, function(tabs) {
+                    // console.log(tabs);
+                    const existingTab = tabs.find(tab => tab.url === url);
+                    if (existingTab) {
+                        chrome.tabs.update(existingTab.id, { active: true });
+                        chrome.windows.update(existingTab.windowId, { focused: true });
+                    } else {
+                        chrome.tabs.create({ url });
+                    }
+                });
             });
-            const id = e.currentTarget.dataset.id;
-            const records = await getRecords();
-            const updatedRecords = records.filter(record => record.id !== id);
-            await chrome.storage.local.set({ records: updatedRecords });
-            updateRecordsList();
-            window.Logger.log(window.LogCategory.UI, 'side_panel_record_item_deleted', {
-                record_id: id
-            });
+        }));
+
+        // 添加滚动事件监听
+        scrollArea.addEventListener('scroll', () => {
+            const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
+            if (activeItems.length > 0) {
+                updateScrollIndicators(activeItems, scrollArea);
+            }
         });
-    });
+    } catch (error) {
+        console.error('[SidePanel] Error during updateRecordsList:', error);
+    }
 }
 
 async function getRecords() {
@@ -890,19 +879,6 @@ window.addEventListener('resize', () => {
     }
 });
 
-// 添加滚动事件监听
-document.addEventListener('DOMContentLoaded', () => {
-    const scrollArea = document.getElementById("recordsScrollArea");
-    if (scrollArea) {
-        scrollArea.addEventListener('scroll', () => {
-            const activeItems = Array.from(document.querySelectorAll('.record-item.active'));
-            if (activeItems.length > 0) {
-                updateScrollIndicators(activeItems, scrollArea);
-            }
-        });
-    }
-});
-
 // 重置提示状态（在URL变化时调用）
 function resetScrollIndicators() {
     const upIndicator = document.querySelector('.scroll-indicator.up');
@@ -1045,4 +1021,61 @@ function countNodes(node) {
         count += node.child.reduce((sum, child) => sum + countNodes(child), 0);
     }
     return count;
+}
+
+function createButton(text, id) {
+    const button = document.createElement("button");
+    button.id = id;
+    button.textContent = text;
+    Object.assign(button.style, {
+        padding: "6px 12px",
+        borderRadius: "8px",
+        border: "none",
+        fontSize: "13px",
+        fontWeight: "500",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+        backgroundColor: getButtonColor(id),
+        color: getButtonTextColor(id),
+        height: "32px",
+        lineHeight: "20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+    });
+
+    // 添加悬停效果
+    button.addEventListener("mouseover", () => {
+        button.style.filter = "brightness(0.95)";
+        button.style.transform = "translateY(-1px)";
+    });
+
+    button.addEventListener("mouseout", () => {
+        button.style.filter = "none";
+        button.style.transform = "translateY(0)";
+    });
+
+    return button;
+}
+
+function getButtonColor(id) {
+    const colors = {
+        clearAllBtn: "#FEE2E2",
+        startGenerateBtn: "#E6FFFA",
+        showIntentBtn: "#EBF4FF",
+        showNetworkBtn: "#F0FFF4",
+        highlightTextBtn: "#FFF5F7"
+    };
+    return colors[id] || "#EDF2F7";
+}
+
+function getButtonTextColor(id) {
+    const colors = {
+        clearAllBtn: "#E53E3E",
+        startGenerateBtn: "#319795",
+        showIntentBtn: "#3182CE",
+        showNetworkBtn: "#38A169",
+        highlightTextBtn: "#D53F8C"
+    };
+    return colors[id] || "#4A5568";
 }
