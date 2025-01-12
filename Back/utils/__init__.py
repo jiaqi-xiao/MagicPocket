@@ -77,9 +77,10 @@ class NodesList(BaseModel):
 class NodeGroupsIndex(BaseModel):
     item: list[dict[str, list[int]]]
 
+
 class sentenceGroupsIndex(BaseModel):
-    top_k: list[int]
-    bottom_k: list[int]
+    top_all: dict[str, list[int]]
+    bottom_all: dict[str, list[int]]
 
 # 定义子模型
 class DataItem(BaseModel):
@@ -118,8 +119,11 @@ class NodeGroups(BaseModel):
 
 class RAGRequest(BaseModel):
     scenario: str
-    k: int = 3
+    k: int = 9
     top_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
     bottom_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
     intentTree: dict
     webContent: str = Field(..., description="The web content to process", max_length=100000)
+
+class SplitContent(BaseModel):
+    data: list[str]
