@@ -100,29 +100,35 @@ class Chain4RAG:
         ## 你将作为协助用户围绕调研场景Scenario进行信息调研的助手。请从SentenceList中为IntentsDict中的每一对Intent和Description各自筛选最多k个最相关的句子，并返回这些句子在SentenceList中的相应索性作为top-k。
         self.instruction = """
 ## System  
-You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given `SentenceList` for each Intent provided in the `IntentsDict`. Ensure all indices in the output start from 0 and do not exceed the length of `SentenceList`.
+You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict. Ensure all indices in the output start from 0 and are within the bounds of the SentenceList.
 
 ### Steps  
 1. **Understand Input Structure:**  
-   - **Scenario**: Describes the context for the research.  
-   - **SentenceList**: A list of sentences, indexed starting from 0. 
-   - SentenceList contains `N` sentences, where `N = len(SentenceList)`. Ensure all indices are strictly within `[0, N-1]`.
-   - **IntentsDict**: A dictionary structured as `{{"intent": "description"}}`, where the description provides a summary of the theme and any existing sub-themes.  
+    - **Scenario**:  Describes the research context, providing high-level guidance..  
+    - **SentenceList**: A list of sentences, indexed starting from 0.
+        - The total number of sentences is N = len(SentenceList).
+        - Ensure all indices are within [0, N-1].
+    - **IntentsDict**: A dictionary structured as `{{"intent": "description"}}`
+        - Each key represents an intent, and the value (description) summarizes the theme and relevant sub-themes of the intent. 
 
-2. **Filter and Match:**  
-   For each `Intent` and `Description` in `IntentsDict`:  
-   - **Theme Analysis**: If `Description` is empty, infer the theme based on the `Scenario` and `Intent` and complete the `Description`.  
-   - **Sentence Evaluation**: For each sentence in `SentenceList`:  
-     - Determine if the sentence aligns with the theme of the Intent and any existing sub-themes:  
-       - If aligned with **both**, add the sentence's index to `top_all[Intent]`.  
-       - If aligned with only the **theme** (not with sub-themes, or if no sub-themes are specified), add the sentence's index to `bottom_all[Intent]`.  
-   - If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
+2. **Filter and Match Sentences:**  
+    For each `Intent` and its corresponding `Description` in IntentsDict:  
+    - **Theme Completion**: If `Description` is empty, infer the intent's theme based on the `Scenario` and `Intent`. Fill in the `Description`. 
+    - **Sentence Evaluation**: For each sentence in `SentenceList`:  
+        - Align with Intent Theme and Sub-Themes:
+            - If the sentence aligns with both the theme and specified sub-themes of the intent, add its index to top_all[Intent].
+        - Align with Intent Theme Only:
+            -If the sentence aligns only with the theme (and not with sub-themes or no sub-themes are provided), add its index to bottom_all[Intent].
+
+3. **Relevance Check**:
+    - Avoid including indices in the output unless the sentences genuinely align with the intent's theme or sub-themes. Do not merely list indices without context.
+    - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable.If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
 
 ### Output Format  
 - The output should be a dictionary with two main keys: `top_all` and `bottom_all`.
   - {format_instructions}
-  - `top_all`: Maps to a dictionary where each Intent key contains a list of indices corresponding to sentences aligned with both the theme and sub-themes.  
-  - `bottom_all`: Maps to a dictionary where each Intent key contains a list of indices corresponding to sentences aligned with only the theme (but not sub-themes).  
+  - `top_all`: Maps each Intent to a list of indices corresponding to sentences aligned with both the intent's theme and sub-themes.  
+  - `bottom_all`: Maps each Intent to a list of indices corresponding to sentences aligned only with the theme.
 - Example output:  
   ```json
   {{
@@ -138,10 +144,12 @@ You are tasked with assisting the user in conducting information research based 
   ```
 
 ### Notes  
-- Ensure **all indices in the output start from 0 and are strictly less than the length of `SentenceList`**.  
-- Pay attention to the distinction between themes and sub-themes to classify sentences accurately.  
-- Provide a comprehensive and accurate `Description` to ensure correct filtering.  
-- Include sentences in the appropriate lists only if they fully meet the criteria for alignment.  
+    - Relevance Over Quantity: Do not include indices simply for the sake of completeness. Each index must correspond to a sentence that fully meets the alignment criteria.
+    - Indexing Rules: Ensure all indices are within [0, N-1] and represent meaningful matches.
+    - Theme vs. Sub-Themes: Clearly differentiate between sentences that align with the overall theme and those that align with sub-themes.
+    - Exhaustive Intent Coverage: Include all intents from IntentsDict, even if no sentences are aligned with them.
+    - No Placeholder Indices: Avoid adding indices arbitrarily; only include indices for sentences with a verifiable match.
+    - Avoid Duplication: Ensure that indices do not appear more than once in the same or different lists.
 
 ## User:
     Scenario: {scenario}
