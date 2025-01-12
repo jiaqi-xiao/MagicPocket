@@ -499,15 +499,15 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         result = []
 
         for chunk in contentChunks:
-            # Step 2: 向量化 webContent 的句子
-            sentences_embeddings = await embedModel.embeddingList(chunk)
+            print("chunk len:", len(chunk))
+            # # Step 2: 向量化 webContent 的句子
+            # sentences_embeddings = await embedModel.embeddingList(chunk)
 
             # Step 3: 筛选意图并向量化它们
             intentsDict = filterNodes(
                 intentTree,  # 转换 IntentTree 为字典
                 target_level=1
             )
-
             # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
             # Step 4: 计算每个意图的 top-k 相关句子
@@ -520,48 +520,53 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             response = await model4RAG.invoke(
                     scenario,
                     intentsDict=intentsDict,
-                    sentenceList=chunk,
-                    top_threshold=top_threshold,
+                    sentenceList=chunk
                 )
             # 重构响应，替换索引
             print("response", response)
-            intent_to_top_k_sentences = {}
-            for item in response["data"]:
-                intent = item["intent"]
-                intent_to_top_k_sentences[intent] = [chunk[i] for i in item["topKIndices"]]
+            for intent in response['top_all'].keys():
+                if intent not in intent_to_top_k_sentences:
+                    intent_to_top_k_sentences[intent] = []
+                if intent not in intent_to_bottom_k_sentences:
+                    intent_to_bottom_k_sentences[intent] = []
+                intent_to_top_k_sentences[intent].extend([chunk[i] for i in response["top_all"][intent]])
+                intent_to_bottom_k_sentences[intent].extend([chunk[i] for i in response["bottom_all"][intent]])
+            # for item in response["data"]:
+            #     intent = item["intent"]
+            #     intent_to_top_k_sentences[intent] = [chunk[i] for i in item["topKIndices"]]
 
-                intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
+            #     intent_records = get_intent_records(intentTree, intent)  # 获取当前意图的记录
 
-                # 如果intent没有records，直接返回top-k
-                if len(intent_records) == 0:
-                    intent_to_bottom_k_sentences[intent] = intent_to_top_k_sentences[intent][:k]
-                    intent_to_top_k_sentences[intent]= []
-                else:
-                    intent_records_embeddings = await embedModel.embeddingList(intent_records)
-                    # 对超过top_threshold的每个句子计算与每个 record 的最小相似度
-                    record_max_similarities = []
-                    top_sentences_embeddings = [sentences_embeddings[i] for i in item["topKIndices"]]
-                    if top_sentences_embeddings:
-                        for sentence_e in top_sentences_embeddings:
-                            max_sim = max(
-                                cosine_similarity(record_e, sentence_e)
-                                for record_e in intent_records_embeddings
-                            )
-                            record_max_similarities.append(max_sim)
+            #     # 如果intent没有records，直接返回top-k
+            #     if len(intent_records) == 0:
+            #         intent_to_bottom_k_sentences[intent] = intent_to_top_k_sentences[intent][:k]
+            #         intent_to_top_k_sentences[intent]= []
+            #     else:
+            #         intent_records_embeddings = await embedModel.embeddingList(intent_records)
+            #         # 对超过top_threshold的每个句子计算与每个 record 的最小相似度
+            #         record_max_similarities = []
+            #         top_sentences_embeddings = [sentences_embeddings[i] for i in item["topKIndices"]]
+            #         if top_sentences_embeddings:
+            #             for sentence_e in top_sentences_embeddings:
+            #                 max_sim = max(
+            #                     cosine_similarity(record_e, sentence_e)
+            #                     for record_e in intent_records_embeddings
+            #                 )
+            #                 record_max_similarities.append(max_sim)
 
-                        # 筛选低于 bottom_k_threshold 的句子及其索引
-                        bottom_filtered_indices = [
-                            i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
-                        ]
-                        bottom_filtered_similarities = [
-                            (i, record_max_similarities[i]) for i in bottom_filtered_indices
-                        ]
-                        bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
-                        bottom_k_sentences = [chunk[i[0]] for i in bottom_k_indices]
+            #             # 筛选低于 bottom_k_threshold 的句子及其索引
+            #             bottom_filtered_indices = [
+            #                 i for i, sim in enumerate(record_max_similarities) if sim <= bottom_threshold
+            #             ]
+            #             bottom_filtered_similarities = [
+            #                 (i, record_max_similarities[i]) for i in bottom_filtered_indices
+            #             ]
+            #             bottom_k_indices = sorted(bottom_filtered_similarities, key=lambda x: x[1])[:k]
+            #             bottom_k_sentences = [chunk[i[0]] for i in bottom_k_indices]
 
-                        intent_to_bottom_k_sentences[intent] = bottom_k_sentences
-                    else:
-                        intent_to_bottom_k_sentences[intent] = []
+            #             intent_to_bottom_k_sentences[intent] = bottom_k_sentences
+            #         else:
+            #             intent_to_bottom_k_sentences[intent] = []
             result.append({
                 "top_k": intent_to_top_k_sentences,
                 "bottom_k": intent_to_bottom_k_sentences
