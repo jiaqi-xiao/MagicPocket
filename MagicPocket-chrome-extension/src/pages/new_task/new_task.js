@@ -10,6 +10,10 @@ document.getElementById('createTaskBtn').addEventListener('click', () => {
         task_description: taskDescription
     });
 
+    // 重置 NetworkManager 的静态属性
+    NetworkManager.activeNodeMenu = false;
+    NetworkManager.immutableIntents = new Set();
+
     // 清除现有记录并保存新任务
     chrome.storage.local.set({
         records: [],
