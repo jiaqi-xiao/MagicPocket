@@ -159,12 +159,22 @@ class ExtractModelCluster:
 
 class Chain4Grouping:
     def __init__(self, model):
+        # self.instruction = """
+        # You are a professional information research assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the indices of the nodes from the original list.
+        
+        # # Output Format
+        # - The output should be structured in JSON format as following {format_instructions}.
+        # - example: {{"item": [{{"group1": [0,1]}}, {{"group2": [2]}}]}}
+        
+        # # User:
+        # Scenario: {scenario}
+        # List: {list}
+        # """
         self.instruction = """
-        You are a professional information research assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the indices of the nodes from the original list.
+        You are a professional information research assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the nodes from the original list.
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
-        - example: {{"item": [{{"group1": [0,1]}}, {{"group2": [2]}}]}}
         
         # User:
         Scenario: {scenario}
@@ -172,7 +182,8 @@ class Chain4Grouping:
         """
 
         self.model = model
-        self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
+        # self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
+        self.parser = JsonOutputParser(pydantic_object=NodeGroups)
         self.prompt_template = PromptTemplate(
             input_variables=["list"],
             template=self.instruction,
@@ -197,14 +208,14 @@ class Chain4Construct:
         # Steps
             1. **Confirm the number of groups**: Understand the structure of Groups and confirm the number of groups. The number of extracted intents should match the number of groups. A group is defined as a dictionary with group_x as the key and a list as the value.
             2. **Understand the scenario**: Analyze the meaning of the Scenario and infer the user's potential intent in this context.
-            3. **Extract intents**: For each group, extract a corresponding intent. The intent should align with the commonalities among all Nodes in the group. Ensure each intent is closely related to the Scenario, logically distinct, and non-overlapping. Each intent should be a concise verb phrase of no more than 7 words. The description should be clear and explain the theme behind the intent and the subtopics already covered in the group.
+            3. **Extract intents**: For each group, extract a corresponding intent. The intent should align with the commonalities among all Nodes in the group while incorporating user comments to refine and ensure relevance. Each intent must be closely related to the Scenario, logically distinct, and non-overlapping. Each intent should be a concise verb phrase of no more than 7 words. The description should clearly explain the theme behind the intent and the subtopics already covered in the group.
             4. **Create a new dictionary**: Following the Output Format, use the extracted intents as keys and the corresponding group dictionary keys as values.
             5. **Compare and replace**:
                 - Compare the intents in IntentsList with the extracted intents in the dictionary to find the most similar intent.
                 - Replace the dictionary intent with the most similar one from IntentsList if a match is found.
                 - Retain the original intent if no sufficiently similar match is found.
             6. **Add remaining intents**: For unused intents in IntentsList, treat them as remaining_intent. Add them to the new dictionary created in step 4 with their values set as empty strings. Skip this step if all intents are used.
-            7. **Add descriptions**: For every intent in the new dictionary, provide a specific description explaining the theme behind the intent and the subtopics covered in the group.
+            7. **Add descriptions**: For every intent in the new dictionary, explain the reason why to construct the intent, and also provide a specific description of the subtopics covered in the group.
         
         # Output Format
             - The output should be structured in JSON format as following {format_instructions}.

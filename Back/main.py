@@ -284,12 +284,19 @@ async def group_nodes(nodesList: NodesList, scenario: str="learn prompt engineer
         
         # 转换输出格式
         groupsOfNodes = {
+            # "item": [
+            #     {group_name: [root[i-1] for i in indices]}
+            #     for group in groupsOfNodesIndex["item"]
+            #     for group_name, indices in group.items()
+            # ]
             "item": [
-                {group_name: [root[i-1] for i in indices]}
+                {group_name: nodesList}
                 for group in groupsOfNodesIndex["item"]
-                for group_name, indices in group.items()
+                for group_name, nodesList in group.items()
             ]
         }
+
+        # print("groupsOfNodesIndex", groupsOfNodesIndex)
         
         return groupsOfNodes
 
@@ -478,9 +485,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         # 以下是原有逻辑
         intentTree = ragRequest.intentTree
         webContent = ragRequest.webContent
-        k = ragRequest.k
-        top_threshold = ragRequest.top_threshold
-        bottom_threshold = ragRequest.bottom_threshold
+        # k = ragRequest.k
+        # top_threshold = ragRequest.top_threshold
+        # bottom_threshold = ragRequest.bottom_threshold
         scenario = ragRequest.scenario
 
         intentTree = IntentTree(
@@ -488,6 +495,8 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
             ).model_dump()
         
+        print("intentTree", intentTree)
+
         # Step 1: 将 webContent 分句
         # sentences = await model4Split.invoke(scenario, webContent)
         # sentences = [sentence for sentence in sentences["data"] if len(sentence.split(" "))  > 3]
@@ -529,8 +538,10 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                     intent_to_top_k_sentences[intent] = []
                 if intent not in intent_to_bottom_k_sentences:
                     intent_to_bottom_k_sentences[intent] = []
-                intent_to_top_k_sentences[intent].extend([chunk[i] for i in response["top_all"][intent]])
-                intent_to_bottom_k_sentences[intent].extend([chunk[i] for i in response["bottom_all"][intent]])
+                # intent_to_top_k_sentences[intent].extend([chunk[i] for i in response["top_all"][intent]])
+                # intent_to_bottom_k_sentences[intent].extend([chunk[i] for i in response["bottom_all"][intent]])
+                intent_to_top_k_sentences[intent].extend(response["top_all"][intent])
+                intent_to_bottom_k_sentences[intent].extend(response["bottom_all"][intent])
             # for item in response["data"]:
             #     intent = item["intent"]
             #     intent_to_top_k_sentences[intent] = [chunk[i] for i in item["topKIndices"]]

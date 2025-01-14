@@ -82,6 +82,10 @@ class sentenceGroupsIndex(BaseModel):
     top_all: dict[str, list[int]]
     bottom_all: dict[str, list[int]]
 
+class sentenceGroups(BaseModel):
+    top_all: dict[str, list[str]]
+    bottom_all: dict[str, list[str]]
+
 # 定义子模型
 class DataItem(BaseModel):
     intent: str
