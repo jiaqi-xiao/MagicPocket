@@ -98,58 +98,107 @@ from utils import *
 class Chain4RAG:
     def __init__(self, model):
         ## 你将作为协助用户围绕调研场景Scenario进行信息调研的助手。请从SentenceList中为IntentsDict中的每一对Intent和Description各自筛选最多k个最相关的句子，并返回这些句子在SentenceList中的相应索性作为top-k。
+#         self.instruction = """
+# ## System  
+# You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict. Ensure all indices in the output start from 0 and are within the bounds of the SentenceList.
+
+# ### Steps  
+# 1. **Understand Input Structure:**  
+#     - **Scenario**:  Describes the research context, providing high-level guidance..  
+#     - **SentenceList**: A list of sentences, indexed starting from 0.
+#         - The total number of sentences is N = len(SentenceList).
+#         - Ensure all indices are within [0, N-1].
+#     - **IntentsDict**: A dictionary structured as `{{"intent": "description"}}`
+#         - Each key represents an intent, and the value (description) summarizes the theme and relevant sub-themes of the intent. 
+
+# 2. **Filter and Match Sentences:**  
+#     For each `Intent` and its corresponding `Description` in IntentsDict:  
+#     - **Theme Completion**: If `Description` is empty, infer the intent's theme based on the `Scenario` and `Intent`. Fill in the `Description`. 
+#     - **Sentence Evaluation**: For each sentence in `SentenceList`:  
+#         - Align with Intent Theme and Sub-Themes:
+#             - If the sentence aligns with both the theme and specified sub-themes of the intent, add its index to top_all[Intent].
+#         - Align with Intent Theme Only:
+#             -If the sentence aligns only with the theme (and not with sub-themes or no sub-themes are provided), add its index to bottom_all[Intent].
+
+# 3. **Relevance Check**:
+#     - Avoid including indices in the output unless the sentences genuinely align with the intent's theme or sub-themes. Do not merely list indices without context.
+#     - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable.If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
+
+# ### Output Format  
+# - The output should be a dictionary with two main keys: `top_all` and `bottom_all`.
+#   - {format_instructions}
+#   - `top_all`: Maps each Intent to a list of indices corresponding to sentences aligned with both the intent's theme and sub-themes.  
+#   - `bottom_all`: Maps each Intent to a list of indices corresponding to sentences aligned only with the theme.
+# - Example output:  
+#   ```json
+#   {{
+#     "top_all": {{
+#       "intent1": [0, 2, 3],
+#       "intent2": []
+#     }},
+#     "bottom_all": {{
+#       "intent1": [10],
+#       "intent2": [24, 27, 30]
+#     }}
+#   }}
+#   ```
+
+# ### Notes  
+#     - Relevance Over Quantity: Do not include indices simply for the sake of completeness. Each index must correspond to a sentence that fully meets the alignment criteria.
+#     - Indexing Rules: Ensure all indices are within [0, N-1] and represent meaningful matches.
+#     - Theme vs. Sub-Themes: Clearly differentiate between sentences that align with the overall theme and those that align with sub-themes.
+#     - Exhaustive Intent Coverage: Include all intents from IntentsDict, even if no sentences are aligned with them.
+#     - No Placeholder Indices: Avoid adding indices arbitrarily; only include indices for sentences with a verifiable match.
+#     - Avoid Duplication: Ensure that indices do not appear more than once in the same or different lists.
+
+# ## User:
+#     Scenario: {scenario}
+#     IntentsDict: {intentsDict}
+#     SentenceList: {sentenceList}
+# """
         self.instruction = """
 ## System  
-You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict. Ensure all indices in the output start from 0 and are within the bounds of the SentenceList.
+You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict.
 
 ### Steps  
 1. **Understand Input Structure:**  
     - **Scenario**:  Describes the research context, providing high-level guidance..  
-    - **SentenceList**: A list of sentences, indexed starting from 0.
-        - The total number of sentences is N = len(SentenceList).
-        - Ensure all indices are within [0, N-1].
+    - **SentenceList**: A list of sentences.
     - **IntentsDict**: A dictionary structured as `{{"intent": "description"}}`
         - Each key represents an intent, and the value (description) summarizes the theme and relevant sub-themes of the intent. 
 
 2. **Filter and Match Sentences:**  
     For each `Intent` and its corresponding `Description` in IntentsDict:  
-    - **Theme Completion**: If `Description` is empty, infer the intent's theme based on the `Scenario` and `Intent`. Fill in the `Description`. 
-    - **Sentence Evaluation**: For each sentence in `SentenceList`:  
-        - Align with Intent Theme and Sub-Themes:
-            - If the sentence aligns with both the theme and specified sub-themes of the intent, add its index to top_all[Intent].
-        - Align with Intent Theme Only:
-            -If the sentence aligns only with the theme (and not with sub-themes or no sub-themes are provided), add its index to bottom_all[Intent].
+    - **Description Understanding**:
+        - Understand the reason why user has the `Intent` and the collected sub-themes of `Intent` in `Description`.
+        - If `Description` is empty, analyze the reason of the `Intent` based on the `Scenario`.
+    - **Sentence Evaluation**: For each sentence in `SentenceList`:
+        - If `Description` or the `Existing sub-themes` in `Description` is empty, skip the step `Align with Intent Reason and Sub-Themes`.
+        - Align with Intent Reason and Sub-Themes:
+            - If the sentence aligns with both the reason in `Description` and collected sub-themes of the intent, add it to top_all[Intent].
+        - Align with Intent Reason Only:
+            - If the sentence aligns only with the reason in `Description` and not with sub-themes, add it to bottom_all[Intent].
+
+        
+
 
 3. **Relevance Check**:
-    - Avoid including indices in the output unless the sentences genuinely align with the intent's theme or sub-themes. Do not merely list indices without context.
-    - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable.If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
+    - Avoid including sentences in the output unless the sentences genuinely align with the intent's theme or sub-themes.
+    - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable. If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
 
 ### Output Format  
 - The output should be a dictionary with two main keys: `top_all` and `bottom_all`.
-  - {format_instructions}
-  - `top_all`: Maps each Intent to a list of indices corresponding to sentences aligned with both the intent's theme and sub-themes.  
-  - `bottom_all`: Maps each Intent to a list of indices corresponding to sentences aligned only with the theme.
-- Example output:  
-  ```json
-  {{
-    "top_all": {{
-      "intent1": [0, 2, 3],
-      "intent2": []
-    }},
-    "bottom_all": {{
-      "intent1": [10],
-      "intent2": [24, 27, 30]
-    }}
-  }}
-  ```
+    - {format_instructions}
+    - `bottom_all`: Maps each Intent to a list of sentences corresponding to sentences aligned only with the reason.
+    - `top_all`: Maps each Intent to a list of sentences corresponding to sentences aligned with both the intent's theme and sub-themes.  
+
 
 ### Notes  
-    - Relevance Over Quantity: Do not include indices simply for the sake of completeness. Each index must correspond to a sentence that fully meets the alignment criteria.
-    - Indexing Rules: Ensure all indices are within [0, N-1] and represent meaningful matches.
-    - Theme vs. Sub-Themes: Clearly differentiate between sentences that align with the overall theme and those that align with sub-themes.
-    - Exhaustive Intent Coverage: Include all intents from IntentsDict, even if no sentences are aligned with them.
-    - No Placeholder Indices: Avoid adding indices arbitrarily; only include indices for sentences with a verifiable match.
-    - Avoid Duplication: Ensure that indices do not appear more than once in the same or different lists.
+    - Relevance Over Quantity: Only include sentences that fully meet the alignment criteria. Avoid adding sentences simply to increase the count.
+    - Empty Description Handling: If the Description of Intent is empty, skip the step `Align with Intent Reason and Sub-Themes`.
+    - Top_all vs. Bottom_all: Maintain a clear distinction between sentences qualifying for top_all (aligned with both the theme and sub-themes) and bottom_all (aligned only with the theme).
+    - Exhaustive Intent Coverage: Ensure every intent in IntentsDict is represented in the output, even if no sentences align with it.
+    - Avoid Duplication: Prevent any sentence from appearing multiple times across or within top_all and bottom_all lists.
 
 ## User:
     Scenario: {scenario}
@@ -158,8 +207,8 @@ You are tasked with assisting the user in conducting information research based 
 """
 
         self.model = model
-        self.parser = JsonOutputParser(pydantic_object=sentenceGroupsIndex)
-        # self.parser = JsonOutputParser(pydantic_object=RAGIndexList)
+        # self.parser = JsonOutputParser(pydantic_object=sentenceGroupsIndex)
+        self.parser = JsonOutputParser(pydantic_object=sentenceGroups)
         self.prompt_template = PromptTemplate(
             # input_variables=["scenario", "intentList", "recordList", "sentenceList", "k", "description"],
             input_variables=["scenario", "intentsDict", "sentenceList"],
