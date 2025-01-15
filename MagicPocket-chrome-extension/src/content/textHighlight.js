@@ -449,7 +449,7 @@ const highlightRange = (range, highlightInfo) => {
             tempDiv.parentNode.removeChild(tempDiv);
         }
     } catch (error) {
-        console.warn('Failed to highlight range:', error);
+        window.Logger.log(window.LogCategory.SYSTEM, 'highlight_range_failed', { error: error.message, highlightInfo: highlightInfo, url: window.location.href });
         try {
             const fragment = range.extractContents();
             const span = createHighlightSpan(highlightInfo);
