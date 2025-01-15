@@ -206,23 +206,64 @@ function initializeRecordsArea() {
                 });
             }
 
+            async function showRetryDialog() {
+                return new Promise((resolve, reject) => {
+                    const dialog = document.createElement('div');
+                    dialog.className = 'mp-custom-dialog';
+                    dialog.innerHTML = `
+                        <div class="mp-dialog-content">
+                            <p>Server is not responding properly. Please try again.</p>
+                            <div class="mp-dialog-buttons">
+                                <button class="mp-cancel-btn">Cancel</button>
+                                <button class="mp-retry-btn">Retry</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(dialog);
+                    
+                    dialog.querySelector('.mp-cancel-btn').addEventListener('click', () => {
+                        dialog.remove();
+                        reject(new Error('Operation cancelled by user'));
+                    });
+                    
+                    dialog.querySelector('.mp-retry-btn').addEventListener('click', () => {
+                        dialog.remove();
+                        resolve();
+                    });
+                });
+            }
+
             let groupResponse;
-            try {
-                groupResponse = await makeGroupRequest();
-                if (groupResponse.status === 422) {
-                    window.Logger.log(window.LogCategory.ERROR, 'side_panel_group_api_422_error', {
-                        error: 'First attempt failed with 422',
+            while (true) {
+                try {
+                    groupResponse = await makeGroupRequest();
+                    if (groupResponse.status === 422) {
+                        window.Logger.log(window.LogCategory.ERROR, 'side_panel_group_api_422_error', {
+                            error: 'Server returned 422 error',
+                            records_count: records.length
+                        });
+                        
+                        // Show dialog and wait for user action
+                        await showRetryDialog();
+                        // If user clicks retry, the loop continues
+                        continue;
+                    }
+                    // If response is not 422, break the loop
+                    break;
+                } catch (error) {
+                    if (error.message === 'Operation cancelled by user') {
+                        window.Logger.log(window.LogCategory.UI, 'side_panel_group_api_cancelled', {
+                            error: error.message
+                        });
+                        throw error;
+                    }
+                    window.Logger.log(window.LogCategory.ERROR, 'side_panel_group_api_error', {
+                        error: error.message,
                         records_count: records.length
                     });
-                    // 重试一次
-                    groupResponse = await makeGroupRequest();
+                    throw error;
                 }
-            } catch (error) {
-                window.Logger.log(window.LogCategory.ERROR, 'side_panel_group_api_error', {
-                    error: error.message,
-                    records_count: records.length
-                });
-                throw error;
             }
 
             const groupApiTime = performance.now() - startTime;
