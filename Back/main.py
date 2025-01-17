@@ -475,7 +475,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
         chunk_num=3
         # 先验证并转换请求数据为RAGRequest对象
         try:
-            print('ragRequest',request_dict)
             ragRequest = RAGRequest(**request_dict)
         except ValidationError as e:
             raise HTTPException(
@@ -483,7 +482,6 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                 detail=f"Invalid request format: {str(e)}"
             )
 
-        
         # 以下是原有逻辑
         intentTree = ragRequest.intentTree
         webContent = ragRequest.webContent
