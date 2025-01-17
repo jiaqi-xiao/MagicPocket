@@ -127,7 +127,7 @@ class RAGRequest(BaseModel):
     top_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
     bottom_threshold: float = Query(default=0.5, ge=0.0, le=1.0)
     intentTree: dict
-    webContent: str = Field(..., description="The web content to process", max_length=100000)
+    webContent: str = Field(..., description="The web content to process")
 
 class SplitContent(BaseModel):
     data: list[str]
