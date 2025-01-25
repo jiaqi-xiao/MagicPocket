@@ -76,3 +76,5 @@ Temporary Items
 
 ### Chrome Extension Output ###
 *.zip
+
+/data_analysis/*.png
