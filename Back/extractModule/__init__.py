@@ -171,7 +171,7 @@ class Chain4Grouping:
         # List: {list}
         # """
         self.instruction = """
-        You are a professional information research assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the nodes from the original list.
+        You are a professional information foraging assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the nodes from the original list.
         
         # Output Format
         - The output should be structured in JSON format as following {format_instructions}.
