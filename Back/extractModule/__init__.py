@@ -185,7 +185,7 @@ class Chain4Grouping:
         # self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
         self.parser = JsonOutputParser(pydantic_object=NodeGroups)
         self.prompt_template = PromptTemplate(
-            input_variables=["list"],
+            input_variables=["list", "scenario"],
             template=self.instruction,
             partial_variables={
                 "format_instructions": self.parser.get_format_instructions()
