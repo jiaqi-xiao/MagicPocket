@@ -2,6 +2,7 @@ from fastapi import Query
 from pydantic import BaseModel, Field, field_validator
 from typing import Union
 from .utils import *
+from .Prompts import Prompts
 
 # Define a Pydantic model for individual intents
 class RecordRef(BaseModel):

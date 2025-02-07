@@ -159,27 +159,7 @@ class ExtractModelCluster:
 
 class Chain4Grouping:
     def __init__(self, model):
-        # self.instruction = """
-        # You are a professional information research assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the indices of the nodes from the original list.
-        
-        # # Output Format
-        # - The output should be structured in JSON format as following {format_instructions}.
-        # - example: {{"item": [{{"group1": [0,1]}}, {{"group2": [2]}}]}}
-        
-        # # User:
-        # Scenario: {scenario}
-        # List: {list}
-        # """
-        self.instruction = """
-        You are a professional information foraging assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the nodes from the original list.
-        
-        # Output Format
-        - The output should be structured in JSON format as following {format_instructions}.
-        
-        # User:
-        Scenario: {scenario}
-        List: {list}
-        """
+        self.instruction = Prompts.GROUP
 
         self.model = model
         # self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
@@ -202,67 +182,7 @@ class Chain4Construct:
     def __init__(self, model):
         ## 对Groups中的每一组提炼一个符合Scenario语境下的意图，以字典形式返回，key为意图，value为group的索引。务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。每个Intent的描述必须简短清晰，最多不超过7个词。
         ## 比较所有生成的意图与IntentsList中的意图，用IntentsList中的意图替换字典中最相似的意图，如果不够相似则不需要替换。如果IntentsList中还有未替换的Intent，则对每个剩余的Intent在字典中创建以该Intent为key，None为value的键值对。
-        self.instruction = """
-        You will act as an assistant to help the user conduct research based on the given Scenario. Please extract a research intent for each dictionary element in Groups and return the results in dictionary format. Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
-
-        # Steps
-            1. **Confirm the number of groups**: Understand the structure of Groups and confirm the number of groups. The number of extracted intents should match the number of groups. A group is defined as a dictionary with group_x as the key and a list as the value.
-            2. **Understand the scenario**: Analyze the meaning of the Scenario and infer the user's potential intent in this context.
-            3. **Extract intents**: For each group, extract a corresponding intent. The intent should align with the commonalities among all Nodes in the group while incorporating user comments to refine and ensure relevance. Each intent must be closely related to the Scenario, logically distinct, and non-overlapping. Each intent should be a concise verb phrase of no more than 7 words. The description should clearly explain the theme behind the intent and the subtopics already covered in the group.
-            4. **Create a new dictionary**: Following the Output Format, use the extracted intents as keys and the corresponding group dictionary keys as values.
-            5. **Compare and replace**:
-                - Compare the intents in IntentsList with the extracted intents in the dictionary to find the most similar intent.
-                - Replace the dictionary intent with the most similar one from IntentsList if a match is found.
-                - Retain the original intent if no sufficiently similar match is found.
-            6. **Add remaining intents**: For unused intents in IntentsList, treat them as remaining_intent. Add them to the new dictionary created in step 4 with their values set as empty strings. Skip this step if all intents are used.
-            7. **Add descriptions**: For every intent in the new dictionary, explain the reason why to construct the intent, and also provide a specific description of the subtopics covered in the group.
-        
-        # Output Format
-            - The output should be structured in JSON format as following {format_instructions}.
-            - example: 
-                    {{'item': {{'generated_intent_1': {{"group": "group1", "description": "Reasons and theme for generated_intent_1. Existing sub-themes: sub_theme_1, sub_theme_2"}}, 'generated_intent_2': {{"group": "group2", "description": "Reasons and theme for generated_intent_2. Existing sub-themes: sub_theme_3, sub_theme_4"}}, 'remaining_intent_3': {{"group": "", "description": "Reasons and theme for generated_intent_1. Existing sub-themes:"}}}}}}
-            - 'generated_intent_x', 'sub_theme_x' and 'remaining_intent_x' should be replaced with specific intent phrases.
-            
-        # Notes
-            - Extract exactly one unique intent per group. The intent must summarize the commonalities of all Nodes in the group.
-            - Each intent description must be logically independent and maintain diversity to the greatest extent, without exceeding 7 words.
-            - When performing similarity replacement, ensure that replacement is only made if similarity is sufficiently high.
-            - If no sufficiently similar intent exists, the original intent remains unchanged, and unused intents in IntentsList will not be forcibly replaced.
-            - Verify the final generated dictionary to ensure all intents are at the same level of granularity. Adjust intent texts if necessary.
-        
-        # User:
-            Scenario: {scenario}
-            Groups: {groups}
-            IntentsList: {intentsList}
-        """
-
-        # self.instruction1 = """
-        # 根据要求，将IntentsList和Groups进行匹配和映射，并为多余的Groups生成新的intents，。
-        #     - 每个Intent和Group之间的匹配应尽可能准确。
-        #     - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
-        #     - 每个Intent的描述必须简短清晰，最多不超过7个词。
-        #     - 务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。
-
-        # # Steps
-        #     1. **初步匹配**: 将IntentsList中的现有intent与Groups列表中的每个group进行匹配，找到最相似的组合。
-        #     2. **分析未匹配的Group**: 如果有多余的group，基于Scenario内容提炼出新的intent以确保每个group都有唯一的intent。
-        #     3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
-        #     4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
-        #     5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
-
-        # # Output Format
-        #     - The output should be structured in JSON format as following {format_instructions}.
-
-        # # Notes
-        # - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
-        # - 请注意每个生成的intent要有显著区别，避免重复以及同义描述。
-        # - 生成的intent节点的immutable属性值为false，原有的intent节点为true
-
-        # # User:
-        # Scenario: {scenario}
-        # Groups: {groups}
-        # IntentsList: {intentsList}
-        # """
+        self.instruction = Prompts.CONSTRUCT
 
         self.model = model
         self.parser = JsonOutputParser(pydantic_object=IntentTreeIndex)
