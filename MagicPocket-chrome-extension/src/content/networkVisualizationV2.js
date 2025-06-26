@@ -517,8 +517,29 @@ class NetworkVisualizationV2 {
             this.demoteHighIntent(sourceId, targetId);
         }
 
+        // 临时禁用物理引擎确保位置调整生效
+        this.network.setOptions({ physics: { enabled: false } });
+        
         this.restoreOriginalState();
-        this.updateNetworkLayout();
+        
+        // 延迟恢复物理引擎
+        setTimeout(() => {
+            this.network.setOptions({
+                physics: {
+                    enabled: true,
+                    stabilization: { enabled: false },
+                    solver: 'repulsion',
+                    repulsion: {
+                        nodeDistance: 0,
+                        centralGravity: 0,
+                        springLength: 0,
+                        springConstant: 0,
+                        damping: 1
+                    }
+                }
+            });
+            this.updateNetworkLayout();
+        }, 300);
     }
 
     // 合并同级节点
@@ -566,6 +587,9 @@ class NetworkVisualizationV2 {
         // 删除源节点及其父连接
         this.removeNodeAndConnections(sourceId);
         
+        // 调整合并后的子节点位置
+        this.adjustAllChildrenPositions(targetId);
+        
         console.log(`Merged ${sourceId} into ${targetId}, new label: ${mergedLabel}`);
     }
 
@@ -600,7 +624,94 @@ class NetworkVisualizationV2 {
             width: 2
         });
 
+        // 自动调整位置：将低级意图移动到高级意图下方合理位置
+        this.adjustChildPosition(lowIntentId, highIntentId);
+
         console.log(`Moved ${lowIntentId} to ${highIntentId}`);
+    }
+
+    // 自动调整子节点位置
+    adjustChildPosition(childId, parentId) {
+        const parentPos = this.network.getPositions([parentId])[parentId];
+        const allChildren = this.nodeRelations.children.get(parentId) || [];
+        
+        if (!parentPos) {
+            console.warn(`Parent position not found for ${parentId}`);
+            return;
+        }
+        
+        // 计算子节点的新位置
+        const levelHeight = 180; // 与树状布局保持一致
+        const childY = parentPos.y + levelHeight;
+        
+        // 如果父节点下有多个子节点，需要水平分布
+        const childIndex = allChildren.indexOf(childId);
+        let childX = parentPos.x;
+        
+        if (allChildren.length > 1) {
+            const childSpacing = 100; // 与树状布局保持一致
+            const totalWidth = (allChildren.length - 1) * childSpacing;
+            childX = parentPos.x - totalWidth / 2 + childIndex * childSpacing;
+        }
+        
+        // 更新子节点位置
+        const childNode = this.nodes.get(childId);
+        if (childNode) {
+            this.nodes.update({
+                id: childId,
+                x: childX,
+                y: childY,
+                fixed: { x: false, y: false } // 确保可以继续拖拽
+            });
+            
+            console.log(`Adjusted position for ${childId}: (${childX}, ${childY}), index: ${childIndex}/${allChildren.length}`);
+            
+            // 递归调整该子节点的所有子节点位置
+            this.adjustAllChildrenPositions(childId);
+        }
+    }
+    
+    // 递归调整所有子节点位置
+    adjustAllChildrenPositions(parentId) {
+        const children = this.nodeRelations.children.get(parentId) || [];
+        
+        children.forEach((childId, index) => {
+            const parentPos = this.network.getPositions([parentId])[parentId];
+            if (!parentPos) return;
+            
+            const childType = this.nodeRelations.nodeTypes.get(childId);
+            let levelHeight;
+            let childSpacing;
+            
+            // 根据节点类型设置不同的间距
+            if (childType === 'low-intent') {
+                levelHeight = 180;
+                childSpacing = 100;
+            } else if (childType === 'record') {
+                levelHeight = 180;
+                childSpacing = 80;
+            } else {
+                return; // 跳过其他类型
+            }
+            
+            const childY = parentPos.y + levelHeight;
+            let childX = parentPos.x;
+            
+            if (children.length > 1) {
+                const totalWidth = (children.length - 1) * childSpacing;
+                childX = parentPos.x - totalWidth / 2 + index * childSpacing;
+            }
+            
+            this.nodes.update({
+                id: childId,
+                x: childX,
+                y: childY,
+                fixed: { x: false, y: false }
+            });
+            
+            // 递归处理下一层
+            this.adjustAllChildrenPositions(childId);
+        });
     }
 
     // 高级意图融合到低级意图 (High -> Low 重组)
@@ -671,6 +782,9 @@ class NetworkVisualizationV2 {
         
         // 4. 删除原高级意图节点
         this.removeNodeAndConnections(highIntentId);
+        
+        // 5. 调整合并后的子节点位置
+        this.adjustAllChildrenPositions(targetLowIntentId);
         
         console.log(`High-intent ${highIntentId} merged into low-intent ${targetLowIntentId}`);
         console.log(`Moved ${leafNodes.length} leaf nodes to target low-intent`);
