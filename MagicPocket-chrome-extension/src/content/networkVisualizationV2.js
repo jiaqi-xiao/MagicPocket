@@ -603,39 +603,78 @@ class NetworkVisualizationV2 {
         console.log(`Moved ${lowIntentId} to ${highIntentId}`);
     }
 
-    // 降级高级意图
+    // 高级意图融合到低级意图 (High -> Low 重组)
     demoteHighIntent(highIntentId, targetLowIntentId) {
-        const targetParent = this.nodeRelations.parents.get(targetLowIntentId);
+        console.log(`High-to-Low reorganization: ${highIntentId} -> ${targetLowIntentId}`);
+        
+        const highNode = this.nodes.get(highIntentId);
+        const targetNode = this.nodes.get(targetLowIntentId);
         const highChildren = this.nodeRelations.children.get(highIntentId) || [];
-
-        // 将高级意图的子节点移动到目标低级意图的父节点
+        
+        // 1. 将高级意图本身融合到目标低级意图的标签中
+        const mergedLabel = `${targetNode.label} + ${highNode.label}`;
+        this.nodes.update({
+            id: targetLowIntentId,
+            label: this.formatLabel(mergedLabel, 'low'),
+            title: `Merged: ${highNode.label} (high-level) → ${targetNode.label} (low-level)`
+        });
+        
+        // 2. 收集所有叶子节点（record节点）
+        const leafNodes = [];
+        
         highChildren.forEach(childId => {
-            if (targetParent) {
-                this.nodeRelations.parents.set(childId, targetParent);
-                const parentChildren = this.nodeRelations.children.get(targetParent) || [];
-                this.nodeRelations.children.set(targetParent, [...parentChildren, childId]);
-
-                // 更新连接
-                const oldEdge = this.edges.get({
-                    filter: edge => edge.from === highIntentId && edge.to === childId
+            const childType = this.nodeRelations.nodeTypes.get(childId);
+            
+            if (childType === 'record') {
+                // 直接收集记录节点
+                leafNodes.push(childId);
+            } else if (childType === 'low-intent') {
+                // 收集低级意图下的所有记录节点
+                const grandChildren = this.nodeRelations.children.get(childId) || [];
+                grandChildren.forEach(grandChildId => {
+                    const grandChildType = this.nodeRelations.nodeTypes.get(grandChildId);
+                    if (grandChildType === 'record') {
+                        leafNodes.push(grandChildId);
+                    }
                 });
-                if (oldEdge.length > 0) {
-                    this.edges.remove(oldEdge[0].id);
-                }
-
-                this.edges.add({
-                    from: targetParent,
-                    to: childId,
-                    arrows: 'to',
-                    width: 2
-                });
+                
+                // 删除原低级意图节点（它将消失）
+                this.removeNodeAndConnections(childId);
             }
         });
-
-        // 删除高级意图节点
+        
+        // 3. 将所有叶子节点连接到目标低级意图下
+        const currentTargetChildren = this.nodeRelations.children.get(targetLowIntentId) || [];
+        
+        leafNodes.forEach(leafId => {
+            // 更新父子关系
+            this.nodeRelations.parents.set(leafId, targetLowIntentId);
+            
+            // 移除旧的连接
+            const oldEdges = this.edges.get({
+                filter: edge => edge.to === leafId
+            });
+            this.edges.remove(oldEdges.map(edge => edge.id));
+            
+            // 创建新连接
+            this.edges.add({
+                from: targetLowIntentId,
+                to: leafId,
+                arrows: 'to',
+                width: 1,
+                dashes: [3, 3]
+            });
+        });
+        
+        // 更新目标节点的子节点列表
+        this.nodeRelations.children.set(targetLowIntentId, [...currentTargetChildren, ...leafNodes]);
+        
+        // 4. 删除原高级意图节点
         this.removeNodeAndConnections(highIntentId);
         
-        console.log(`Demoted ${highIntentId}, children moved to parent of ${targetLowIntentId}`);
+        console.log(`High-intent ${highIntentId} merged into low-intent ${targetLowIntentId}`);
+        console.log(`Moved ${leafNodes.length} leaf nodes to target low-intent`);
+        console.log(`Merged label: ${mergedLabel}`);
     }
 
     // 删除节点及其连接
@@ -791,88 +830,75 @@ class NetworkVisualizationV2 {
         return colors[type] || colors['record'];
     }
 
-    // 重置为树状布局
-    resetToTreeLayout() {
-        console.log('Resetting to tree layout...');
+    // 计算标准树状布局位置 - 抽取的共用函数（与buildNetworkData保持一致）
+    calculateTreeLayoutPositions() {
+        const positions = {};
+        const containerWidth = this.container ? this.container.offsetWidth * 0.8 : 800;
+        const levelHeight = 180;
+        const baseY = -200;
         
+        // 按照buildNetworkData的逻辑重新计算位置
+        // 获取所有节点并按层级分组
         const nodesByLevel = { 0: [], 1: [], 2: [] };
-        
-        // 按层级分组节点，同时重新构建节点关系映射
-        this.rebuildNodeRelations();
-        
         this.nodes.get().forEach(node => {
-            if (nodesByLevel[node.level]) {
+            if (nodesByLevel[node.level] !== undefined) {
                 nodesByLevel[node.level].push(node);
             }
         });
         
-        // 计算新的位置
-        const newPositions = {};
-        const containerWidth = this.container.offsetWidth * 0.8;
-        const levelHeight = 180; // 层级间距
-        const baseY = -200; // 起始Y坐标
-        
-        console.log('Nodes by level:', {
+        console.log('Calculating tree positions for nodes by level:', {
             'High-Intent': nodesByLevel[0].length,
-            'Low-Intent': nodesByLevel[1].length, 
+            'Low-Intent': nodesByLevel[1].length,
             'Record': nodesByLevel[2].length
         });
         
-        // 为每层节点计算位置
-        if (nodesByLevel[0].length > 0) {
-            // 高级意图节点 - 水平均匀分布
-            const highNodes = nodesByLevel[0];
-            const highSpacing = Math.max(150, containerWidth / (highNodes.length + 1));
-            const highTotalWidth = (highNodes.length - 1) * highSpacing;
+        // 高级意图节点布局 - 与buildNetworkData保持一致
+        const highNodes = nodesByLevel[0];
+        if (highNodes.length > 0) {
+            const highNodeSpacing = Math.max(150, containerWidth * 0.8 / (highNodes.length + 1));
+            const highTotalWidth = (highNodes.length - 1) * highNodeSpacing;
             const highStartX = -highTotalWidth / 2;
             
             highNodes.forEach((node, index) => {
-                newPositions[node.id] = {
-                    x: highStartX + index * highSpacing,
+                positions[node.id] = {
+                    x: highStartX + index * highNodeSpacing,
                     y: baseY
                 };
             });
-            
-            console.log(`Positioned ${highNodes.length} high-intent nodes`);
         }
         
-        // 低级意图节点 - 按父节点分组分布
-        if (nodesByLevel[1].length > 0) {
-            const lowNodes = nodesByLevel[1];
+        // 低级意图节点布局 - 按父节点分组
+        const lowNodes = nodesByLevel[1];
+        if (lowNodes.length > 0) {
             const lowNodesByParent = new Map();
             
             // 按父节点分组
             lowNodes.forEach(node => {
                 const parentId = this.nodeRelations.parents.get(node.id);
-                if (!lowNodesByParent.has(parentId)) {
-                    lowNodesByParent.set(parentId, []);
+                if (parentId) {
+                    if (!lowNodesByParent.has(parentId)) {
+                        lowNodesByParent.set(parentId, []);
+                    }
+                    lowNodesByParent.get(parentId).push(node);
                 }
-                lowNodesByParent.get(parentId).push(node);
             });
             
-            // 为每组计算位置
+            // 为每个父节点下的子节点计算位置
             lowNodesByParent.forEach((children, parentId) => {
-                const parentPos = newPositions[parentId];
+                const parentPos = positions[parentId];
                 if (parentPos) {
-                    children.forEach((child, index) => {
+                    children.forEach((child, childIndex) => {
                         let childX = parentPos.x;
+                        
+                        // 如果有多个子节点，进行水平分布
                         if (children.length > 1) {
-                            const childSpacing = 100;
-                            const childTotalWidth = (children.length - 1) * childSpacing;
-                            childX = parentPos.x - childTotalWidth / 2 + index * childSpacing;
+                            const lowSpacing = 100; // 与buildNetworkData保持一致
+                            const lowTotalWidth = (children.length - 1) * lowSpacing;
+                            childX = parentPos.x - lowTotalWidth / 2 + childIndex * lowSpacing;
                         }
-                        newPositions[child.id] = {
+                        
+                        positions[child.id] = {
                             x: childX,
-                            y: baseY + levelHeight
-                        };
-                    });
-                    console.log(`Positioned ${children.length} low-intent nodes under parent ${parentId}`);
-                } else {
-                    console.warn(`Parent ${parentId} not found for low-intent nodes:`, children.map(c => c.id));
-                    // 为没有找到父节点的低级意图节点分配默认位置
-                    children.forEach((child, index) => {
-                        newPositions[child.id] = {
-                            x: index * 150,
                             y: baseY + levelHeight
                         };
                     });
@@ -880,43 +906,38 @@ class NetworkVisualizationV2 {
             });
         }
         
-        // 记录节点 - 按父节点分组分布
-        if (nodesByLevel[2].length > 0) {
-            const recordNodes = nodesByLevel[2];
+        // 记录节点布局 - 按父节点分组
+        const recordNodes = nodesByLevel[2];
+        if (recordNodes.length > 0) {
             const recordNodesByParent = new Map();
             
             // 按父节点分组
             recordNodes.forEach(node => {
                 const parentId = this.nodeRelations.parents.get(node.id);
-                if (!recordNodesByParent.has(parentId)) {
-                    recordNodesByParent.set(parentId, []);
+                if (parentId) {
+                    if (!recordNodesByParent.has(parentId)) {
+                        recordNodesByParent.set(parentId, []);
+                    }
+                    recordNodesByParent.get(parentId).push(node);
                 }
-                recordNodesByParent.get(parentId).push(node);
             });
             
-            // 为每组计算位置
+            // 为每个父节点下的记录节点计算位置
             recordNodesByParent.forEach((children, parentId) => {
-                const parentPos = newPositions[parentId];
+                const parentPos = positions[parentId];
                 if (parentPos) {
-                    children.forEach((child, index) => {
+                    children.forEach((child, childIndex) => {
                         let childX = parentPos.x;
+                        
+                        // 如果有多个记录，进行水平分布
                         if (children.length > 1) {
-                            const childSpacing = 80;
-                            const childTotalWidth = (children.length - 1) * childSpacing;
-                            childX = parentPos.x - childTotalWidth / 2 + index * childSpacing;
+                            const recordSpacing = 80; // 与buildNetworkData保持一致
+                            const recordTotalWidth = (children.length - 1) * recordSpacing;
+                            childX = parentPos.x - recordTotalWidth / 2 + childIndex * recordSpacing;
                         }
-                        newPositions[child.id] = {
+                        
+                        positions[child.id] = {
                             x: childX,
-                            y: baseY + levelHeight * 2
-                        };
-                    });
-                    console.log(`Positioned ${children.length} record nodes under parent ${parentId}`);
-                } else {
-                    console.warn(`Parent ${parentId} not found for record nodes:`, children.map(c => c.id));
-                    // 为没有找到父节点的记录节点分配默认位置
-                    children.forEach((child, index) => {
-                        newPositions[child.id] = {
-                            x: index * 100,
                             y: baseY + levelHeight * 2
                         };
                     });
@@ -924,9 +945,22 @@ class NetworkVisualizationV2 {
             });
         }
         
+        return positions;
+    }
+    
+    // 重置为树状布局
+    resetToTreeLayout() {
+        console.log('Resetting to tree layout...');
+        
+        // 重新构建节点关系映射
+        this.rebuildNodeRelations();
+        
+        // 使用统一的布局计算函数
+        const newPositions = this.calculateTreeLayoutPositions();
+        
         // 应用新位置
         const positionedNodes = Object.keys(newPositions).length;
-        console.log(`Applying positions to ${positionedNodes} nodes`);
+        console.log(`Applying tree layout positions to ${positionedNodes} nodes`);
         
         if (positionedNodes > 0) {
             // 临时禁用物理引擎以确保位置设置生效
@@ -950,7 +984,7 @@ class NetworkVisualizationV2 {
             
             if (nodesToUpdate.length > 0) {
                 this.nodes.update(nodesToUpdate);
-                console.log(`Positions applied successfully to ${nodesToUpdate.length} nodes`);
+                console.log(`Tree layout positions applied successfully to ${nodesToUpdate.length} nodes`);
                 
                 // 延迟后恢复物理引擎设置
                 setTimeout(() => {
@@ -971,7 +1005,7 @@ class NetworkVisualizationV2 {
                 }, 100);
             }
         } else {
-            console.warn('No positions calculated - layout reset failed');
+            console.warn('No positions calculated - tree layout reset failed');
         }
         
         // 调整完毕后适配视图
