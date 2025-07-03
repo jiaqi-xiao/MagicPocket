@@ -40,8 +40,9 @@ if (document.readyState === 'loading') {
     initializeExtension();
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Content script received message:', request);
+if (chrome && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        console.log('Content script received message:', request);
     
     if (request.action === "startScreenshot") {
         initScreenshot();
@@ -61,15 +62,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({success: true});
         return true;
     }
-});
+    });
+}
 
 // 添加用于向侧边栏发送数据的函数
 function updateSidePanel(data, type) {
-    chrome.runtime.sendMessage({
-        action: type === 'intent' ? 'updateIntentGraph' : 'updateNetworkGraph',
-        data: data,
-        target: 'sidePanel'
-    });
+    if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+            action: type === 'intent' ? 'updateIntentGraph' : 'updateNetworkGraph',
+            data: data,
+            target: 'sidePanel'
+        });
+    }
 }
 
 // 在现有的可视化更新函数中添加对侧边栏的更新

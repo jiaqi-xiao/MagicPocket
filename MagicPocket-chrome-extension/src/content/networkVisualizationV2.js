@@ -379,19 +379,32 @@ class NetworkVisualizationV2 {
             }
         });
 
+        // 右键菜单事件
+        this.network.on('oncontext', (params) => {
+            params.event.preventDefault();
+            if (params.nodes.length === 1) {
+                this.showContextMenu(params.nodes[0], params.pointer.DOM);
+            }
+        });
+
         console.log('Event handlers setup complete');
     }
 
     // 开始拖拽
     startDrag(nodeId) {
         const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
-        if (nodeType === 'record') return false; // 记录节点不能拖拽
-
-        // 只有意图节点才进入重组模式
-        if (nodeType === 'high-intent' || nodeType === 'low-intent') {
+        
+        // 所有节点类型都允许拖拽
+        if (nodeType === 'high-intent' || nodeType === 'low-intent' || nodeType === 'record') {
             this.dragState.isDragging = true;
             this.dragState.draggedNodeId = nodeId;
-            this.dragState.draggedSubtree = this.getSubtree(nodeId);
+            
+            // 对于Record节点，只拖拽自身；对于Intent节点，拖拽整个子树
+            if (nodeType === 'record') {
+                this.dragState.draggedSubtree = new Set([nodeId]);
+            } else {
+                this.dragState.draggedSubtree = this.getSubtree(nodeId);
+            }
 
             // 设置子树透明度
             this.dragState.draggedSubtree.forEach(id => {
@@ -406,7 +419,7 @@ class NetworkVisualizationV2 {
                 }
             });
 
-            console.log('Reorganization drag started:', nodeId, 'Subtree:', Array.from(this.dragState.draggedSubtree));
+            console.log('Reorganization drag started:', nodeId, 'Type:', nodeType, 'Subtree:', Array.from(this.dragState.draggedSubtree));
         }
         
         return true;
@@ -506,15 +519,210 @@ class NetworkVisualizationV2 {
 
         console.log(`Reorganizing: ${sourceType}(${sourceId}) -> ${targetType}(${targetId})`);
 
-        if (sourceType === targetType) {
-            // 同级合并
-            this.mergeNodes(sourceId, targetId);
+        // 显示碰撞检测对话框
+        this.showCollisionDialog(sourceId, targetId, sourceType, targetType);
+    }
+
+    // 显示碰撞检测对话框
+    showCollisionDialog(sourceId, targetId, sourceType, targetType) {
+        const sourceNode = this.nodes.get(sourceId);
+        const targetNode = this.nodes.get(targetId);
+        
+        // 根据节点类型确定可用选项
+        const options = this.getCollisionOptions(sourceType, targetType);
+        
+        if (options.length === 0) {
+            // 不允许的操作
+            this.showNotAllowedMessage(sourceType, targetType);
+            this.restoreOriginalState();
+            this.clearDragState();
+            return;
+        }
+
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.id = 'collisionDialog';
+        dialog.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 10001;
+                min-width: 320px;
+                max-width: 480px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;">
+                    Node Reorganization Options
+                </h3>
+                <div style="margin: 16px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #666;">
+                    <div><strong>Source Node:</strong> ${sourceNode.label} (${this.getNodeTypeLabel(sourceType)})</div>
+                    <div style="margin-top: 4px;"><strong>Target Node:</strong> ${targetNode.label} (${this.getNodeTypeLabel(targetType)})</div>
+                </div>
+                <div style="margin: 20px 0;">
+                    ${options.map(option => `
+                        <button 
+                            class="collision-option-btn"
+                            data-action="${option.action}"
+                            style="
+                                display: block;
+                                width: 100%;
+                                padding: 12px 16px;
+                                margin: 8px 0;
+                                background: ${option.primary ? '#007bff' : '#6c757d'};
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 14px;
+                                font-weight: 500;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)';"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+                        >
+                            ${option.icon} ${option.label}
+                        </button>
+                    `).join('')}
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button id="cancelReorganization" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #f8f9fa;
+                        color: #666;
+                        border: 1px solid #dee2e6;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(dialog);
+
+        // 绑定事件
+        dialog.querySelectorAll('.collision-option-btn').forEach(btn => {
+            btn.onclick = () => {
+                const action = btn.dataset.action;
+                this.executeReorganization(sourceId, targetId, action);
+                dialog.remove();
+            };
+        });
+
+        document.getElementById('cancelReorganization').onclick = () => {
+            this.restoreOriginalState();
+            this.clearDragState();
+            dialog.remove();
+        };
+    }
+
+    // 获取节点类型标签
+    getNodeTypeLabel(type) {
+        const labels = {
+            'high-intent': 'High-Level Intent',
+            'low-intent': 'Low-Level Intent',
+            'record': 'Record'
+        };
+        return labels[type] || type;
+    }
+
+    // 获取碰撞选项
+    getCollisionOptions(sourceType, targetType) {
+        const options = [];
+        
+        if (sourceType === 'high-intent' && targetType === 'high-intent') {
+            options.push(
+                { action: 'merge', label: 'Merge Nodes', icon: '🔗', primary: true },
+                { action: 'attach', label: 'Demote as Child', icon: '🔻', primary: false }
+            );
+        } else if (sourceType === 'low-intent' && targetType === 'low-intent') {
+            // Low-Level Intent 之间只能合并，不能设为子节点
+            options.push(
+                { action: 'merge', label: 'Merge Nodes', icon: '🔗', primary: true }
+            );
+        } else if (sourceType === 'record' && targetType === 'low-intent') {
+            options.push(
+                { action: 'attach', label: 'Attach as Child', icon: '📎', primary: true }
+            );
         } else if (sourceType === 'low-intent' && targetType === 'high-intent') {
-            // Low -> High: 移动到新的高级意图下
-            this.moveToHighIntent(sourceId, targetId);
+            options.push(
+                { action: 'attach', label: 'Move to High-Intent', icon: '📎', primary: true }
+            );
         } else if (sourceType === 'high-intent' && targetType === 'low-intent') {
-            // High -> Low: 高级意图降级
-            this.demoteHighIntent(sourceId, targetId);
+            options.push(
+                { action: 'merge', label: 'Demote & Merge', icon: '🔻', primary: true }
+            );
+        }
+        
+        return options;
+    }
+
+    // 显示不允许操作的消息
+    showNotAllowedMessage(sourceType, targetType) {
+        const message = document.createElement('div');
+        message.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #fff3cd;
+                border: 1px solid #ffeaa7;
+                border-radius: 8px;
+                padding: 20px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 10001;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                color: #856404;
+                text-align: center;
+            ">
+                <div style="font-size: 24px; margin-bottom: 8px;">⚠️</div>
+                <div style="font-weight: 600; margin-bottom: 8px;">Operation Not Allowed</div>
+                <div style="font-size: 14px;">
+                    ${this.getNodeTypeLabel(sourceType)} cannot be dragged to ${this.getNodeTypeLabel(targetType)}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(message);
+        
+        setTimeout(() => {
+            message.remove();
+        }, 2000);
+    }
+
+    // 执行重组操作
+    executeReorganization(sourceId, targetId, action) {
+        const sourceType = this.nodeRelations.nodeTypes.get(sourceId);
+        const targetType = this.nodeRelations.nodeTypes.get(targetId);
+        
+        console.log(`Executing reorganization: ${action} for ${sourceType}(${sourceId}) -> ${targetType}(${targetId})`);
+        
+        switch (action) {
+            case 'merge':
+                if (sourceType === targetType) {
+                    this.mergeNodes(sourceId, targetId);
+                } else if (sourceType === 'high-intent' && targetType === 'low-intent') {
+                    this.demoteHighIntent(sourceId, targetId);
+                }
+                break;
+            case 'attach':
+                if (sourceType === 'record' && targetType === 'low-intent') {
+                    this.attachRecordToLowIntent(sourceId, targetId);
+                } else if (sourceType === 'low-intent' && targetType === 'high-intent') {
+                    this.moveToHighIntent(sourceId, targetId);
+                } else if (sourceType === targetType && sourceType === 'high-intent') {
+                    // 高级意图设为子节点 - 降级处理
+                    this.demoteHighIntentAsChild(sourceId, targetId);
+                }
+                break;
         }
 
         // 临时禁用物理引擎确保位置调整生效
@@ -540,6 +748,154 @@ class NetworkVisualizationV2 {
             });
             this.updateNetworkLayout();
         }, 300);
+    }
+
+    // 新增：记录节点附加到低级意图
+    attachRecordToLowIntent(recordId, lowIntentId) {
+        const currentParent = this.nodeRelations.parents.get(recordId);
+        
+        // 从当前父节点移除
+        if (currentParent) {
+            const siblings = this.nodeRelations.children.get(currentParent) || [];
+            this.nodeRelations.children.set(currentParent, siblings.filter(id => id !== recordId));
+            
+            // 移除旧连接
+            const oldEdge = this.edges.get({
+                filter: edge => edge.from === currentParent && edge.to === recordId
+            });
+            if (oldEdge.length > 0) {
+                this.edges.remove(oldEdge[0].id);
+            }
+        }
+
+        // 添加到新父节点
+        this.nodeRelations.parents.set(recordId, lowIntentId);
+        const newSiblings = this.nodeRelations.children.get(lowIntentId) || [];
+        this.nodeRelations.children.set(lowIntentId, [...newSiblings, recordId]);
+
+        // 创建新连接
+        this.edges.add({
+            from: lowIntentId,
+            to: recordId,
+            arrows: 'to',
+            width: 1,
+            dashes: [3, 3]
+        });
+
+        // 调整记录节点位置
+        this.adjustChildPosition(recordId, lowIntentId);
+
+        console.log(`Attached record ${recordId} to low-intent ${lowIntentId}`);
+    }
+
+    // 新增：高级意图降级为子节点
+    demoteHighIntentAsChild(sourceHighId, targetHighId) {
+        const sourceNode = this.nodes.get(sourceHighId);
+        const sourceChildren = this.nodeRelations.children.get(sourceHighId) || [];
+        
+        console.log(`Demoting high-intent ${sourceHighId} as child of ${targetHighId}`);
+        
+        // 1. 收集所有叶子节点（record节点）
+        const leafNodes = [];
+        
+        sourceChildren.forEach(childId => {
+            const childType = this.nodeRelations.nodeTypes.get(childId);
+            
+            if (childType === 'record') {
+                // 直接收集记录节点
+                leafNodes.push(childId);
+            } else if (childType === 'low-intent') {
+                // 收集低级意图下的所有记录节点
+                const grandChildren = this.nodeRelations.children.get(childId) || [];
+                grandChildren.forEach(grandChildId => {
+                    const grandChildType = this.nodeRelations.nodeTypes.get(grandChildId);
+                    if (grandChildType === 'record') {
+                        leafNodes.push(grandChildId);
+                    }
+                });
+                
+                // 删除原低级意图节点
+                this.removeNodeAndConnections(childId);
+            }
+        });
+        
+        // 2. 将源高级意图节点降级为低级意图
+        const newLabel = `${sourceNode.label} (降级)`;
+        this.nodes.update({
+            id: sourceHighId,
+            label: this.formatLabel(newLabel, 'low'),
+            type: 'low-intent',
+            level: 1, // 重要：更新level为低级意图层级
+            color: { background: '#74b9ff', border: '#0984e3' },
+            size: 20,
+            font: { size: 14, color: '#333' },
+            title: `Demoted from high-intent: ${sourceNode.label}`
+        });
+        
+        // 更新节点类型
+        this.nodeRelations.nodeTypes.set(sourceHighId, 'low-intent');
+        
+        // 3. 将降级后的节点连接到目标高级意图下
+        // 移除原来的父子关系（如果有的话）
+        const originalParent = this.nodeRelations.parents.get(sourceHighId);
+        if (originalParent) {
+            const siblings = this.nodeRelations.children.get(originalParent) || [];
+            this.nodeRelations.children.set(originalParent, siblings.filter(id => id !== sourceHighId));
+            
+            // 移除旧的父子连接
+            const oldEdge = this.edges.get({
+                filter: edge => edge.from === originalParent && edge.to === sourceHighId
+            });
+            if (oldEdge.length > 0) {
+                this.edges.remove(oldEdge[0].id);
+            }
+        }
+        
+        // 建立新的父子关系
+        this.nodeRelations.parents.set(sourceHighId, targetHighId);
+        const targetChildren = this.nodeRelations.children.get(targetHighId) || [];
+        this.nodeRelations.children.set(targetHighId, [...targetChildren, sourceHighId]);
+        
+        // 创建新的父子连接
+        this.edges.add({
+            from: targetHighId,
+            to: sourceHighId,
+            arrows: 'to',
+            width: 2
+        });
+        
+        // 4. 将所有叶子节点连接到降级后的低级意图下
+        this.nodeRelations.children.set(sourceHighId, leafNodes);
+        
+        leafNodes.forEach(leafId => {
+            // 更新父子关系
+            this.nodeRelations.parents.set(leafId, sourceHighId);
+            
+            // 移除旧的连接
+            const oldEdges = this.edges.get({
+                filter: edge => edge.to === leafId
+            });
+            this.edges.remove(oldEdges.map(edge => edge.id));
+            
+            // 创建新连接
+            this.edges.add({
+                from: sourceHighId,
+                to: leafId,
+                arrows: 'to',
+                width: 1,
+                dashes: [3, 3]
+            });
+        });
+        
+        // 5. 调整降级后节点的位置
+        this.adjustChildPosition(sourceHighId, targetHighId);
+        
+        // 6. 调整所有叶子节点的位置
+        this.adjustAllChildrenPositions(sourceHighId);
+        
+        console.log(`High-intent ${sourceHighId} demoted to low-intent under ${targetHighId}`);
+        console.log(`Connected ${leafNodes.length} leaf nodes to demoted low-intent`);
+        console.log(`New label: ${newLabel}`);
     }
 
     // 合并同级节点
@@ -891,6 +1247,292 @@ class NetworkVisualizationV2 {
         });
 
         console.log(`Toggled confirmation for ${nodeId}: ${newOpacity === 1.0 ? 'confirmed' : 'pending'}`);
+    }
+
+    // 显示右键菜单
+    showContextMenu(nodeId, position) {
+        // 清除现有菜单
+        this.clearContextMenu();
+        
+        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
+        const node = this.nodes.get(nodeId);
+        
+        // 创建菜单
+        const menu = document.createElement('div');
+        menu.id = 'nodeContextMenu';
+        menu.innerHTML = `
+            <div style="
+                position: fixed;
+                top: ${position.y}px;
+                left: ${position.x}px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                z-index: 10002;
+                padding: 8px 0;
+                min-width: 120px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-size: 14px;
+                border: 1px solid #e0e0e0;
+            ">
+                <div class="menu-item" data-action="edit" style="
+                    padding: 8px 16px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: #333;
+                " onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+                    <span>✏️</span>
+                    <span>Edit Node</span>
+                </div>
+                <div class="menu-item" data-action="confirm" style="
+                    padding: 8px 16px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: #333;
+                " onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+                    <span>${node.opacity >= 1.0 ? '❓' : '✅'}</span>
+                    <span>${node.opacity >= 1.0 ? 'Set Pending' : 'Confirm Node'}</span>
+                </div>
+                <div class="menu-item" data-action="delete" style="
+                    padding: 8px 16px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: #dc3545;
+                " onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+                    <span>🗑️</span>
+                    <span>Delete Node</span>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(menu);
+        
+        // 绑定事件
+        menu.querySelectorAll('.menu-item').forEach(item => {
+            item.onclick = (e) => {
+                e.stopPropagation();
+                const action = item.dataset.action;
+                this.executeContextMenuAction(nodeId, action);
+                this.clearContextMenu();
+            };
+        });
+        
+        // 点击其他地方关闭菜单
+        setTimeout(() => {
+            document.addEventListener('click', this.clearContextMenu.bind(this), { once: true });
+        }, 100);
+    }
+
+    // 清除右键菜单
+    clearContextMenu() {
+        const existingMenu = document.getElementById('nodeContextMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+    }
+
+    // 执行右键菜单操作
+    executeContextMenuAction(nodeId, action) {
+        const node = this.nodes.get(nodeId);
+        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
+        
+        switch (action) {
+            case 'edit':
+                this.editNode(nodeId);
+                break;
+            case 'confirm':
+                this.toggleNodeConfirmation(nodeId);
+                break;
+            case 'delete':
+                this.deleteNode(nodeId);
+                break;
+        }
+    }
+
+    // 编辑节点
+    editNode(nodeId) {
+        const node = this.nodes.get(nodeId);
+        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
+        
+        const dialog = document.createElement('div');
+        dialog.id = 'editNodeDialog';
+        dialog.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 10003;
+                min-width: 320px;
+                max-width: 480px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;">
+                    Edit ${this.getNodeTypeLabel(nodeType)}
+                </h3>
+                <div style="margin: 16px 0;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">
+                        Node Label:
+                    </label>
+                    <input type="text" id="nodeLabel" value="${node.label}" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                    " />
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button id="saveNodeEdit" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 500;
+                    ">Save</button>
+                    <button id="cancelNodeEdit" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #f8f9fa;
+                        color: #666;
+                        border: 1px solid #dee2e6;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">Cancel</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        // 获取输入框并聚焦
+        const labelInput = document.getElementById('nodeLabel');
+        labelInput.focus();
+        labelInput.select();
+        
+        // 绑定事件
+        document.getElementById('saveNodeEdit').onclick = () => {
+            const newLabel = labelInput.value.trim();
+            if (newLabel) {
+                this.updateNodeLabel(nodeId, newLabel);
+            }
+            dialog.remove();
+        };
+        
+        document.getElementById('cancelNodeEdit').onclick = () => {
+            dialog.remove();
+        };
+        
+        // 回车保存
+        labelInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('saveNodeEdit').click();
+            }
+        };
+    }
+
+    // 更新节点标签
+    updateNodeLabel(nodeId, newLabel) {
+        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
+        const formattedLabel = this.formatLabel(newLabel, nodeType === 'high-intent' ? 'high' : nodeType === 'low-intent' ? 'low' : 'record');
+        
+        this.nodes.update({
+            id: nodeId,
+            label: formattedLabel
+        });
+        
+        console.log(`Updated label for ${nodeId}: ${formattedLabel}`);
+    }
+
+    // 删除节点
+    deleteNode(nodeId) {
+        const node = this.nodes.get(nodeId);
+        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
+        
+        // 确认对话框
+        const dialog = document.createElement('div');
+        dialog.id = 'deleteNodeDialog';
+        dialog.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 10003;
+                min-width: 320px;
+                max-width: 480px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                text-align: center;
+            ">
+                <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;">
+                    Confirm Deletion
+                </h3>
+                <p style="margin: 16px 0; color: #666; font-size: 14px; line-height: 1.5;">
+                    Are you sure you want to delete <strong>"${node.label}"</strong>?<br>
+                    ${nodeType !== 'record' ? 'This will also delete all its child nodes.' : ''}
+                </p>
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button id="confirmDeleteNode" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #dc3545;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 500;
+                    ">Delete</button>
+                    <button id="cancelDeleteNode" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #f8f9fa;
+                        color: #666;
+                        border: 1px solid #dee2e6;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">Cancel</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        // 绑定事件
+        document.getElementById('confirmDeleteNode').onclick = () => {
+            this.removeNodeAndConnections(nodeId);
+            dialog.remove();
+            console.log(`Deleted node ${nodeId} (${nodeType})`);
+        };
+        
+        document.getElementById('cancelDeleteNode').onclick = () => {
+            dialog.remove();
+        };
     }
 
     // 重新构建节点关系映射（在重组后可能丢失）

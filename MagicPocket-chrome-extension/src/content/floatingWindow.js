@@ -1,5 +1,25 @@
 let visJsLoaded = false;
 
+// 安全的 Chrome API 包装函数
+function safeChromeStorage(operation, ...args) {
+    if (chrome && chrome.storage && chrome.storage.local) {
+        return chrome.storage.local[operation](...args);
+    }
+    // 对于get操作，调用回调函数返回空数据
+    if (operation === 'get') {
+        const callback = args[args.length - 1];
+        if (typeof callback === 'function') {
+            setTimeout(() => callback({}), 0);
+        }
+    }
+}
+
+function safeChromeRuntime(operation, ...args) {
+    if (chrome && chrome.runtime && chrome.runtime[operation]) {
+        return chrome.runtime[operation](...args);
+    }
+}
+
 // FloatingWindow核心类
 class FloatingWindow {
     constructor() {
@@ -192,7 +212,7 @@ class FloatingWindow {
         });
 
         // 从storage获取并显示当前任务描述
-        chrome.storage.local.get("currentTask", (data) => {
+        safeChromeStorage("get", "currentTask", (data) => {
             if (data.currentTask && data.currentTask.description) {
                 taskDescription.textContent = `📋 ${data.currentTask.description}`;
             } else {
