@@ -382,8 +382,12 @@ class NetworkVisualizationV2 {
         // 右键菜单事件
         this.network.on('oncontext', (params) => {
             params.event.preventDefault();
-            if (params.nodes.length === 1) {
-                this.showContextMenu(params.nodes[0], params.pointer.DOM);
+            
+            // 检查是否右键点击在节点上
+            const nodeId = this.network.getNodeAt(params.pointer.DOM);
+            if (nodeId) {
+                // 直接显示右键菜单，无需先选中节点
+                this.showContextMenu(nodeId, params.pointer.DOM);
             }
         });
 
