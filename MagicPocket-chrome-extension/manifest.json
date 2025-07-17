@@ -32,6 +32,7 @@
         "src/content/screenshot.js",
         "src/content/intentVisualization.js",
         "src/content/networkVisualization.js",
+        "src/content/intentCreationPanel.js",
         "src/content/networkVisualizationV2.js",
         "src/content/content.js",
         "src/content/tooltipManager.js",
