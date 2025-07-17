@@ -1,6 +1,730 @@
 // NetworkVisualizationV2.js - 完全重构的多层意图拖拽重组系统
 // 专为拖拽重组功能设计的简洁高效实现
 
+// IntentCreationPanel 类 - 意图创建UI系统
+class IntentCreationPanel {
+    constructor(networkVisualization) {
+        this.networkViz = networkVisualization;
+        this.container = null;
+        this.inputField = null;
+        this.submitButton = null;
+        this.stagingArea = null;
+        this.stagedNodes = new Map(); // nodeId -> DOM element
+        this.nodeIdCounter = 10000; // 新节点从高ID开始
+        
+        console.log('IntentCreationPanel initialized');
+    }
+    
+    // 初始化UI组件
+    initialize() {
+        this.createPanel();
+        this.createStagingArea();
+        this.setupEventHandlers();
+        this.injectStyles();
+        console.log('IntentCreationPanel UI ready');
+    }
+    
+    // 创建主面板
+    createPanel() {
+        this.container = document.createElement('div');
+        this.container.className = 'intent-creation-panel';
+        
+        this.container.innerHTML = `
+            <div class="panel-content">
+                <input type="text" 
+                       class="intent-input" 
+                       placeholder="Enter intent description or leave empty for AI suggestions..." 
+                       maxlength="400">
+                <button class="intent-submit-btn">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">Create</span>
+                </button>
+            </div>
+        `;
+        
+        // 获取输入和按钮元素
+        this.inputField = this.container.querySelector('.intent-input');
+        this.submitButton = this.container.querySelector('.intent-submit-btn');
+        
+        // 添加到网络容器
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (networkContainer) {
+            networkContainer.appendChild(this.container);
+        }
+    }
+    
+    // 创建暂存区域
+    createStagingArea() {
+        this.stagingArea = document.createElement('div');
+        this.stagingArea.className = 'staging-area';
+        this.stagingArea.innerHTML = `
+            <div class="staging-header">
+                <span class="staging-title">💫 Staged Intents</span>
+                <span class="staging-subtitle">Drag to main network</span>
+            </div>
+            <div class="staged-nodes-container">
+                <!-- 暂存的节点将在此显示 -->
+            </div>
+        `;
+        
+        // 添加到网络容器
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (networkContainer) {
+            networkContainer.appendChild(this.stagingArea);
+        }
+    }
+    
+    // 设置事件处理器
+    setupEventHandlers() {
+        // 提交按钮点击
+        this.submitButton.addEventListener('click', () => {
+            this.handleIntentCreation();
+        });
+        
+        // 输入框回车
+        this.inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.handleIntentCreation();
+            }
+        });
+        
+        // 输入框状态变化
+        this.inputField.addEventListener('input', () => {
+            this.updateButtonState();
+        });
+    }
+    
+    // 处理意图创建
+    handleIntentCreation() {
+        const inputText = this.inputField.value.trim();
+        
+        if (inputText) {
+            // 手动模式：创建单个意图节点
+            this.createManualIntent(inputText);
+        } else {
+            // 自动模式：生成多个意图建议
+            this.generateAutoIntents();
+        }
+        
+        // 清空输入框
+        this.inputField.value = '';
+        this.updateButtonState();
+    }
+    
+    // 创建手动意图节点
+    createManualIntent(intentText) {
+        const nodeId = `staged_${this.nodeIdCounter++}`;
+        const stagedNode = this.createStageNode(intentText, nodeId);
+        
+        this.stagedNodes.set(nodeId, {
+            element: stagedNode,
+            text: intentText,
+            type: 'idle-intent'
+        });
+        
+        // 添加到暂存区域
+        const container = this.stagingArea.querySelector('.staged-nodes-container');
+        container.appendChild(stagedNode);
+        
+        // 添加创建动画
+        setTimeout(() => {
+            stagedNode.classList.add('bubble-animation');
+        }, 100);
+        
+        console.log('Manual intent created:', intentText);
+    }
+    
+    // 生成自动意图建议
+    async generateAutoIntents() {
+        this.showLoadingAnimation();
+        
+        try {
+            // 模拟异步LLM调用
+            const autoIntents = await this.mockIntentGenerator();
+            
+            // 创建建议的意图节点
+            autoIntents.forEach((intent, index) => {
+                setTimeout(() => {
+                    const nodeId = `staged_${this.nodeIdCounter++}`;
+                    const stagedNode = this.createStageNode(intent.text, nodeId);
+                    
+                    this.stagedNodes.set(nodeId, {
+                        element: stagedNode,
+                        text: intent.text,
+                        type: 'idle-intent',
+                        confidence: intent.confidence
+                    });
+                    
+                    const container = this.stagingArea.querySelector('.staged-nodes-container');
+                    container.appendChild(stagedNode);
+                    
+                    // 添加气泡动画
+                    setTimeout(() => {
+                        stagedNode.classList.add('bubble-animation');
+                    }, 100);
+                }, index * 200); // 错开显示时间
+            });
+            
+        } catch (error) {
+            console.error('Failed to generate auto intents:', error);
+        } finally {
+            this.hideLoadingAnimation();
+        }
+    }
+    
+    // 创建暂存节点
+    createStageNode(intentText, nodeId, isRestored = false) {
+        // 如果是恢复操作且nodeId为true，生成新的nodeId
+        if (isRestored && nodeId === true) {
+            nodeId = `staged_${this.nodeIdCounter++}`;
+        }
+        
+        const stagedNode = document.createElement('div');
+        stagedNode.className = 'staged-node';
+        stagedNode.dataset.nodeId = nodeId;
+        stagedNode.draggable = true;
+        
+        // 截断过长的文本
+        const displayText = intentText.length > 50 ? 
+                           intentText.substring(0, 47) + '...' : intentText;
+        
+        stagedNode.innerHTML = `
+            <div class="staged-node-content">
+                <span class="staged-node-text">${displayText}</span>
+                <button class="remove-staged-btn" title="Remove">×</button>
+            </div>
+        `;
+        
+        // 拖拽事件
+        this.setupStagedNodeDrag(stagedNode);
+        
+        // 删除按钮事件
+        const removeBtn = stagedNode.querySelector('.remove-staged-btn');
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.removeStagedNode(nodeId);
+        });
+        
+        // 如果是恢复操作，直接添加到暂存区并设置映射
+        if (isRestored) {
+            this.stagedNodes.set(nodeId, {
+                element: stagedNode,
+                text: intentText,
+                type: 'idle-intent'
+            });
+            
+            // 确保暂存区域存在
+            this.ensureStagingAreaExists();
+            
+            // 添加到暂存区域
+            const container = this.stagingArea.querySelector('.staged-nodes-container');
+            container.appendChild(stagedNode);
+            
+            // 添加恢复动画
+            stagedNode.style.opacity = '0';
+            stagedNode.style.transform = 'scale(0.8)';
+            setTimeout(() => {
+                stagedNode.style.transition = 'all 0.3s ease';
+                stagedNode.style.opacity = '1';
+                stagedNode.style.transform = 'scale(1)';
+                
+                // 添加气泡动画
+                setTimeout(() => {
+                    stagedNode.classList.add('bubble-animation');
+                }, 300);
+            }, 50);
+        }
+        
+        return stagedNode;
+    }
+    
+    // 确保暂存区域存在
+    ensureStagingAreaExists() {
+        if (!this.stagingArea || !document.contains(this.stagingArea)) {
+            this.createStagingArea();
+        }
+    }
+    
+    // 设置暂存节点拖拽
+    setupStagedNodeDrag(stagedNode) {
+        stagedNode.addEventListener('dragstart', (e) => {
+            const nodeId = stagedNode.dataset.nodeId;
+            const stagedData = this.stagedNodes.get(nodeId);
+            
+            e.dataTransfer.setData('text/plain', nodeId);
+            e.dataTransfer.effectAllowed = 'move';
+            stagedNode.classList.add('dragging');
+            
+            // 通知网络可视化开始暂存节点拖拽
+            if (this.networkViz) {
+                this.networkViz.startStagedNodeDrag(nodeId, stagedData);
+            }
+            
+            console.log('Drag started for staged node:', nodeId);
+        });
+        
+        stagedNode.addEventListener('dragend', () => {
+            stagedNode.classList.remove('dragging');
+            
+            // 通知网络可视化结束暂存节点拖拽
+            if (this.networkViz) {
+                this.networkViz.endStagedNodeDrag();
+            }
+            
+            console.log('Drag ended for staged node');
+        });
+    }
+    
+    // 删除暂存节点
+    removeStagedNode(nodeId) {
+        const stagedData = this.stagedNodes.get(nodeId);
+        if (stagedData) {
+            stagedData.element.remove();
+            this.stagedNodes.delete(nodeId);
+            console.log('Staged node removed:', nodeId);
+        }
+    }
+    
+    // 模拟LLM意图生成器
+    async mockIntentGenerator() {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const templates = [
+                    "Analyze data patterns",
+                    "Generate comprehensive report",
+                    "Optimize workflow process",
+                    "Review content quality",
+                    "Plan strategic activities"
+                ];
+                
+                const intents = templates
+                    .sort(() => 0.5 - Math.random())
+                    .slice(0, 3)
+                    .map(intent => ({
+                        text: intent,
+                        confidence: Math.random() * 0.4 + 0.6,
+                        type: 'idle-intent'
+                    }));
+                
+                resolve(intents);
+            }, 1500); // 模拟加载时间
+        });
+    }
+    
+    // 显示加载动画
+    showLoadingAnimation() {
+        this.submitButton.classList.add('loading');
+        this.submitButton.innerHTML = `
+            <span class="loading-spinner"></span>
+            <span class="btn-text">Generating...</span>
+        `;
+        this.submitButton.disabled = true;
+        
+        // 添加光晕动画到整个面板
+        this.container.classList.add('loading-glow');
+        
+        // 在暂存区域显示等待提示
+        this.showStagingLoadingState();
+    }
+    
+    // 隐藏加载动画
+    hideLoadingAnimation() {
+        this.submitButton.classList.remove('loading');
+        this.submitButton.innerHTML = `
+            <span class="btn-icon">✨</span>
+            <span class="btn-text">Create</span>
+        `;
+        this.submitButton.disabled = false;
+        
+        // 移除光晕动画
+        this.container.classList.remove('loading-glow');
+        
+        // 隐藏暂存区域的加载状态
+        this.hideStagingLoadingState();
+    }
+    
+    // 显示暂存区域加载状态
+    showStagingLoadingState() {
+        const container = this.stagingArea.querySelector('.staged-nodes-container');
+        
+        // 创建加载指示器
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'staging-loading-indicator';
+        loadingIndicator.innerHTML = `
+            <div class="ai-thinking-animation">
+                <div class="thinking-dots">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+                <div class="thinking-text">AI is generating intent suggestions...</div>
+            </div>
+        `;
+        
+        container.appendChild(loadingIndicator);
+    }
+    
+    // 隐藏暂存区域加载状态
+    hideStagingLoadingState() {
+        const loadingIndicator = this.stagingArea.querySelector('.staging-loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    // 更新按钮状态
+    updateButtonState() {
+        const hasInput = this.inputField.value.trim().length > 0;
+        const icon = this.submitButton.querySelector('.btn-icon');
+        const text = this.submitButton.querySelector('.btn-text');
+        
+        if (hasInput) {
+            // icon.textContent = '💡';
+            text.textContent = 'Create';
+        } else {
+            // icon.textContent = '✨';
+            text.textContent = 'Generate';
+        }
+    }
+    
+    // 注入样式
+    injectStyles() {
+        const styleId = 'intent-creation-panel-styles';
+        if (document.getElementById(styleId)) return;
+        
+        const styles = document.createElement('style');
+        styles.id = styleId;
+        styles.textContent = `
+            .intent-creation-panel {
+                position: absolute;
+                top: 20px;
+                left: 20px;
+                background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,249,250,0.9));
+                border-radius: 16px;
+                padding: 16px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+                z-index: 10001;
+                backdrop-filter: blur(8px);
+                border: 1px solid rgba(255,255,255,0.2);
+                transition: all 0.3s ease;
+            }
+            
+            .intent-creation-panel:hover {
+                box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1);
+            }
+            
+            .panel-content {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .intent-input {
+                width: 220px;
+                padding: 12px 16px;
+                border: 2px solid rgba(116, 185, 255, 0.3);
+                border-radius: 24px;
+                font-size: 14px;
+                background: rgba(255,255,255,0.8);
+                transition: all 0.3s ease;
+                outline: none;
+            }
+            
+            .intent-input:focus {
+                border-color: #74b9ff;
+                box-shadow: 0 0 0 3px rgba(116, 185, 255, 0.1);
+                background: rgba(255,255,255,1);
+            }
+            
+            .intent-input::placeholder {
+                color: #999;
+                font-style: italic;
+                font-size: 12px;
+            }
+            
+            .intent-submit-btn {
+                padding: 12px 20px;
+                background: linear-gradient(135deg, #74b9ff, #0984e3);
+                color: white;
+                border: none;
+                border-radius: 24px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(116, 185, 255, 0.3);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 100px;
+                justify-content: center;
+            }
+            
+            .intent-submit-btn:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(116, 185, 255, 0.4);
+            }
+            
+            .intent-submit-btn:active {
+                transform: translateY(0);
+            }
+            
+            .intent-submit-btn:disabled {
+                opacity: 0.7;
+                cursor: not-allowed;
+                transform: none;
+            }
+            
+            .intent-submit-btn.loading {
+                background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+            }
+            
+            .loading-spinner {
+                width: 16px;
+                height: 16px;
+                border: 2px solid rgba(255,255,255,0.3);
+                border-top: 2px solid white;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            .staging-area {
+                position: absolute;
+                top: 100px;
+                left: 20px;
+                width: 280px;
+                max-height: 320px;
+                background: linear-gradient(135deg, rgba(248, 249, 250, 0.95), rgba(255, 255, 255, 0.9));
+                border-radius: 20px;
+                padding: 16px;
+                overflow-y: auto;
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255,255,255,0.3);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                z-index: 10001;
+                transition: all 0.3s ease;
+            }
+            
+            .staging-header {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 12px;
+                text-align: center;
+            }
+            
+            .staging-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 2px;
+            }
+            
+            .staging-subtitle {
+                font-size: 11px;
+                color: #666;
+                font-style: italic;
+            }
+            
+            .staged-nodes-container {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .staged-node {
+                display: block;
+                background: linear-gradient(135deg, #ff7675, #74b9ff);
+                color: white;
+                border-radius: 20px;
+                cursor: grab;
+                font-size: 13px;
+                opacity: 0.9;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                position: relative;
+                overflow: hidden;
+                user-select: none;
+            }
+            
+            .staged-node:hover {
+                transform: translateY(-2px) scale(1.02);
+                box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                opacity: 1;
+            }
+            
+            .staged-node:active {
+                cursor: grabbing;
+                transform: scale(0.98);
+            }
+            
+            .staged-node.dragging {
+                opacity: 0.5;
+                transform: rotate(2deg);
+            }
+            
+            .staged-node-content {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 16px;
+            }
+            
+            .staged-node-text {
+                flex: 1;
+                margin-right: 8px;
+                line-height: 1.3;
+            }
+            
+            .remove-staged-btn {
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                font-size: 16px;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                flex-shrink: 0;
+            }
+            
+            .remove-staged-btn:hover {
+                background: rgba(255,255,255,0.3);
+                transform: scale(1.1);
+            }
+            
+            .staged-node::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+                transition: left 0.6s;
+            }
+            
+            .staged-node:hover::before {
+                left: 100%;
+            }
+            
+            @keyframes bubble-float {
+                0%, 100% { transform: translateY(0px) rotate(0deg); }
+                33% { transform: translateY(-6px) rotate(1deg); }
+                66% { transform: translateY(-3px) rotate(-1deg); }
+            }
+            
+            .staged-node.bubble-animation {
+                animation: bubble-float 3s ease-in-out infinite;
+            }
+            
+            @keyframes glow-pulse {
+                0%, 100% { 
+                    box-shadow: 0 0 5px rgba(116, 185, 255, 0.3),
+                                0 0 15px rgba(116, 185, 255, 0.2),
+                                0 0 25px rgba(116, 185, 255, 0.1);
+                }
+                50% { 
+                    box-shadow: 0 0 10px rgba(116, 185, 255, 0.6),
+                                0 0 25px rgba(116, 185, 255, 0.4),
+                                0 0 40px rgba(116, 185, 255, 0.3);
+                }
+            }
+            
+            .intent-creation-panel.loading-glow {
+                animation: glow-pulse 2s ease-in-out infinite;
+            }
+            
+            .staging-loading-indicator {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 20px;
+                background: linear-gradient(135deg, rgba(116, 185, 255, 0.1), rgba(255, 255, 255, 0.1));
+                border-radius: 12px;
+                margin: 8px 0;
+                border: 1px dashed rgba(116, 185, 255, 0.3);
+            }
+            
+            .ai-thinking-animation {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .thinking-dots {
+                display: flex;
+                gap: 6px;
+            }
+            
+            .thinking-dots .dot {
+                width: 8px;
+                height: 8px;
+                background: #74b9ff;
+                border-radius: 50%;
+                animation: thinking-bounce 1.4s ease-in-out infinite both;
+            }
+            
+            .thinking-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+            .thinking-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+            .thinking-dots .dot:nth-child(3) { animation-delay: 0s; }
+            
+            @keyframes thinking-bounce {
+                0%, 80%, 100% { 
+                    transform: scale(0.8);
+                    opacity: 0.5;
+                }
+                40% { 
+                    transform: scale(1.2);
+                    opacity: 1;
+                }
+            }
+            
+            .thinking-text {
+                font-size: 12px;
+                color: #666;
+                font-style: italic;
+                text-align: center;
+                animation: text-pulse 2s ease-in-out infinite;
+            }
+            
+            @keyframes text-pulse {
+                0%, 100% { opacity: 0.6; }
+                50% { opacity: 1; }
+            }
+        `;
+        
+        document.head.appendChild(styles);
+    }
+    
+    // 清理
+    cleanup() {
+        if (this.container) {
+            this.container.remove();
+        }
+        if (this.stagingArea) {
+            this.stagingArea.remove();
+        }
+        
+        // 清理样式
+        const styles = document.getElementById('intent-creation-panel-styles');
+        if (styles) {
+            styles.remove();
+        }
+        
+        console.log('IntentCreationPanel cleaned up');
+    }
+}
+
 class NetworkVisualizationV2 {
     constructor(intentTree, containerArea = null, mode = 'standalone') {
         this.intentTree = intentTree;
@@ -20,7 +744,68 @@ class NetworkVisualizationV2 {
             draggedSubtree: new Set(),
             targetNode: null,
             originalOpacities: new Map(),
-            dropZoneRadius: 80
+            dropZoneRadius: 80,
+            // 新增：暂存节点拖拽状态
+            stagedNodeDrag: {
+                isActive: false,
+                stagedNodeId: null,
+                stagedNodeData: null
+            }
+        };
+        
+        // 节点移除管理器
+        this.stagedNodeRemovalManager = {
+            pendingRemovals: new Set(),
+            operationStates: new Map(), // 记录操作状态
+            activeDialogs: new Set(), // 跟踪活动对话框的节点ID
+            
+            scheduleRemoval: (stagedNodeId, reason, delay = 0) => {
+                if (!stagedNodeId || this.stagedNodeRemovalManager.pendingRemovals.has(stagedNodeId)) {
+                    console.log(`Removal already scheduled for ${stagedNodeId}, skipping`);
+                    return false;
+                }
+                
+                console.log(`Scheduling removal of staged node ${stagedNodeId}, reason: ${reason}`);
+                this.stagedNodeRemovalManager.pendingRemovals.add(stagedNodeId);
+                this.stagedNodeRemovalManager.operationStates.set(stagedNodeId, { reason, timestamp: Date.now() });
+                
+                setTimeout(() => {
+                    this.stagedNodeRemovalManager.executeRemoval(stagedNodeId, reason);
+                }, delay);
+                
+                return true;
+            },
+            
+            executeRemoval: (stagedNodeId, reason) => {
+                if (!this.stagedNodeRemovalManager.pendingRemovals.has(stagedNodeId)) {
+                    console.log(`Node ${stagedNodeId} not in pending removals, skipping execution`);
+                    return false;
+                }
+                
+                try {
+                    if (this.intentCreationPanel) {
+                        this.intentCreationPanel.removeStagedNode(stagedNodeId);
+                        console.log(`Successfully removed staged node ${stagedNodeId}, reason: ${reason}`);
+                    }
+                } catch (error) {
+                    console.error(`Failed to remove staged node ${stagedNodeId}:`, error);
+                } finally {
+                    this.stagedNodeRemovalManager.pendingRemovals.delete(stagedNodeId);
+                    this.stagedNodeRemovalManager.operationStates.delete(stagedNodeId);
+                }
+                
+                return true;
+            },
+            
+            cancelRemoval: (stagedNodeId) => {
+                if (this.stagedNodeRemovalManager.pendingRemovals.has(stagedNodeId)) {
+                    this.stagedNodeRemovalManager.pendingRemovals.delete(stagedNodeId);
+                    this.stagedNodeRemovalManager.operationStates.delete(stagedNodeId);
+                    console.log(`Cancelled removal of staged node ${stagedNodeId}`);
+                    return true;
+                }
+                return false;
+            }
         };
         
         // 节点关系映射
@@ -29,6 +814,9 @@ class NetworkVisualizationV2 {
             children: new Map(),    // nodeId -> [childIds]
             nodeTypes: new Map()    // nodeId -> type
         };
+        
+        // 意图创建面板
+        this.intentCreationPanel = null;
         
         console.log('NetworkVisualizationV2 initialized');
     }
@@ -40,11 +828,19 @@ class NetworkVisualizationV2 {
             this.buildNetworkData();
             this.createNetwork();
             this.setupEventHandlers();
+            this.initializeIntentCreationPanel();
             console.log('V2 Network visualization ready');
         } catch (error) {
             console.error('Failed to initialize V2 network:', error);
             throw error;
         }
+    }
+    
+    // 初始化意图创建面板
+    initializeIntentCreationPanel() {
+        this.intentCreationPanel = new IntentCreationPanel(this);
+        this.intentCreationPanel.initialize();
+        console.log('Intent creation panel initialized');
     }
 
     // 创建容器
@@ -504,7 +1300,912 @@ class NetworkVisualizationV2 {
             }
         });
 
+        // 添加暂存节点拖拽到网络的支持
+        this.setupStagedNodeDropZone();
+
         console.log('Event handlers setup complete');
+    }
+    
+    // 设置暂存节点拖拽到网络的支持
+    setupStagedNodeDropZone() {
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (!networkContainer) return;
+        
+        // 拖拽进入网络区域
+        networkContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // 如果有暂存节点拖拽，显示视觉反馈
+            if (this.dragState.stagedNodeDrag.isActive) {
+                this.showNetworkDropFeedback(e);
+            }
+        });
+        
+        // 拖拽离开网络区域
+        networkContainer.addEventListener('dragleave', (e) => {
+            // 检查是否真的离开了容器（不是子元素）
+            if (!networkContainer.contains(e.relatedTarget)) {
+                this.hideNetworkDropFeedback();
+            }
+        });
+        
+        // 在网络区域放置暂存节点
+        networkContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            
+            if (this.dragState.stagedNodeDrag.isActive) {
+                this.handleStagedNodeDrop(e);
+            }
+        });
+        
+        console.log('Staged node drop zone setup complete');
+    }
+    
+    // 开始暂存节点拖拽
+    startStagedNodeDrag(stagedNodeId, stagedNodeData) {
+        this.dragState.stagedNodeDrag = {
+            isActive: true,
+            stagedNodeId: stagedNodeId,
+            stagedNodeData: stagedNodeData
+        };
+        
+        console.log('Staged node drag started:', stagedNodeId, stagedNodeData);
+    }
+    
+    // 结束暂存节点拖拽
+    endStagedNodeDrag() {
+        // 保存当前拖拽状态用于清理检查
+        const currentStagedNodeId = this.dragState.stagedNodeDrag.stagedNodeId;
+        
+        this.dragState.stagedNodeDrag = {
+            isActive: false,
+            stagedNodeId: null,
+            stagedNodeData: null
+        };
+        
+        this.hideNetworkDropFeedback();
+        
+        // 兜底清理机制：延迟检查并清理可能残留的暂存节点
+        if (currentStagedNodeId) {
+            setTimeout(() => {
+                this.performFallbackCleanup(currentStagedNodeId);
+            }, 1000); // 1秒后检查，确保异步操作有足够时间完成
+        }
+        
+        console.log('Staged node drag ended');
+    }
+    
+    // 兜底清理机制：检查并清理可能残留的暂存节点
+    performFallbackCleanup(stagedNodeId) {
+        // 检查是否有活动对话框正在使用该节点
+        if (this.stagedNodeRemovalManager.activeDialogs.has(stagedNodeId)) {
+            console.log(`Fallback cleanup: skipping ${stagedNodeId} - active dialog in progress`);
+            // 延迟重试，给用户更多时间
+            setTimeout(() => {
+                this.performFallbackCleanup(stagedNodeId);
+            }, 2000);
+            return;
+        }
+        
+        // 检查暂存节点是否仍然存在
+        if (this.intentCreationPanel && this.intentCreationPanel.stagedNodes.has(stagedNodeId)) {
+            // 检查是否已经有移除操作在进行
+            if (!this.stagedNodeRemovalManager.pendingRemovals.has(stagedNodeId)) {
+                console.log(`Fallback cleanup: removing orphaned staged node ${stagedNodeId}`);
+                this.stagedNodeRemovalManager.scheduleRemoval(stagedNodeId, 'fallback_cleanup');
+            } else {
+                console.log(`Fallback cleanup: removal already scheduled for ${stagedNodeId}`);
+            }
+        } else {
+            console.log(`Fallback cleanup: staged node ${stagedNodeId} already removed`);
+        }
+    }
+    
+    // 显示网络拖拽反馈
+    showNetworkDropFeedback(e) {
+        // 获取鼠标在网络中的位置
+        const rect = e.currentTarget.getBoundingClientRect();
+        const canvasPos = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        
+        // 将DOM坐标转换为网络坐标
+        const networkPos = this.network.DOMtoCanvas(canvasPos);
+        
+        // 检查是否接近现有节点
+        const closestNode = this.findClosestNode(networkPos);
+        
+        if (closestNode && closestNode.distance < this.dragState.dropZoneRadius) {
+            // 高亮目标节点
+            this.highlightDropTarget(closestNode.nodeId);
+            this.dragState.targetNode = { id: closestNode.nodeId };
+            
+            // 显示拖拽预览效果
+            this.showDragPreview(closestNode.nodeId, networkPos);
+        } else {
+            // 清除高亮
+            this.clearTargetHighlight();
+            this.dragState.targetNode = null;
+            this.hideDragPreview();
+            
+            // 显示独立放置预览
+            this.showIndependentDropPreview(networkPos);
+        }
+    }
+    
+    // 显示拖拽预览效果
+    showDragPreview(targetNodeId, position) {
+        // 移除现有的预览
+        this.removeDragPreview();
+        
+        const targetType = this.nodeRelations.nodeTypes.get(targetNodeId);
+        const stagedData = this.dragState.stagedNodeDrag.stagedNodeData;
+        
+        if (!stagedData) return;
+        
+        const previewNodeId = 'drag-preview-node';
+        
+        if (targetType === 'high-intent') {
+            // 高级意图预览：显示两种可能的操作（合并或子节点）
+            // 这里显示子节点预览，因为合并不需要新节点
+            const previewPosition = { x: position.x + 60, y: position.y + 40 };
+            
+            const previewNode = {
+                id: previewNodeId,
+                label: this.formatLabel(stagedData.text, 'low'),
+                type: 'low-intent',
+                x: previewPosition.x,
+                y: previewPosition.y,
+                color: {
+                    background: 'rgba(116, 185, 255, 0.6)',
+                    border: '#74b9ff'
+                },
+                size: 20,
+                opacity: 0.6,
+                font: { size: 14, color: '#333' },
+                fixed: { x: true, y: true },
+                physics: false,
+                title: 'Preview: Child Low-Intent node'
+            };
+            
+            this.nodes.add(previewNode);
+            
+            // 添加预览连接线
+            const previewEdgeId = 'drag-preview-edge';
+            const previewEdge = {
+                id: previewEdgeId,
+                from: targetNodeId,
+                to: previewNodeId,
+                color: { color: 'rgba(116, 185, 255, 0.6)', opacity: 0.6 },
+                width: 2,
+                dashes: [5, 5],
+                smooth: { enabled: true, type: 'cubicBezier' },
+                physics: false
+            };
+            
+            this.edges.add(previewEdge);
+            
+        } else if (targetType === 'low-intent') {
+            // 低级意图预览：显示合并操作（高亮目标节点，不创建新节点）
+            // 为被拖拽节点添加形变效果，指示merge趋势
+            this.showMergePreviewEffects(targetNodeId, stagedData);
+            return;
+        }
+    }
+    
+    // 显示merge预览效果
+    showMergePreviewEffects(targetNodeId, stagedData) {
+        // 目标low-intent节点形变效果（缩放+脉冲）
+        this.addMergeTargetEffect(targetNodeId);
+        
+        // 为被拖拽的暂存节点添加"压缩"形变效果，指示merge趋势
+        this.addDraggedNodeMergeIndicator(stagedData);
+        
+        // 添加"合并箭头"动画效果
+        this.showMergeArrowAnimation(targetNodeId);
+    }
+    
+    // 为目标节点添加merge效果
+    addMergeTargetEffect(targetNodeId) {
+        const targetNode = this.nodes.get(targetNodeId);
+        if (!targetNode) return;
+        
+        // 添加"吸收"光效动画
+        this.nodes.update({
+            id: targetNodeId,
+            borderWidth: 4,
+            color: {
+                background: '#74b9ff',
+                border: '#0984e3'
+            },
+            shadow: { 
+                enabled: true, 
+                size: 15, 
+                color: 'rgba(116, 185, 255, 0.8)' 
+            },
+            scaling: { min: 15, max: 25 } // 轻微缩放突出
+        });
+        
+        // 添加脉冲动画
+        this.startMergePulseAnimation(targetNodeId);
+    }
+    
+    // 为被拖拽节点添加merge指示
+    addDraggedNodeMergeIndicator(stagedData) {
+        // 这个效果会应用到暂存区的DOM节点上
+        const stagedElements = document.querySelectorAll('.staged-node');
+        stagedElements.forEach(element => {
+            if (element.textContent.includes(stagedData.text.substring(0, 20))) {
+                element.style.transform = 'scale(0.9) rotateZ(2deg)';
+                element.style.opacity = '0.7';
+                element.style.filter = 'blur(1px)';
+                element.style.transition = 'all 0.3s ease';
+            }
+        });
+    }
+    
+    // 显示合并箭头动画
+    showMergeArrowAnimation(targetNodeId) {
+        const targetNode = this.nodes.get(targetNodeId);
+        if (!targetNode) return;
+        
+        // 创建箭头指示器
+        const arrowIndicator = document.createElement('div');
+        arrowIndicator.id = 'merge-arrow-indicator';
+        arrowIndicator.innerHTML = '⬅️ Merging';
+        arrowIndicator.style.cssText = `
+            position: fixed;
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 10003;
+            animation: merge-pulse 1s ease-in-out infinite;
+            box-shadow: 0 2px 8px rgba(116, 185, 255, 0.4);
+        `;
+        
+        // 添加动画样式
+        if (!document.getElementById('merge-animation-styles')) {
+            const style = document.createElement('style');
+            style.id = 'merge-animation-styles';
+            style.textContent = `
+                @keyframes merge-pulse {
+                    0%, 100% { transform: scale(1) translateX(0); opacity: 0.8; }
+                    50% { transform: scale(1.1) translateX(-5px); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // 获取目标节点位置
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        const rect = networkContainer.getBoundingClientRect();
+        const canvasPos = this.network.canvasToDOM({x: targetNode.x, y: targetNode.y});
+        
+        arrowIndicator.style.left = (rect.left + canvasPos.x + 30) + 'px';
+        arrowIndicator.style.top = (rect.top + canvasPos.y - 15) + 'px';
+        
+        document.body.appendChild(arrowIndicator);
+    }
+    
+    // 开始merge脉冲动画
+    startMergePulseAnimation(targetNodeId) {
+        let pulseCount = 0;
+        const pulseInterval = setInterval(() => {
+            if (pulseCount >= 6) { // 3秒钟的脉冲
+                clearInterval(pulseInterval);
+                return;
+            }
+            
+            const scaleFactor = pulseCount % 2 === 0 ? 1.2 : 1.0;
+            this.nodes.update({
+                id: targetNodeId,
+                scaling: { min: scaleFactor * 15, max: scaleFactor * 25 }
+            });
+            
+            pulseCount++;
+        }, 250);
+    }
+
+    // 显示独立放置预览
+    showIndependentDropPreview(position) {
+        this.removeDragPreview();
+        
+        const stagedData = this.dragState.stagedNodeDrag.stagedNodeData;
+        if (!stagedData) return;
+        
+        // 独立放置始终创建高级意图节点
+        const previewNodeType = 'high-intent';
+        
+        const previewNodeId = 'drag-preview-node';
+        const previewNode = {
+            id: previewNodeId,
+            label: this.formatLabel(stagedData.text, 'high'),
+            type: previewNodeType,
+            x: position.x,
+            y: position.y,
+            color: {
+                background: 'rgba(255, 118, 117, 0.6)',
+                border: '#ff7675'
+            },
+            size: 25,
+            opacity: 0.6,
+            font: { 
+                size: 16, 
+                color: '#333',
+                bold: true
+            },
+            fixed: { x: true, y: true },
+            physics: false,
+            title: 'Preview: Independent High-Intent node'
+        };
+        
+        this.nodes.add(previewNode);
+    }
+    
+    // 隐藏拖拽预览
+    hideDragPreview() {
+        this.removeDragPreview();
+    }
+    
+    // 移除拖拽预览
+    removeDragPreview() {
+        // 移除预览节点
+        if (this.nodes.get('drag-preview-node')) {
+            this.nodes.remove('drag-preview-node');
+        }
+        
+        // 移除预览边
+        if (this.edges.get('drag-preview-edge')) {
+            this.edges.remove('drag-preview-edge');
+        }
+        
+        // 清理merge预览效果
+        this.clearMergePreviewEffects();
+    }
+    
+    // 清理merge预览效果
+    clearMergePreviewEffects() {
+        // 移除合并箭头指示器
+        const arrowIndicator = document.getElementById('merge-arrow-indicator');
+        if (arrowIndicator) {
+            arrowIndicator.remove();
+        }
+        
+        // 恢复暂存节点的原始样式
+        const stagedElements = document.querySelectorAll('.staged-node');
+        stagedElements.forEach(element => {
+            element.style.transform = '';
+            element.style.opacity = '';
+            element.style.filter = '';
+            element.style.transition = '';
+        });
+    }
+    
+    // 隐藏网络拖拽反馈
+    hideNetworkDropFeedback() {
+        this.clearTargetHighlight();
+        this.dragState.targetNode = null;
+        this.removeDragPreview();
+    }
+    
+    // 查找最近的节点
+    findClosestNode(position) {
+        let closestNode = null;
+        let minDistance = Infinity;
+        
+        this.nodes.get().forEach(node => {
+            const nodeType = this.nodeRelations.nodeTypes.get(node.id);
+            // 只考虑意图节点作为放置目标
+            if (nodeType === 'high-intent' || nodeType === 'low-intent') {
+                const distance = Math.sqrt(
+                    Math.pow(node.x - position.x, 2) + 
+                    Math.pow(node.y - position.y, 2)
+                );
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestNode = { nodeId: node.id, distance: distance };
+                }
+            }
+        });
+        
+        return closestNode;
+    }
+    
+    // 处理暂存节点放置
+    handleStagedNodeDrop(e) {
+        const stagedData = this.dragState.stagedNodeDrag.stagedNodeData;
+        if (!stagedData) return;
+        
+        // 获取放置位置
+        const rect = e.currentTarget.getBoundingClientRect();
+        const canvasPos = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        const networkPos = this.network.DOMtoCanvas(canvasPos);
+        
+        // 检查是否有目标节点
+        if (this.dragState.targetNode) {
+            // 附加到现有节点 - 注意：High-Intent是异步操作，节点移除在Promise回调中处理
+            this.attachStagedNodeToTarget(stagedData, this.dragState.targetNode.id, networkPos);
+        } else {
+            // 作为独立节点添加到网络 - 同步操作，立即移除暂存节点
+            this.addStagedNodeAsIndependent(stagedData, networkPos);
+            this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'independent_node_created');
+        }
+        
+        // 结束拖拽
+        this.endStagedNodeDrag();
+    }
+    
+    // 将暂存节点附加到目标节点
+    attachStagedNodeToTarget(stagedData, targetNodeId, position) {
+        const targetType = this.nodeRelations.nodeTypes.get(targetNodeId);
+        
+        // 根据目标节点类型决定操作选项
+        if (targetType === 'high-intent') {
+            // 保存状态快照，防止异步操作期间状态变化
+            const stateSnapshot = {
+                stagedNodeId: this.dragState.stagedNodeDrag.stagedNodeId,
+                operationId: `high_intent_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+                timestamp: Date.now()
+            };
+            
+            console.log('Starting async high-intent operation:', stateSnapshot);
+            
+            // 标记对话框活动状态，防止fallback cleanup干扰
+            this.stagedNodeRemovalManager.activeDialogs.add(stateSnapshot.stagedNodeId);
+            
+            // 拖拽到高级意图节点：显示合并或子节点选项
+            this.showHighIntentAttachDialog(stagedData, targetNodeId).then(action => {
+                // 验证状态快照仍然有效
+                if (!this.isStateSnapshotValid(stateSnapshot)) {
+                    console.warn('State snapshot invalid, aborting operation:', stateSnapshot);
+                    // 状态验证失败时，清理可能残留的暂存节点
+                    this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'state_validation_failed');
+                    return;
+                }
+                if (action === 'cancel') {
+                    // 取消操作：用户主动放弃，移除暂存节点
+                    this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'user_cancelled_operation');
+                    return;
+                }
+                
+                if (action === 'merge') {
+                    // 合并到高级意图节点
+                    this.mergeStagedNodeToTarget(stagedData, targetNodeId);
+                    // 从暂存区域移除该节点（操作成功）
+                    this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'merged_to_high_intent');
+                } else if (action === 'child') {
+                    // 创建为子节点（低级意图）
+                    const newNodeId = this.createNetworkNodeFromStaged(stagedData, 'low-intent', position);
+                    this.establishParentChildRelation(targetNodeId, newNodeId);
+                    this.addNodeConnection(targetNodeId, newNodeId);
+                    this.updateNetworkLayout();
+                    console.log('Staged node created as child of high-intent:', newNodeId, 'Parent:', targetNodeId);
+                    // 从暂存区域移除该节点（操作成功）
+                    this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'created_as_child_node');
+                }
+            }).catch(error => {
+                console.error('High-intent dialog error:', error);
+                // 对话框出错时，清理暂存节点
+                this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'dialog_error');
+            }).finally(() => {
+                // 无论如何都清理对话框状态
+                this.stagedNodeRemovalManager.activeDialogs.delete(stateSnapshot.stagedNodeId);
+                console.log('Dialog completed, removed from active dialogs:', stateSnapshot.stagedNodeId);
+                
+                // 额外保护：如果暂存节点仍然存在，说明可能有未处理的情况
+                setTimeout(() => {
+                    if (this.intentCreationPanel && this.intentCreationPanel.stagedNodes.has(stateSnapshot.stagedNodeId)) {
+                        console.log('Post-dialog cleanup: staged node still exists, scheduling removal');
+                        this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'post_dialog_cleanup');
+                    }
+                }, 500);
+            });
+            // High-Intent是异步操作，不需要返回值
+        } else if (targetType === 'low-intent') {
+            // 拖拽到低级意图节点：直接合并 - 同步操作，立即移除暂存节点
+            this.mergeStagedNodeToTarget(stagedData, targetNodeId);
+            this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'merged_to_low_intent');
+        }
+    }
+    
+    // 验证状态快照是否仍然有效
+    isStateSnapshotValid(stateSnapshot) {
+        // 检查暂存节点是否仍然存在
+        if (!this.intentCreationPanel || !this.intentCreationPanel.stagedNodes.has(stateSnapshot.stagedNodeId)) {
+            console.log('State snapshot invalid: staged node no longer exists');
+            return false;
+        }
+        
+        // 检查是否有其他操作正在进行（但忽略对话框活动期间的pending removal）
+        if (this.stagedNodeRemovalManager.pendingRemovals.has(stateSnapshot.stagedNodeId) && 
+            !this.stagedNodeRemovalManager.activeDialogs.has(stateSnapshot.stagedNodeId)) {
+            console.log('State snapshot invalid: removal already pending');
+            return false;
+        }
+        
+        // 检查操作时间戳（对话框活动期间延长超时）
+        const isDialogActive = this.stagedNodeRemovalManager.activeDialogs.has(stateSnapshot.stagedNodeId);
+        const maxAge = isDialogActive ? 120000 : 30000; // 对话框活动期间延长到2分钟
+        if (Date.now() - stateSnapshot.timestamp > maxAge) {
+            console.log('State snapshot invalid: operation timeout', { 
+                age: Date.now() - stateSnapshot.timestamp, 
+                maxAge, 
+                isDialogActive 
+            });
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // 将节点回归暂存区
+    returnNodeToStagingArea(stagedData) {
+        if (!this.intentCreationPanel) return;
+        
+        // 在暂存区重新显示节点
+        const nodeId = this.intentCreationPanel.createStageNode(stagedData.text, true);
+        
+        console.log('Node returned to staging area:', nodeId);
+    }
+    
+    // 将暂存节点作为独立节点添加
+    addStagedNodeAsIndependent(stagedData, position) {
+        // 拖拽到空白处：始终创建为高级意图节点
+        const newNodeType = 'high-intent';
+        
+        // 创建新的网络节点
+        const newNodeId = this.createNetworkNodeFromStaged(stagedData, newNodeType, position);
+        
+        // 高级意图节点不需要建立父子关系，作为独立的顶级节点
+        
+        // 更新布局
+        this.updateNetworkLayout();
+        
+        console.log('Staged node added as independent high-intent:', newNodeId);
+    }
+    
+    // 创建网络节点从暂存数据
+    createNetworkNodeFromStaged(stagedData, nodeType, position) {
+        // 生成新的节点ID
+        const newNodeId = `integrated_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        
+        // 新节点初始使用融合色圆形样式，区别于最终状态
+        const hybridColor = {
+            background: 'linear-gradient(135deg, #ff7675, #74b9ff)',
+            border: '#a29bfe'
+        };
+        
+        // 创建新节点 - 融合色圆形样式，区分拖拽状态
+        const newNode = {
+            id: newNodeId,
+            label: this.formatLabel(stagedData.text, nodeType === 'high-intent' ? 'high' : 'low'),
+            type: nodeType,
+            x: position.x,
+            y: position.y,
+            color: hybridColor,
+            // 不设置shape，使用vis.js默认圆形，与主网络一致
+            size: nodeType === 'high-intent' ? 25 : 20,
+            opacity: 0.9, // 融合状态时略透明
+            font: { 
+                size: nodeType === 'high-intent' ? 16 : 14, 
+                color: '#ffffff', // 白色字体在渐变背景上更清晰
+                bold: nodeType === 'high-intent'
+            },
+            fixed: { x: false, y: false },
+            title: this.formatIntentTooltip(stagedData.text, nodeType, 0),
+            // 添加状态标记
+            isConfirmed: false,
+            isNewlyIntegrated: true,
+            isDraggingState: true // 标记为拖拽状态，用于区分处理
+        };
+        
+        // 添加到网络
+        this.nodes.add(newNode);
+        
+        // 建立节点关系映射
+        this.nodeRelations.nodeTypes.set(newNodeId, nodeType);
+        if (!this.nodeRelations.children.has(newNodeId)) {
+            this.nodeRelations.children.set(newNodeId, []);
+        }
+        
+        // 添加颜色转换和创建动画效果
+        this.addColorTransitionAnimation(newNodeId, nodeType);
+        
+        return newNodeId;
+    }
+    
+    // 添加颜色转换动画
+    addColorTransitionAnimation(nodeId, finalNodeType) {
+        // 短暂延迟，让用户看到融合色圆形状态
+        setTimeout(() => {
+            // 阶段1：转换到目标颜色，保持默认圆形
+            const finalColor = this.getNodeColor(finalNodeType);
+            
+            this.nodes.update({
+                id: nodeId,
+                color: finalColor,
+                // 不设置shape，保持默认圆形与主网络一致
+                opacity: 0.4, // 新节点默认待定状态
+                font: { 
+                    size: finalNodeType === 'high-intent' ? 16 : 14, 
+                    color: '#333', // 恢复标准字体颜色
+                    bold: finalNodeType === 'high-intent'
+                },
+                isDraggingState: false // 清除拖拽状态标记
+            });
+        }, 800);
+        
+        // 阶段2：添加脉冲效果表示集成成功
+        setTimeout(() => {
+            this.addIntegrationSuccessEffect(nodeId);
+        }, 1200);
+    }
+    
+    // 添加集成成功效果
+    addIntegrationSuccessEffect(nodeId) {
+        // 短暂的缩放脉冲效果
+        const originalNode = this.nodes.get(nodeId);
+        if (!originalNode) return;
+        
+        // 放大
+        this.nodes.update({
+            id: nodeId,
+            scaling: { min: 15, max: 35 },
+            shadow: { enabled: true, size: 10, color: 'rgba(116, 185, 255, 0.6)' }
+        });
+        
+        // 恢复原始大小
+        setTimeout(() => {
+            this.nodes.update({
+                id: nodeId,
+                scaling: { min: 10, max: 30 },
+                shadow: { enabled: true, size: 5 }
+            });
+        }, 300);
+        
+        console.log('Integration success effect applied to:', nodeId);
+    }
+    
+    // 显示高级意图节点附加对话框
+    showHighIntentAttachDialog(stagedData, targetNodeId) {
+        return new Promise((resolve) => {
+            // 清除现有菜单
+            this.clearDragIntegrationMenu();
+            
+            // 获取拖拽位置，在鼠标位置显示菜单
+            const networkContainer = document.getElementById('v2NetworkContainer');
+            const rect = networkContainer.getBoundingClientRect();
+            const targetNode = this.nodes.get(targetNodeId);
+            const canvasPos = this.network.canvasToDOM({x: targetNode.x, y: targetNode.y});
+            
+            // 创建自定义菜单
+            const menu = document.createElement('div');
+            menu.id = 'dragIntegrationMenu';
+            menu.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: ${rect.top + canvasPos.y - 50}px;
+                    left: ${rect.left + canvasPos.x + 30}px;
+                    background: white;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+                    z-index: 10003;
+                    padding: 12px 0;
+                    min-width: 200px;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    font-size: 14px;
+                    border: 1px solid #e0e0e0;
+                    backdrop-filter: blur(8px);
+                    background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,249,250,0.9));
+                ">
+                    <div style="
+                        padding: 8px 16px 12px 16px;
+                        font-weight: 600;
+                        color: #333;
+                        border-bottom: 1px solid #eee;
+                        font-size: 13px;
+                    ">
+                        Integration Options
+                    </div>
+                    <div class="integration-menu-item" data-action="merge" style="
+                        padding: 12px 16px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        color: #333;
+                    " onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='transparent'">
+                        <span style="font-size: 16px;">🔗</span>
+                        <div>
+                            <div style="font-weight: 500;">Merge Content</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 2px;">
+                                Combine with existing High-Intent
+                            </div>
+                        </div>
+                    </div>
+                    <div class="integration-menu-item" data-action="child" style="
+                        padding: 12px 16px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        color: #333;
+                    " onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='transparent'">
+                        <span style="font-size: 16px;">🔻</span>
+                        <div>
+                            <div style="font-weight: 500;">Create Child Node</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 2px;">
+                                Add as Low-Intent under this node
+                            </div>
+                        </div>
+                    </div>
+                    <div style="height: 1px; background: #eee; margin: 8px 0;"></div>
+                    <div class="integration-menu-item" data-action="cancel" style="
+                        padding: 12px 16px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        color: #dc3545;
+                    " onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='transparent'">
+                        <span style="font-size: 16px;">❌</span>
+                        <div>
+                            <div style="font-weight: 500;">Cancel</div>
+                            <div style="font-size: 12px; color: #999; margin-top: 2px;">
+                                Return to staging area
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(menu);
+            
+            // 绑定事件
+            menu.querySelectorAll('.integration-menu-item').forEach(item => {
+                item.onclick = (e) => {
+                    e.stopPropagation();
+                    const action = item.dataset.action;
+                    this.clearDragIntegrationMenu();
+                    resolve(action);
+                };
+            });
+            
+            // 点击其他地方关闭菜单
+            setTimeout(() => {
+                document.addEventListener('click', () => {
+                    this.clearDragIntegrationMenu();
+                    resolve('cancel');
+                }, { once: true });
+            }, 100);
+        });
+    }
+    
+    // 清除拖拽集成菜单
+    clearDragIntegrationMenu() {
+        const existingMenu = document.getElementById('dragIntegrationMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+    }
+    
+    // 合并暂存节点到目标节点
+    mergeStagedNodeToTarget(stagedData, targetNodeId) {
+        // 获取目标节点当前的intent内容
+        const targetNode = this.nodes.get(targetNodeId);
+        if (!targetNode) return;
+        
+        // 提取当前intent文本（移除格式化）
+        const currentIntent = targetNode.label.replace(/^(h-Intent|l-Intent):\s*/, '');
+        
+        // 合并文本内容
+        const mergedIntent = `${currentIntent}; ${stagedData.text}`;
+        
+        // 更新节点
+        const targetType = this.nodeRelations.nodeTypes.get(targetNodeId);
+        this.nodes.update({
+            id: targetNodeId,
+            label: this.formatLabel(mergedIntent, targetType === 'high-intent' ? 'high' : 'low'),
+            title: this.formatIntentTooltip(mergedIntent, targetType, this.nodeRelations.children.get(targetNodeId)?.length || 0)
+        });
+        
+        console.log('Staged node merged into target:', targetNodeId);
+    }
+    
+    // 建立父子关系
+    establishParentChildRelation(parentId, childId) {
+        // 验证节点存在
+        const parentNode = this.nodes.get(parentId);
+        const childNode = this.nodes.get(childId);
+        if (!parentNode || !childNode) {
+            console.error('Cannot establish relation: missing nodes', { parentId, childId, parentExists: !!parentNode, childExists: !!childNode });
+            return false;
+        }
+        
+        // 设置子节点的父节点
+        this.nodeRelations.parents.set(childId, parentId);
+        
+        // 初始化父节点的子节点列表（如果不存在）
+        if (!this.nodeRelations.children.has(parentId)) {
+            this.nodeRelations.children.set(parentId, []);
+        }
+        
+        // 添加到父节点的子节点列表（避免重复）
+        const parentChildren = this.nodeRelations.children.get(parentId);
+        if (!parentChildren.includes(childId)) {
+            parentChildren.push(childId);
+        }
+        
+        // 初始化子节点的子节点列表（确保新节点能作为拖动目标）
+        if (!this.nodeRelations.children.has(childId)) {
+            this.nodeRelations.children.set(childId, []);
+        }
+        
+        // 确保节点类型映射正确
+        const childType = this.nodeRelations.nodeTypes.get(childId);
+        if (!childType) {
+            console.warn('Child node type not set, inferring from node properties');
+            // 可以从节点的其他属性推断类型
+            const nodeData = this.nodes.get(childId);
+            if (nodeData?.type) {
+                this.nodeRelations.nodeTypes.set(childId, nodeData.type);
+            }
+        }
+        
+        console.log('Parent-child relation established:', parentId, '->', childId, 'Child type:', childType);
+        return true;
+    }
+    
+    // 添加节点连接
+    addNodeConnection(fromNodeId, toNodeId) {
+        const edgeId = `${fromNodeId}->${toNodeId}`;
+        
+        const edge = {
+            id: edgeId,
+            from: fromNodeId,
+            to: toNodeId,
+            color: { color: '#848484' },
+            width: 2,
+            smooth: { enabled: true, type: 'cubicBezier' }
+        };
+        
+        this.edges.add(edge);
+        console.log('Node connection added:', edgeId);
+    }
+    
+    // 查找最近的高级意图节点
+    findNearestHighIntentNode(position) {
+        let nearestNode = null;
+        let minDistance = Infinity;
+        
+        this.nodes.get().forEach(node => {
+            const nodeType = this.nodeRelations.nodeTypes.get(node.id);
+            if (nodeType === 'high-intent') {
+                const distance = Math.sqrt(
+                    Math.pow(node.x - position.x, 2) + 
+                    Math.pow(node.y - position.y, 2)
+                );
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestNode = node;
+                }
+            }
+        });
+        
+        return nearestNode;
     }
 
     // 开始拖拽
@@ -579,9 +2280,33 @@ class NetworkVisualizationV2 {
         const node = this.nodes.get(nodeId);
         const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
         
-        return node && // 节点必须存在
+        // 调试信息：检查新节点是否正确映射
+        if (node && !nodeType) {
+            console.warn(`Node ${nodeId} exists but has no type mapping. Node data:`, node);
+            // 尝试从节点数据推断类型
+            if (node.type) {
+                console.log(`Inferring type from node.type: ${node.type}`);
+                this.nodeRelations.nodeTypes.set(nodeId, node.type);
+                return this.isValidDropTarget(nodeId); // 递归调用以使用新设置的类型
+            }
+        }
+        
+        const isValid = node && // 节点必须存在
                (nodeType === 'high-intent' || nodeType === 'low-intent') && 
                !this.dragState.draggedSubtree.has(nodeId);
+               
+        // 调试日志（仅在节点存在但无效时）
+        if (node && !isValid) {
+            console.log(`Node ${nodeId} not valid drop target:`, {
+                nodeExists: !!node,
+                nodeType: nodeType,
+                isIntentNode: nodeType === 'high-intent' || nodeType === 'low-intent',
+                inDraggedSubtree: this.dragState.draggedSubtree.has(nodeId),
+                draggedSubtree: Array.from(this.dragState.draggedSubtree)
+            });
+        }
+        
+        return isValid;
     }
 
     // 高亮拖拽目标
@@ -1931,6 +3656,12 @@ class NetworkVisualizationV2 {
         return colors[type] || colors['record'];
     }
 
+    // 获取节点形状
+    getNodeShape(type) {
+        // 所有节点都使用默认圆形，与主网络保持一致
+        return undefined; // 不设置shape，使用vis.js默认圆形
+    }
+
     // 计算标准树状布局位置 - 抽取的共用函数（与buildNetworkData保持一致）
     calculateTreeLayoutPositions() {
         const positions = {};
@@ -2129,6 +3860,12 @@ class NetworkVisualizationV2 {
 
     // 清理
     cleanup() {
+        // 清理意图创建面板
+        if (this.intentCreationPanel) {
+            this.intentCreationPanel.cleanup();
+            this.intentCreationPanel = null;
+        }
+        
         if (this.network) {
             this.network.destroy();
         }
