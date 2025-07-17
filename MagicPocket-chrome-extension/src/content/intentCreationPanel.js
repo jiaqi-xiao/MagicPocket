@@ -10,6 +10,8 @@ class IntentCreationPanel {
         this.stagingArea = null;
         this.stagedNodes = new Map(); // nodeId -> DOM element
         this.nodeIdCounter = 10000; // 新节点从高ID开始
+        this.isCollapsed = false; // 折叠状态
+        this.toggleButton = null; // 切换按钮
         
         console.log('IntentCreationPanel initialized');
     }
@@ -18,6 +20,7 @@ class IntentCreationPanel {
     initialize() {
         this.createPanel();
         this.createStagingArea();
+        this.createToggleButton();
         this.setupEventHandlers();
         this.injectStyles();
         console.log('IntentCreationPanel UI ready');
@@ -73,6 +76,53 @@ class IntentCreationPanel {
         }
     }
     
+    // 创建切换按钮
+    createToggleButton() {
+        this.toggleButton = document.createElement('button');
+        this.toggleButton.className = 'panel-toggle-button';
+        this.toggleButton.innerHTML = `
+            <span class="toggle-icon">‹</span>
+            <span class="toggle-tooltip">Hide Panel</span>
+        `;
+        
+        // 添加到网络容器
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (networkContainer) {
+            networkContainer.appendChild(this.toggleButton);
+            console.log('Toggle button created and added to network container');
+            console.log('Toggle button element:', this.toggleButton);
+            console.log('Network container:', networkContainer);
+            
+            // // 强制样式确保可见
+            // this.toggleButton.style.position = 'fixed';
+            // this.toggleButton.style.top = '20px';
+            // this.toggleButton.style.right = '20px';
+            // this.toggleButton.style.zIndex = '99999';
+            // this.toggleButton.style.background = 'red';
+            // this.toggleButton.style.width = '40px';
+            // this.toggleButton.style.height = '40px';
+            // this.toggleButton.style.borderRadius = '50%';
+            // this.toggleButton.style.display = 'flex';
+            // this.toggleButton.style.alignItems = 'center';
+            // this.toggleButton.style.justifyContent = 'center';
+        } else {
+            console.error('Network container not found - adding to body as fallback');
+            // 备用方案：添加到body
+            // document.body.appendChild(this.toggleButton);
+            // this.toggleButton.style.position = 'fixed';
+            // this.toggleButton.style.top = '20px';
+            // this.toggleButton.style.right = '20px';
+            // this.toggleButton.style.zIndex = '99999';
+            // this.toggleButton.style.background = 'red';
+            // this.toggleButton.style.width = '40px';
+            // this.toggleButton.style.height = '40px';
+            // this.toggleButton.style.borderRadius = '50%';
+            // this.toggleButton.style.display = 'flex';
+            // this.toggleButton.style.alignItems = 'center';
+            // this.toggleButton.style.justifyContent = 'center';
+        }
+    }
+    
     // 设置事件处理器
     setupEventHandlers() {
         // 提交按钮点击
@@ -91,6 +141,16 @@ class IntentCreationPanel {
         this.inputField.addEventListener('input', () => {
             this.updateButtonState();
         });
+        
+        // 切换按钮点击
+        if (this.toggleButton) {
+            this.toggleButton.addEventListener('click', () => {
+                console.log('Toggle button clicked');
+                this.togglePanel();
+            });
+        } else {
+            console.error('Toggle button not found when setting up event handlers');
+        }
     }
     
     // 处理意图创建
@@ -380,6 +440,39 @@ class IntentCreationPanel {
             text.textContent = 'Create';
         } else {
             text.textContent = 'Generate';
+        }
+    }
+    
+    // 切换面板显示/隐藏
+    togglePanel() {
+        this.isCollapsed = !this.isCollapsed;
+        
+        if (this.isCollapsed) {
+            // 隐藏面板
+            this.container.classList.add('collapsed');
+            this.stagingArea.classList.add('collapsed');
+            this.toggleButton.classList.add('collapsed');
+            
+            // 更新按钮状态
+            const icon = this.toggleButton.querySelector('.toggle-icon');
+            const tooltip = this.toggleButton.querySelector('.toggle-tooltip');
+            icon.textContent = '›';
+            tooltip.textContent = 'Show Panel';
+            
+            console.log('Panel collapsed');
+        } else {
+            // 显示面板
+            this.container.classList.remove('collapsed');
+            this.stagingArea.classList.remove('collapsed');
+            this.toggleButton.classList.remove('collapsed');
+            
+            // 更新按钮状态
+            const icon = this.toggleButton.querySelector('.toggle-icon');
+            const tooltip = this.toggleButton.querySelector('.toggle-tooltip');
+            icon.textContent = '‹';
+            tooltip.textContent = 'Hide Panel';
+            
+            console.log('Panel expanded');
         }
     }
     
@@ -697,6 +790,118 @@ class IntentCreationPanel {
                 0%, 100% { opacity: 0.6; }
                 50% { opacity: 1; }
             }
+            
+            /* 切换按钮样式 */
+            .panel-toggle-button {
+                position: absolute;
+                top: 20px;
+                left: 450px;
+                width: 40px;
+                height: 40px;
+                background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.8));
+                border: 2px solid rgba(116, 185, 255, 0.3);
+                border-radius: 50%;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                z-index: 10002;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                backdrop-filter: blur(8px);
+                /* Debug: Make button more visible */
+                // outline: 2px solid red;
+                opacity: 1;
+            }
+            
+            .panel-toggle-button:hover {
+                background: linear-gradient(135deg, rgba(255,255,255,1), rgba(248,249,250,0.95));
+                border-color: #74b9ff;
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            }
+            
+            .panel-toggle-button.collapsed {
+                left: 20px;
+                right: auto;
+                background: linear-gradient(135deg, #74b9ff, #0984e3);
+                border-color: rgba(255,255,255,0.3);
+            }
+            
+            .panel-toggle-button.collapsed .toggle-icon {
+                color: white;
+            }
+            
+            .panel-toggle-button.collapsed:hover {
+                background: linear-gradient(135deg, #0984e3, #74b9ff);
+                box-shadow: 0 6px 20px rgba(116, 185, 255, 0.4);
+            }
+            
+            .toggle-icon {
+                font-size: 20px;
+                font-weight: bold;
+                color: #74b9ff;
+                transition: all 0.3s ease;
+                user-select: none;
+            }
+            
+            .toggle-tooltip {
+                position: absolute;
+                bottom: -35px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                white-space: nowrap;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+                pointer-events: none;
+            }
+            
+            .panel-toggle-button:hover .toggle-tooltip {
+                opacity: 1;
+                visibility: visible;
+            }
+            
+            .toggle-tooltip::before {
+                content: '';
+                position: absolute;
+                top: -4px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 0;
+                height: 0;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 4px solid rgba(0,0,0,0.8);
+            }
+            
+            /* 折叠状态的面板样式 */
+            .intent-creation-panel.collapsed {
+                transform: translateX(-100%);
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            
+            .staging-area.collapsed {
+                transform: translateX(-100%);
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            
+            /* 折叠动画 */
+            .intent-creation-panel,
+            .staging-area {
+                transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                           opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                           visibility 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            }
         `;
         
         document.head.appendChild(styles);
@@ -709,6 +914,9 @@ class IntentCreationPanel {
         }
         if (this.stagingArea) {
             this.stagingArea.remove();
+        }
+        if (this.toggleButton) {
+            this.toggleButton.remove();
         }
         
         // 清理样式
