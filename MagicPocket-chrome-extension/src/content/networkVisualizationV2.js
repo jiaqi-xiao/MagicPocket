@@ -156,7 +156,8 @@ class NetworkVisualizationV2 {
                 size: 25,
                 opacity: 0.4, // 默认半透明
                 font: { size: 16, color: '#333', bold: true },
-                fixed: { x: false, y: false } // 允许自由移动
+                fixed: { x: false, y: false }, // 允许自由移动
+                title: this.formatIntentTooltip(`h-Intent-${index + 1}`, 'high-intent', intentGroup.length)
             });
 
             this.nodeRelations.children.set(highId, []);
@@ -191,7 +192,8 @@ class NetworkVisualizationV2 {
                     size: 20,
                     opacity: 0.3, // 默认半透明
                     font: { size: 14, color: '#333' },
-                    fixed: { x: false, y: false } // 允许自由移动
+                    fixed: { x: false, y: false }, // 允许自由移动
+                    title: this.formatIntentTooltip(intent.name, 'low-intent', intent.data?.group?.length || 0)
                 });
 
                 // 建立关系
@@ -237,7 +239,7 @@ class NetworkVisualizationV2 {
                             opacity: 0.3,
                             font: { size: 12, color: '#333' },
                             fixed: { x: false, y: false }, // 允许自由移动
-                            title: `Content: ${record.content || 'No content'}\nComment: ${record.comment || 'No comment'}`
+                            title: this.formatTooltipContent(record.content || 'No content', record.comment || 'No comment')
                         });
 
                         // 建立关系
@@ -291,6 +293,70 @@ class NetworkVisualizationV2 {
         return text.substring(0, maxLength - 3) + '...';
     }
 
+    // 格式化工具提示内容
+    formatTooltipContent(content, comment) {
+        // 限制单行内容长度，超长时自动换行
+        const formatText = (text, label) => {
+            if (!text || text === 'No content' || text === 'No comment') {
+                return `${label}: ${text}`;
+            }
+            
+            // 将长文本按50字符换行，提高可读性
+            const lines = [];
+            let currentLine = '';
+            const words = text.split(/\s+/);
+            
+            for (const word of words) {
+                if ((currentLine + word).length <= 50) {
+                    currentLine += (currentLine ? ' ' : '') + word;
+                } else {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            if (currentLine) lines.push(currentLine);
+            
+            const formattedText = lines.join('\n  '); // 缩进续行
+            return `${label}: ${formattedText}`;
+        };
+        
+        const contentLine = formatText(content, 'Content');
+        const commentLine = formatText(comment, 'Comment');
+        
+        return `${contentLine}\n\n${commentLine}`;
+    }
+
+    // 格式化意图节点工具提示
+    formatIntentTooltip(intentName, nodeType, childrenCount) {
+        const typeLabel = nodeType === 'high-intent' ? 'High-Level Intent' : 'Low-Level Intent';
+        const childrenLabel = nodeType === 'high-intent' ? 'Low-level intents' : 'Records';
+        
+        // 格式化意图名称，按50字符换行
+        const formatIntentName = (name) => {
+            if (name.length <= 50) return name;
+            
+            const lines = [];
+            let currentLine = '';
+            const words = name.split(/\s+/);
+            
+            for (const word of words) {
+                if ((currentLine + word).length <= 50) {
+                    currentLine += (currentLine ? ' ' : '') + word;
+                } else {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            if (currentLine) lines.push(currentLine);
+            
+            return lines.join('\n  ');
+        };
+        
+        const formattedName = formatIntentName(intentName);
+        
+        return `Type: ${typeLabel}\nIntent: ${formattedName}\n${childrenLabel}: ${childrenCount}`;
+    }
+
     // 创建网络
     createNetwork() {
         const container = document.getElementById('v2NetworkContainer');
@@ -332,7 +398,8 @@ class NetworkVisualizationV2 {
                 dragNodes: true,
                 dragView: true,
                 zoomView: true,
-                hover: true
+                hover: true,
+                tooltipDelay: 300
             },
             layout: {
                 randomSeed: 42
@@ -344,10 +411,56 @@ class NetworkVisualizationV2 {
             edges: this.edges
         }, options);
 
+        // 添加工具提示样式限制
+        this.injectTooltipStyles();
+
         // 初始布局已在节点创建时设置，不需要额外调用
 
         console.log('Network created successfully');
     }
+
+    // 注入工具提示样式
+    injectTooltipStyles() {
+        // 检查是否已经注入样式
+        if (document.getElementById('vis-tooltip-styles-v2')) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'vis-tooltip-styles-v2';
+        style.textContent = `
+            /* vis.js 工具提示样式优化 */
+            .vis-tooltip {
+                max-width: 300px !important;
+                min-width: 150px !important;
+                white-space: pre-wrap !important;
+                word-wrap: break-word !important;
+                word-break: break-word !important;
+                line-height: 1.4 !important;
+                padding: 10px 14px !important;
+                font-size: 13px !important;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+                background: #ffffff !important;
+                color: #333333 !important;
+                border: 1px solid #e0e0e0 !important;
+                border-radius: 8px !important;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
+                z-index: 10005 !important;
+            }
+            
+            /* 确保长文本能够换行 */
+            .vis-tooltip div {
+                max-width: 100% !important;
+                word-wrap: break-word !important;
+                white-space: pre-wrap !important;
+                color: #333333 !important;
+            }
+        `;
+        
+        document.head.appendChild(style);
+        console.log('Tooltip styles injected for width limitation');
+    }
+
 
     // 设置事件处理
     setupEventHandlers() {
@@ -366,7 +479,7 @@ class NetworkVisualizationV2 {
         });
 
         // 拖拽结束
-        this.network.on('dragEnd', (params) => {
+        this.network.on('dragEnd', () => {
             if (this.dragState.isDragging) {
                 this.endDrag();
             }
@@ -914,13 +1027,6 @@ class NetworkVisualizationV2 {
         // 创建合并后的新标签，显示合并来源
         const mergedLabel = `${targetNode.label} + ${sourceNode.label}`;
         
-        // 更新目标节点的标签
-        this.nodes.update({
-            id: targetId,
-            label: this.formatLabel(mergedLabel, this.nodeRelations.nodeTypes.get(targetId) === 'high-intent' ? 'high' : 'low'),
-            title: `Merged from: ${sourceNode.label} → ${targetNode.label}`
-        });
-
         // 将源节点的子节点移动到目标节点
         sourceChildren.forEach(childId => {
             this.nodeRelations.parents.set(childId, targetId);
@@ -943,6 +1049,16 @@ class NetworkVisualizationV2 {
 
         // 更新目标节点的子节点列表
         this.nodeRelations.children.set(targetId, [...targetChildren, ...sourceChildren]);
+
+        // 更新目标节点的标签和工具提示
+        const targetType = this.nodeRelations.nodeTypes.get(targetId);
+        const finalChildrenCount = targetChildren.length + sourceChildren.length;
+        
+        this.nodes.update({
+            id: targetId,
+            label: this.formatLabel(mergedLabel, targetType === 'high-intent' ? 'high' : 'low'),
+            title: this.formatIntentTooltip(mergedLabel, targetType, finalChildrenCount)
+        });
 
         // 删除源节点及其父连接
         this.removeNodeAndConnections(sourceId);
@@ -1082,15 +1198,7 @@ class NetworkVisualizationV2 {
         const targetNode = this.nodes.get(targetLowIntentId);
         const highChildren = this.nodeRelations.children.get(highIntentId) || [];
         
-        // 1. 将高级意图本身融合到目标低级意图的标签中
-        const mergedLabel = `${targetNode.label} + ${highNode.label}`;
-        this.nodes.update({
-            id: targetLowIntentId,
-            label: this.formatLabel(mergedLabel, 'low'),
-            title: `Merged: ${highNode.label} (high-level) → ${targetNode.label} (low-level)`
-        });
-        
-        // 2. 收集所有叶子节点（record节点）
+        // 1. 收集所有叶子节点（record节点）
         const leafNodes = [];
         
         highChildren.forEach(childId => {
@@ -1139,6 +1247,16 @@ class NetworkVisualizationV2 {
         
         // 更新目标节点的子节点列表
         this.nodeRelations.children.set(targetLowIntentId, [...currentTargetChildren, ...leafNodes]);
+        
+        // 3. 更新目标节点的标签和工具提示
+        const mergedLabel = `${targetNode.label} + ${highNode.label}`;
+        const finalChildrenCount = currentTargetChildren.length + leafNodes.length;
+        
+        this.nodes.update({
+            id: targetLowIntentId,
+            label: this.formatLabel(mergedLabel, 'low'),
+            title: this.formatIntentTooltip(mergedLabel, 'low-intent', finalChildrenCount)
+        });
         
         // 4. 删除原高级意图节点
         this.removeNodeAndConnections(highIntentId);
@@ -1258,7 +1376,6 @@ class NetworkVisualizationV2 {
         // 清除现有菜单
         this.clearContextMenu();
         
-        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
         const node = this.nodes.get(nodeId);
         
         // 创建菜单
@@ -1346,9 +1463,6 @@ class NetworkVisualizationV2 {
 
     // 执行右键菜单操作
     executeContextMenuAction(nodeId, action) {
-        const node = this.nodes.get(nodeId);
-        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
-        
         switch (action) {
             case 'edit':
                 this.editNode(nodeId);
@@ -1367,8 +1481,111 @@ class NetworkVisualizationV2 {
         const node = this.nodes.get(nodeId);
         const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
         
+        // 获取当前节点的内容信息
+        let currentContent = '';
+        let currentComment = '';
+        
+        if (nodeType === 'record' && node.title) {
+            // 记录节点：从title中提取content和comment
+            const commentMatch = node.title.match(/Comment:\s*(.*?)(?:\n|$)/s);
+            currentComment = commentMatch ? commentMatch[1].trim() : '';
+            if (currentComment === 'No comment') currentComment = '';
+            
+            // 提取Content部分，包括可能的多行内容
+            const contentMatch = node.title.match(/Content:\s*(.*?)(?=\n\nComment:|$)/s);
+            if (contentMatch) {
+                // 清理缩进的续行
+                currentContent = contentMatch[1]
+                    .replace(/\n  /g, ' ')  // 移除换行和缩进
+                    .trim();
+            } else {
+                currentContent = node.label;
+            }
+        } else if ((nodeType === 'high-intent' || nodeType === 'low-intent') && node.title) {
+            // 意图节点：从title中提取intent名称，可能包含多行
+            const intentMatch = node.title.match(/Intent:\s*(.*?)(?=\n[A-Z]|$)/s);
+            if (intentMatch) {
+                // 清理缩进的续行
+                currentContent = intentMatch[1]
+                    .replace(/\n  /g, ' ')  // 移除换行和缩进
+                    .trim();
+            } else {
+                currentContent = node.label;
+            }
+        } else {
+            // 默认情况：使用节点标签
+            currentContent = node.label;
+        }
+        
         const dialog = document.createElement('div');
         dialog.id = 'editNodeDialog';
+        
+        // 根据节点类型决定内容输入方式
+        let contentInputHtml = '';
+        if (nodeType === 'record') {
+            // Record节点：只读显示区域 + 展开功能
+            const shouldShowExpand = currentContent.length > 100;
+            const truncatedText = shouldShowExpand ? currentContent.substring(0, 100) + '...' : currentContent;
+            
+            contentInputHtml = `
+                <div style="margin: 16px 0;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">
+                        Content:
+                    </label>
+                    <div style="
+                        padding: 8px 12px;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 6px;
+                        background: #f8f9fa;
+                        font-size: 14px;
+                        line-height: 1.4;
+                        color: #333;
+                        min-height: 20px;
+                        position: relative;
+                    ">
+                        <span id="displayText">${truncatedText}</span>
+                        ${shouldShowExpand ? `
+                            <button id="expandBtn" style="
+                                background: none;
+                                border: none;
+                                color: #007bff;
+                                cursor: pointer;
+                                font-size: 12px;
+                                margin-left: 8px;
+                                padding: 2px 6px;
+                                border-radius: 4px;
+                                transition: background-color 0.2s;
+                            " onmouseover="this.style.backgroundColor='#e3f2fd'" onmouseout="this.style.backgroundColor='transparent'">
+                                Expand
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>`;
+        } else {
+            // Intent节点：可编辑的textarea
+            contentInputHtml = `
+                <div style="margin: 16px 0;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">
+                        Intent:
+                    </label>
+                    <textarea id="intentInput" style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        box-sizing: border-box;
+                        min-height: 80px;
+                        resize: vertical;
+                        font-family: inherit;
+                        line-height: 1.4;
+                    ">${currentContent}</textarea>
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                        Enter the complete intent description
+                    </div>
+                </div>`;
+        }
+        
         dialog.innerHTML = `
             <div style="
                 position: fixed;
@@ -1380,26 +1597,35 @@ class NetworkVisualizationV2 {
                 padding: 24px;
                 box-shadow: 0 8px 32px rgba(0,0,0,0.3);
                 z-index: 10003;
-                min-width: 320px;
-                max-width: 480px;
+                min-width: 360px;
+                max-width: 520px;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             ">
                 <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;">
                     Edit ${this.getNodeTypeLabel(nodeType)}
                 </h3>
+                ${contentInputHtml}
+                ${nodeType === 'record' ? `
                 <div style="margin: 16px 0;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">
-                        Node Label:
+                        Comment:
                     </label>
-                    <input type="text" id="nodeLabel" value="${node.label}" style="
+                    <textarea id="nodeComment" placeholder="Add a comment for this record..." style="
                         width: 100%;
                         padding: 8px 12px;
                         border: 1px solid #ddd;
                         border-radius: 6px;
                         font-size: 14px;
                         box-sizing: border-box;
-                    " />
+                        min-height: 80px;
+                        resize: vertical;
+                        font-family: inherit;
+                    ">${currentComment}</textarea>
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                        Maximum 500 characters
+                    </div>
                 </div>
+                ` : ''}
                 <div style="display: flex; gap: 12px; margin-top: 20px;">
                     <button id="saveNodeEdit" style="
                         flex: 1;
@@ -1428,16 +1654,57 @@ class NetworkVisualizationV2 {
         
         document.body.appendChild(dialog);
         
-        // 获取输入框并聚焦
-        const labelInput = document.getElementById('nodeLabel');
-        labelInput.focus();
-        labelInput.select();
+        // 获取相关元素
+        const commentInput = nodeType === 'record' ? document.getElementById('nodeComment') : null;
+        const intentInput = nodeType !== 'record' ? document.getElementById('intentInput') : null;
+        const expandBtn = document.getElementById('expandBtn');
+        const displayText = document.getElementById('displayText');
+        
+        // 展开/收起功能（仅Record节点）
+        if (expandBtn && displayText) {
+            let isExpanded = false;
+            expandBtn.onclick = () => {
+                isExpanded = !isExpanded;
+                if (isExpanded) {
+                    displayText.textContent = currentContent;
+                    expandBtn.textContent = 'Collapse';
+                } else {
+                    const truncatedText = currentContent.length > 100 ? currentContent.substring(0, 100) + '...' : currentContent;
+                    displayText.textContent = truncatedText;
+                    expandBtn.textContent = 'Expand';
+                }
+            };
+        }
+        
+        // 聚焦到相应的输入框
+        if (commentInput) {
+            // Record节点：聚焦到评论框
+            commentInput.focus();
+            
+            // 为评论框添加字符限制
+            commentInput.oninput = (e) => {
+                if (e.target.value.length > 500) {
+                    e.target.value = e.target.value.substring(0, 500);
+                }
+            };
+        } else if (intentInput) {
+            // Intent节点：聚焦到意图输入框
+            intentInput.focus();
+            intentInput.select();
+        }
         
         // 绑定事件
         document.getElementById('saveNodeEdit').onclick = () => {
-            const newLabel = labelInput.value.trim();
-            if (newLabel) {
-                this.updateNodeLabel(nodeId, newLabel);
+            if (nodeType === 'record') {
+                // Record节点：只更新评论
+                const newComment = commentInput ? commentInput.value.trim() : null;
+                this.updateNodeLabel(nodeId, node.label, newComment);
+            } else {
+                // Intent节点：更新intent内容
+                const newIntent = intentInput ? intentInput.value.trim() : '';
+                if (newIntent && newIntent !== currentContent) {
+                    this.updateIntentNode(nodeId, newIntent);
+                }
             }
             dialog.remove();
         };
@@ -1446,25 +1713,99 @@ class NetworkVisualizationV2 {
             dialog.remove();
         };
         
-        // 回车保存
-        labelInput.onkeypress = (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('saveNodeEdit').click();
+        // 键盘快捷键处理
+        if (commentInput) {
+            commentInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    // Ctrl+Enter 保存
+                    document.getElementById('saveNodeEdit').click();
+                }
+            });
+        } else if (intentInput) {
+            intentInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    // Ctrl+Enter 保存
+                    document.getElementById('saveNodeEdit').click();
+                }
+            });
+        }
+        
+        // Esc取消
+        dialog.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                dialog.remove();
             }
-        };
+        });
     }
 
     // 更新节点标签
-    updateNodeLabel(nodeId, newLabel) {
+    updateNodeLabel(nodeId, newLabel, newComment = null) {
         const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
         const formattedLabel = this.formatLabel(newLabel, nodeType === 'high-intent' ? 'high' : nodeType === 'low-intent' ? 'low' : 'record');
         
-        this.nodes.update({
+        // 准备更新对象
+        const updateData = {
             id: nodeId,
             label: formattedLabel
+        };
+        
+        // 如果是记录节点且提供了评论参数，更新工具提示
+        if (nodeType === 'record') {
+            const currentNode = this.nodes.get(nodeId);
+            let contentText = 'No content';
+            
+            // 从现有title中提取content信息
+            if (currentNode.title) {
+                const contentMatch = currentNode.title.match(/Content:\s*(.*?)(?=\n\nComment:|$)/s);
+                if (contentMatch) {
+                    // 清理缩进的续行
+                    contentText = contentMatch[1]
+                        .replace(/\n  /g, ' ')  // 移除换行和缩进
+                        .trim();
+                } else {
+                    contentText = 'No content';
+                }
+            }
+            
+            // 处理评论，如果newComment为null表示不更新评论
+            let commentText;
+            if (newComment !== null) {
+                commentText = newComment || 'No comment';
+            } else {
+                // 从现有title中提取comment信息
+                const commentMatch = currentNode.title ? currentNode.title.match(/Comment:\s*(.*)$/) : null;
+                commentText = commentMatch ? commentMatch[1] : 'No comment';
+            }
+            
+            // 更新工具提示
+            updateData.title = this.formatTooltipContent(contentText, commentText);
+        }
+        
+        this.nodes.update(updateData);
+        
+        const logMessage = nodeType === 'record' && newComment !== null 
+            ? `Updated label and comment for ${nodeId}: "${formattedLabel}" with comment: "${newComment || 'No comment'}"`
+            : `Updated label for ${nodeId}: ${formattedLabel}`;
+        
+        console.log(logMessage);
+    }
+
+    // 更新意图节点
+    updateIntentNode(nodeId, newIntent) {
+        const nodeType = this.nodeRelations.nodeTypes.get(nodeId);
+        const formattedLabel = this.formatLabel(newIntent, nodeType === 'high-intent' ? 'high' : 'low');
+        
+        // 获取当前子节点数量
+        const childrenCount = this.nodeRelations.children.get(nodeId)?.length || 0;
+        
+        // 更新节点标签和工具提示
+        this.nodes.update({
+            id: nodeId,
+            label: formattedLabel,
+            title: this.formatIntentTooltip(newIntent, nodeType, childrenCount)
         });
         
-        console.log(`Updated label for ${nodeId}: ${formattedLabel}`);
+        console.log(`Updated intent for ${nodeId}: "${newIntent}"`);
     }
 
     // 删除节点
@@ -1794,12 +2135,19 @@ class NetworkVisualizationV2 {
         if (this.container) {
             this.container.remove();
         }
+        
+        // 清理注入的样式（如果没有其他实例使用）
+        const tooltipStyles = document.getElementById('vis-tooltip-styles-v2');
+        if (tooltipStyles) {
+            tooltipStyles.remove();
+        }
+        
         console.log('NetworkVisualizationV2 cleaned up');
     }
 }
 
 // 全局函数入口
-window.showNetworkVisualizationV2 = async function(intentTree, containerArea = null, mode = 'standalone', layout = 'force') {
+window.showNetworkVisualizationV2 = async function(intentTree, containerArea = null, mode = 'standalone') {
     try {
         console.log('Creating V2 Network Visualization');
         
