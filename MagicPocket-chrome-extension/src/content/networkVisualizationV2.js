@@ -145,7 +145,10 @@ class NetworkVisualizationV2 {
         const header = document.createElement('div');
         header.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee; background: linear-gradient(135deg, #ff7675, #fd79a8);">
-                <h3 style="margin: 0; color: white; font-size: 16px; font-weight: 600;">🚀 Multi-Level Network V2 - Drag & Drop</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h3 id="networkTitle" style="margin: 0; color: white; font-size: 16px; font-weight: 600;">🚀 Multi-Level Network V2 - Drag & Drop</h3>
+                    <button id="editTitleBtn" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 14px; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" title="Edit Title">✏️</button>
+                </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button id="autoLayoutBtn" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 12px; padding: 6px 12px; border-radius: 16px; cursor: pointer; transition: all 0.2s;">📐 Auto Layout</button>
                     <button id="closeV2Network" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
@@ -178,6 +181,9 @@ class NetworkVisualizationV2 {
                 autoLayoutBtn.style.background = 'rgba(255,255,255,0.2)';
             }, 200);
         };
+        
+        // 编辑标题按钮事件
+        header.querySelector('#editTitleBtn').onclick = () => this.showEditTitleDialog();
         
         // 按钮悬停效果
         autoLayoutBtn.onmouseover = () => {
@@ -3160,6 +3166,140 @@ class NetworkVisualizationV2 {
         }
         
         console.log('NetworkVisualizationV2 cleaned up');
+    }
+    
+    // 显示编辑标题对话框
+    showEditTitleDialog() {
+        const currentTitle = document.getElementById('networkTitle').textContent;
+        
+        const dialog = document.createElement('div');
+        dialog.id = 'editTitleDialog';
+        dialog.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 10001;
+                min-width: 400px;
+                max-width: 600px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;">
+                    Edit Network Title
+                </h3>
+                <div style="margin: 16px 0;">
+                    <input 
+                        type="text" 
+                        id="titleInput" 
+                        value="${currentTitle}" 
+                        placeholder="Enter network title..."
+                        style="
+                            width: 100%;
+                            padding: 12px;
+                            border: 1px solid #ddd;
+                            border-radius: 8px;
+                            font-size: 14px;
+                            font-family: inherit;
+                            outline: none;
+                            transition: border-color 0.2s;
+                        "
+                    />
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button id="cancelTitleEdit" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #f8f9fa;
+                        color: #666;
+                        border: 1px solid #dee2e6;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        transition: all 0.2s;
+                    ">Cancel</button>
+                    <button id="saveTitleEdit" style="
+                        flex: 1;
+                        padding: 10px 16px;
+                        background: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 500;
+                        transition: all 0.2s;
+                    ">Save</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        // 聚焦输入框并选中文本
+        const titleInput = document.getElementById('titleInput');
+        titleInput.focus();
+        titleInput.select();
+        
+        // 输入框样式增强
+        titleInput.onfocus = () => {
+            titleInput.style.borderColor = '#007bff';
+            titleInput.style.boxShadow = '0 0 0 3px rgba(0,123,255,0.1)';
+        };
+        titleInput.onblur = () => {
+            titleInput.style.borderColor = '#ddd';
+            titleInput.style.boxShadow = 'none';
+        };
+        
+        // 保存按钮事件
+        document.getElementById('saveTitleEdit').onclick = () => {
+            const newTitle = titleInput.value.trim();
+            if (newTitle && newTitle !== currentTitle) {
+                document.getElementById('networkTitle').textContent = newTitle;
+                console.log('Network title updated:', newTitle);
+            }
+            dialog.remove();
+        };
+        
+        // 取消按钮事件
+        document.getElementById('cancelTitleEdit').onclick = () => {
+            dialog.remove();
+        };
+        
+        // 键盘事件处理
+        titleInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('saveTitleEdit').click();
+            } else if (e.key === 'Escape') {
+                dialog.remove();
+            }
+        };
+        
+        // 按钮悬停效果
+        const saveBtn = document.getElementById('saveTitleEdit');
+        const cancelBtn = document.getElementById('cancelTitleEdit');
+        
+        saveBtn.onmouseover = () => {
+            saveBtn.style.background = '#0056b3';
+            saveBtn.style.transform = 'translateY(-1px)';
+        };
+        saveBtn.onmouseout = () => {
+            saveBtn.style.background = '#007bff';
+            saveBtn.style.transform = 'translateY(0)';
+        };
+        
+        cancelBtn.onmouseover = () => {
+            cancelBtn.style.background = '#e9ecef';
+            cancelBtn.style.transform = 'translateY(-1px)';
+        };
+        cancelBtn.onmouseout = () => {
+            cancelBtn.style.background = '#f8f9fa';
+            cancelBtn.style.transform = 'translateY(0)';
+        };
     }
 }
 
