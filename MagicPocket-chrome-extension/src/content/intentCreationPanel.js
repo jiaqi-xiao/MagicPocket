@@ -517,6 +517,7 @@ class IntentCreationPanel {
                 background: rgba(255,255,255,0.8);
                 transition: all 0.3s ease;
                 outline: none;
+                color: #000;
             }
             
             .intent-input:focus {
