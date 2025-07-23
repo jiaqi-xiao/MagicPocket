@@ -1,0 +1,202 @@
+[
+    {
+        "records": [
+            {
+                "id": 1,
+                "content": "A network protocol is a set of rules that govern data communication between different devices in the network. It determines what is being communicated, how it is being communicated, and when it is being communicated. It permits connected devices to communicate with each other, irrespective of internal and structural differences.",
+                "context": "General understanding of what network protocols are and their purpose.",
+                "isLeafNode": true,
+                "comment": null
+            },
+            {
+                "id": 2,
+                "content": "The [Open Systems Interconnection (OSI),](https://www.geeksforgeeks.org/open-systems-interconnection-model-osi/) the most widely used model, illustrates how computer systems interact with one another over a network.",
+                "context": "Understanding the OSI model as a framework for network protocols.",
+                "isLeafNode": true,
+                "comment": null
+            }
+        ],
+        "intent_id": 1,
+        "intent_name": "Understanding foundational network protocols",
+        "intent_description": "Gaining a basic understanding of what network protocols are and how the OSI model serves as a framework for these protocols.",
+        "level": "1",
+        "parent": null
+    },
+    {
+        "records": [
+            {
+                "id": 3,
+                "content": "Hypertext Transfer Protocol(HTTP)It is a layer 7 protocol that is designed for transferring a hypertext between two or more systems.[ HTTP](https://www.geeksforgeeks.org/http-full-form/) works on a [client-server model](https://www.geeksforgeeks.org/client-server-model/), most of the data sharing over the web is done through using HTTP.",
+                "context": "Understanding HTTP as a specific network protocol used for web data transfer.",
+                "isLeafNode": true,
+                "comment": null
+            },
+            {
+                "id": 4,
+                "content": "HTTPS is a secure version of HTTP, using encryption (SSL/TLS) to protect data during transmission.HTTP and HTTPS allow users to access and interact with websites securely, ensuring privacy and data integrity.",
+                "context": "Understanding the security aspect of HTTP through HTTPS.",
+                "isLeafNode": true,
+                "comment": null
+            }
+        ],
+        "intent_id": 2,
+        "intent_name": "Exploring web transfer protocols",
+        "intent_description": "Examining HTTP and HTTPS as protocols for web data transfer, focusing on their functionalities and security features.",
+        "level": "1",
+        "parent": null
+    },
+    {
+        "records": [
+            {
+                "id": 5,
+                "content": "Network SecurityThese protocols secure the data in passage over a network. These protocols also determine how the network secures data from any unauthorized attempts to extract or review data. These protocols make sure that no unauthorized devices, users, or services can access the network data. Primarily, these protocols depend on encryption to secure data.",
+                "context": "Understanding network security protocols and their role in data protection.",
+                "isLeafNode": true,
+                "comment": null
+            }
+        ],
+        "intent_id": 3,
+        "intent_name": "Understanding network security protocols",
+        "intent_description": "Learning about protocols that secure data transmission over networks and protect against unauthorized access.",
+        "level": "1",
+        "parent": null
+    },
+    {
+        "records": [
+            {
+                "id": 6,
+                "content": "TCP is known for its reliability and connection-oriented nature. When two devices establish communication through TCP, they create a dedicated connection for the duration of the data exchange.",
+                "context": "Understanding TCP as a reliable, connection-oriented protocol.",
+                "isLeafNode": true,
+                "comment": null
+            },
+            {
+                "id": 7,
+                "content": "UDP is often considered faster than TCP because it doesn\u00e2\u20ac\u2122t have the overhead of connection setup and the error-checking mechanisms that TCP employs. As a result, it can transmit data more quickly.",
+                "context": "Understanding UDP as a faster, connectionless protocol.",
+                "isLeafNode": true,
+                "comment": null
+            },
+            {
+                "id": 8,
+                "content": "Connection-Oriented vs. Connectionless: TCP is connection-oriented, meaning it establishes a connection before data transmission, while UDP is connectionless, simply sending data without prior setup.",
+                "context": "Comparing TCP and UDP in terms of connection orientation.",
+                "isLeafNode": true,
+                "comment": null
+            }
+        ],
+        "intent_id": 4,
+        "intent_name": "Comparing TCP and UDP protocols",
+        "intent_description": "Analyzing the differences between TCP and UDP, focusing on their connection-oriented and connectionless nature, respectively.",
+        "level": "1",
+        "parent": null
+    },
+    {
+        "records": [
+            {
+                "1": [
+                    {
+                        "id": 1,
+                        "content": "A network protocol is a set of rules that govern data communication between different devices in the network. It determines what is being communicated, how it is being communicated, and when it is being communicated. It permits connected devices to communicate with each other, irrespective of internal and structural differences.",
+                        "context": "Understanding the basic definition and purpose of network protocols.",
+                        "isLeafNode": true,
+                        "comment": null
+                    }
+                ],
+                "2": [
+                    {
+                        "id": 2,
+                        "content": "The [Open Systems Interconnection (OSI),](https://www.geeksforgeeks.org/open-systems-interconnection-model-osi/) the most widely used model, illustrates how computer systems interact with one another over a network.",
+                        "context": "Understanding the OSI model as a framework for network protocols.",
+                        "isLeafNode": true,
+                        "comment": null
+                    }
+                ]
+            }
+        ],
+        "intent_id": 5,
+        "intent_name": "Learning basic network protocol concepts",
+        "intent_description": "Acquiring foundational knowledge about network protocols and the OSI model's role in facilitating network communication.",
+        "level": "2",
+        "parent": 1
+    },
+    {
+        "records": [
+            {
+                "1": [
+                    {
+                        "id": 1,
+                        "content": "Hypertext Transfer Protocol(HTTP)It is a layer 7 protocol that is designed for transferring a hypertext between two or more systems.",
+                        "context": "Understanding the basic function and purpose of HTTP as a network protocol.",
+                        "isLeafNode": true,
+                        "comment": null
+                    },
+                    {
+                        "id": 2,
+                        "content": "HTTP works on a client-server model, most of the data sharing over the web is done through using HTTP.",
+                        "context": "Understanding the operational model of HTTP and its role in web data sharing.",
+                        "isLeafNode": true,
+                        "comment": null
+                    }
+                ],
+                "2": [
+                    {
+                        "id": 3,
+                        "content": "HTTPS is a secure version of HTTP, using encryption (SSL/TLS) to protect data during transmission.",
+                        "context": "Understanding the security enhancements of HTTPS over HTTP.",
+                        "isLeafNode": true,
+                        "comment": null
+                    },
+                    {
+                        "id": 4,
+                        "content": "HTTP and HTTPS allow users to access and interact with websites securely, ensuring privacy and data integrity.",
+                        "context": "Understanding the importance of HTTP and HTTPS in ensuring secure web interactions.",
+                        "isLeafNode": true,
+                        "comment": null
+                    }
+                ]
+            }
+        ],
+        "intent_id": 6,
+        "intent_name": "Examining HTTP and HTTPS protocols",
+        "intent_description": "Exploring the functionalities and security features of HTTP and HTTPS, focusing on their roles in web data transfer and secure interactions.",
+        "level": "2",
+        "parent": 2
+    },
+    {
+        "records": [
+            {
+                "1": [
+                    {
+                        "id": 1,
+                        "content": "TCP is known for its reliability and connection-oriented nature. When two devices establish communication through TCP, they create a dedicated connection for the duration of the data exchange.",
+                        "context": "Understanding the characteristics and mechanisms of TCP in network protocols.",
+                        "isLeafNode": true,
+                        "comment": null
+                    },
+                    {
+                        "id": 2,
+                        "content": "Connection-Oriented vs. Connectionless: TCP is connection-oriented, meaning it establishes a connection before data transmission, while UDP is connectionless, simply sending data without prior setup.",
+                        "context": "Comparing the connection-oriented nature of TCP with the connectionless nature of UDP.",
+                        "isLeafNode": true,
+                        "comment": null
+                    }
+                ],
+                "2": [
+                    {
+                        "id": 3,
+                        "content": "UDP is often considered faster than TCP because it doesn\u00e2\u20ac\u2122t have the overhead of connection setup and the error-checking mechanisms that TCP employs. As a result, it can transmit data more quickly.",
+                        "context": "Understanding the speed and efficiency differences between UDP and TCP due to the lack of connection setup and error-checking in UDP.",
+                        "isLeafNode": true,
+                        "comment": null
+                    }
+                ]
+            }
+        ],
+        "intent_id": 7,
+        "intent_name": "Analyzing TCP and UDP characteristics",
+        "intent_description": "Investigating the features and performance differences between TCP and UDP, focusing on their connection setup and data transmission efficiency.",
+        "level": "2",
+        "parent": 4
+    }
+]
