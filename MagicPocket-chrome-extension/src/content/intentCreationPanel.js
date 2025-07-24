@@ -33,10 +33,21 @@ class IntentCreationPanel {
         
         this.container.innerHTML = `
             <div class="panel-content">
-                <input type="text" 
-                       class="intent-input" 
-                       placeholder="Enter intent description or leave empty for AI suggestions..." 
-                       maxlength="400">
+                <div class="input-section">
+                    <input type="text" 
+                           class="intent-input" 
+                           placeholder="Enter intent description or leave empty for AI suggestions..." 
+                           maxlength="400">
+                    <div class="level-selector">
+                        <span class="level-label">Level:</span>
+                        <div class="level-option active" data-level="high-intent">
+                            <span class="level-indicator high-level">🔴 High</span>
+                        </div>
+                        <div class="level-option" data-level="low-intent">
+                            <span class="level-indicator low-level">🔵 Low</span>
+                        </div>
+                    </div>
+                </div>
                 <button class="intent-submit-btn">
                     <span class="btn-icon">✨</span>
                     <span class="btn-text">Create</span>
@@ -47,6 +58,7 @@ class IntentCreationPanel {
         // 获取输入和按钮元素
         this.inputField = this.container.querySelector('.intent-input');
         this.submitButton = this.container.querySelector('.intent-submit-btn');
+        this.levelOptions = this.container.querySelectorAll('.level-option');
         
         // 添加到网络容器
         const networkContainer = document.getElementById('v2NetworkContainer');
@@ -142,6 +154,13 @@ class IntentCreationPanel {
             this.updateButtonState();
         });
         
+        // 级别选择器点击事件
+        this.levelOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                this.setSelectedLevel(option.dataset.level);
+            });
+        });
+        
         // 切换按钮点击
         if (this.toggleButton) {
             this.toggleButton.addEventListener('click', () => {
@@ -153,16 +172,39 @@ class IntentCreationPanel {
         }
     }
     
+    // 设置选择的意图级别
+    setSelectedLevel(level) {
+        // 移除所有active状态
+        this.levelOptions.forEach(option => {
+            option.classList.remove('active');
+        });
+        
+        // 设置选中的级别
+        const selectedOption = this.container.querySelector(`[data-level="${level}"]`);
+        if (selectedOption) {
+            selectedOption.classList.add('active');
+        }
+        
+        console.log('Level selected:', level);
+    }
+    
+    // 获取当前选择的意图级别
+    getSelectedLevel() {
+        const activeOption = this.container.querySelector('.level-option.active');
+        return activeOption ? activeOption.dataset.level : 'high-intent'; // 默认为高级意图
+    }
+    
     // 处理意图创建
     handleIntentCreation() {
         const inputText = this.inputField.value.trim();
+        const selectedLevel = this.getSelectedLevel();
         
         if (inputText) {
             // 手动模式：创建单个意图节点
-            this.createManualIntent(inputText);
+            this.createManualIntent(inputText, selectedLevel);
         } else {
             // 自动模式：生成多个意图建议
-            this.generateAutoIntents();
+            this.generateAutoIntents(selectedLevel);
         }
         
         // 清空输入框
@@ -171,14 +213,15 @@ class IntentCreationPanel {
     }
     
     // 创建手动意图节点
-    createManualIntent(intentText) {
+    createManualIntent(intentText, selectedLevel) {
         const nodeId = `staged_${this.nodeIdCounter++}`;
-        const stagedNode = this.createStageNode(intentText, nodeId);
+        const stagedNode = this.createStageNode(intentText, nodeId, false, selectedLevel);
         
         this.stagedNodes.set(nodeId, {
             element: stagedNode,
             text: intentText,
-            type: 'idle-intent'
+            type: selectedLevel, // 使用选择的级别而不是固定的 'idle-intent'
+            level: selectedLevel
         });
         
         // 添加到暂存区域
@@ -190,11 +233,11 @@ class IntentCreationPanel {
             stagedNode.classList.add('bubble-animation');
         }, 100);
         
-        console.log('Manual intent created:', intentText);
+        console.log('Manual intent created:', intentText, 'Level:', selectedLevel);
     }
     
     // 生成自动意图建议
-    async generateAutoIntents() {
+    async generateAutoIntents(selectedLevel) {
         this.showLoadingAnimation();
         
         try {
@@ -205,12 +248,13 @@ class IntentCreationPanel {
             autoIntents.forEach((intent, index) => {
                 setTimeout(() => {
                     const nodeId = `staged_${this.nodeIdCounter++}`;
-                    const stagedNode = this.createStageNode(intent.text, nodeId);
+                    const stagedNode = this.createStageNode(intent.text, nodeId, false, selectedLevel);
                     
                     this.stagedNodes.set(nodeId, {
                         element: stagedNode,
                         text: intent.text,
-                        type: 'idle-intent',
+                        type: selectedLevel, // 使用选择的级别
+                        level: selectedLevel,
                         confidence: intent.confidence
                     });
                     
@@ -232,23 +276,31 @@ class IntentCreationPanel {
     }
     
     // 创建暂存节点
-    createStageNode(intentText, nodeId, isRestored = false) {
+    createStageNode(intentText, nodeId, isRestored = false, selectedLevel = 'high-intent') {
         // 如果是恢复操作且nodeId为true，生成新的nodeId
         if (isRestored && nodeId === true) {
             nodeId = `staged_${this.nodeIdCounter++}`;
         }
         
         const stagedNode = document.createElement('div');
-        stagedNode.className = 'staged-node';
+        stagedNode.className = `staged-node ${selectedLevel}`;
         stagedNode.dataset.nodeId = nodeId;
+        stagedNode.dataset.level = selectedLevel;
         stagedNode.draggable = true;
         
         // 截断过长的文本
         const displayText = intentText.length > 50 ? 
                            intentText.substring(0, 47) + '...' : intentText;
         
+        // 根据级别选择图标和颜色
+        const levelIcon = selectedLevel === 'high-intent' ? '🔴' : '🔵';
+        const levelText = selectedLevel === 'high-intent' ? 'High' : 'Low';
+        
         stagedNode.innerHTML = `
             <div class="staged-node-content">
+                <div class="staged-node-header">
+                    <span class="level-badge">${levelIcon} ${levelText}</span>
+                </div>
                 <span class="staged-node-text">${displayText}</span>
                 <button class="remove-staged-btn" title="Remove">×</button>
             </div>
@@ -269,7 +321,8 @@ class IntentCreationPanel {
             this.stagedNodes.set(nodeId, {
                 element: stagedNode,
                 text: intentText,
-                type: 'idle-intent'
+                type: selectedLevel,
+                level: selectedLevel
             });
             
             // 确保暂存区域存在
@@ -504,8 +557,85 @@ class IntentCreationPanel {
             
             .panel-content {
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 12px;
+            }
+            
+            .input-section {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .level-selector {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 12px;
+            }
+            
+            .level-label {
+                color: #666;
+                font-weight: 500;
+                margin-right: 4px;
+            }
+            
+            .level-option {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 12px;
+                transition: all 0.2s ease;
+                border: 1.5px solid transparent;
+                background: rgba(255, 255, 255, 0.3);
+            }
+            
+            .level-option:hover {
+                background: rgba(116, 185, 255, 0.15);
+                border-color: rgba(116, 185, 255, 0.3);
+            }
+            
+            /* 选中状态的高级意图 */
+            .level-option.active[data-level="high-intent"] {
+                background: linear-gradient(135deg, rgba(255, 118, 117, 0.2), rgba(225, 112, 85, 0.15));
+                border-color: #ff7675;
+                box-shadow: 0 2px 8px rgba(255, 118, 117, 0.2);
+            }
+            
+            /* 选中状态的低级意图 */
+            .level-option.active[data-level="low-intent"] {
+                background: linear-gradient(135deg, rgba(116, 185, 255, 0.2), rgba(9, 132, 227, 0.15));
+                border-color: #74b9ff;
+                box-shadow: 0 2px 8px rgba(116, 185, 255, 0.2);
+            }
+            
+            .level-indicator {
+                font-size: 11px;
+                font-weight: 600;
+                user-select: none;
+                transition: all 0.2s ease;
+            }
+            
+            /* 未选中状态的颜色 - 较淡 */
+            .level-indicator.high-level {
+                color: rgba(225, 112, 85, 0.6);
+            }
+            
+            .level-indicator.low-level {
+                color: rgba(9, 132, 227, 0.6);
+            }
+            
+            /* 选中状态的颜色 - 更鲜艳 */
+            .level-option.active .level-indicator.high-level {
+                color: #e17055;
+                text-shadow: 0 1px 2px rgba(225, 112, 85, 0.3);
+            }
+            
+            .level-option.active .level-indicator.low-level {
+                color: #0984e3;
+                text-shadow: 0 1px 2px rgba(9, 132, 227, 0.3);
             }
             
             .intent-input {
@@ -585,7 +715,7 @@ class IntentCreationPanel {
             
             .staging-area {
                 position: absolute;
-                top: 100px;
+                top: 120px;
                 left: 20px;
                 width: 280px;
                 max-height: 320px;
@@ -628,7 +758,6 @@ class IntentCreationPanel {
             
             .staged-node {
                 display: block;
-                background: linear-gradient(135deg, #ff7675, #74b9ff);
                 color: white;
                 border-radius: 20px;
                 cursor: grab;
@@ -639,6 +768,17 @@ class IntentCreationPanel {
                 position: relative;
                 overflow: hidden;
                 user-select: none;
+                border: 2px solid transparent;
+            }
+            
+            .staged-node.high-intent {
+                background: linear-gradient(135deg, #ff7675, #e17055);
+                border-color: rgba(255, 118, 117, 0.5);
+            }
+            
+            .staged-node.low-intent {
+                background: linear-gradient(135deg, #74b9ff, #0984e3);
+                border-color: rgba(116, 185, 255, 0.5);
             }
             
             .staged-node:hover {
@@ -659,24 +799,44 @@ class IntentCreationPanel {
             
             .staged-node-content {
                 display: flex;
+                flex-direction: column;
+                gap: 4px;
+                padding: 12px 16px;
+                position: relative;
+            }
+            
+            .staged-node-header {
+                display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 12px 16px;
+                margin-bottom: 2px;
+            }
+            
+            .level-badge {
+                background: rgba(255, 255, 255, 0.2);
+                padding: 2px 6px;
+                border-radius: 8px;
+                font-size: 10px;
+                font-weight: bold;
+                backdrop-filter: blur(4px);
+                border: 1px solid rgba(255, 255, 255, 0.3);
             }
             
             .staged-node-text {
-                flex: 1;
-                margin-right: 8px;
                 line-height: 1.3;
+                margin-bottom: 2px;
             }
             
             .remove-staged-btn {
+                position: absolute;
+                top: 8px;
+                right: 8px;
                 background: rgba(255,255,255,0.2);
                 border: none;
                 color: white;
-                font-size: 16px;
-                width: 24px;
-                height: 24px;
+                font-size: 14px;
+                width: 20px;
+                height: 20px;
                 border-radius: 50%;
                 cursor: pointer;
                 display: flex;

@@ -1029,64 +1029,68 @@ class NetworkVisualizationV2 {
         this.endStagedNodeDrag();
     }
     
-    // 将暂存节点附加到目标节点
+    // 将暂存节点附加到目标节点 - 使用统一的碰撞检测系统
     attachStagedNodeToTarget(stagedData, targetNodeId, position) {
         const targetType = this.nodeRelations.nodeTypes.get(targetNodeId);
         
-        // 根据目标节点类型决定操作选项
-        if (targetType === 'high-intent') {
-            // 保存状态快照，防止异步操作期间状态变化
-            const stateSnapshot = {
-                stagedNodeId: this.dragState.stagedNodeDrag.stagedNodeId,
-                operationId: `high_intent_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-                timestamp: Date.now()
-            };
-            
-            console.log('Starting async high-intent operation:', stateSnapshot);
-            
-            // 标记对话框活动状态，防止fallback cleanup干扰
-            this.stagedNodeRemovalManager.activeDialogs.add(stateSnapshot.stagedNodeId);
-            
-            // 拖拽到高级意图节点：显示合并或子节点选项
-            this.showHighIntentAttachDialog(stagedData, targetNodeId).then(action => {
+        // 创建临时源节点ID用于碰撞检测系统
+        const tempSourceId = `temp_staged_${Date.now()}`;
+        const sourceType = stagedData.level || stagedData.type; // 使用暂存节点的级别
+        
+        console.log(`Staged node collision: ${sourceType}(${tempSourceId}) -> ${targetType}(${targetNodeId})`);
+        
+        // 保存状态快照，防止异步操作期间状态变化
+        const stateSnapshot = {
+            stagedNodeId: this.dragState.stagedNodeDrag.stagedNodeId,
+            operationId: `staged_collision_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+            timestamp: Date.now(),
+            tempSourceId: tempSourceId,
+            sourceType: sourceType,
+            targetType: targetType
+        };
+        
+        // 标记对话框活动状态，防止fallback cleanup干扰
+        this.stagedNodeRemovalManager.activeDialogs.add(stateSnapshot.stagedNodeId);
+        
+        // 使用统一的碰撞检测系统获取可用选项
+        const options = this.getCollisionOptions(sourceType, targetType);
+        
+        if (options.length === 0) {
+            // 不允许的操作
+            this.showNotAllowedMessage(sourceType, targetType);
+            this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'operation_not_allowed');
+            this.stagedNodeRemovalManager.activeDialogs.delete(stateSnapshot.stagedNodeId);
+            return;
+        }
+        
+        // 显示统一的碰撞对话框
+        this.showStagedNodeCollisionDialog(stagedData, targetNodeId, sourceType, targetType, options, stateSnapshot)
+            .then(action => {
                 // 验证状态快照仍然有效
                 if (!this.isStateSnapshotValid(stateSnapshot)) {
                     console.warn('State snapshot invalid, aborting operation:', stateSnapshot);
-                    // 状态验证失败时，清理可能残留的暂存节点
                     this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'state_validation_failed');
                     return;
                 }
+                
                 if (action === 'cancel') {
                     // 取消操作：用户主动放弃，移除暂存节点
-                    this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'user_cancelled_operation');
+                    this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'user_cancelled_operation');
                     return;
                 }
                 
-                if (action === 'merge') {
-                    // 合并到高级意图节点
-                    this.mergeStagedNodeToTarget(stagedData, targetNodeId);
-                    // 从暂存区域移除该节点（操作成功）
-                    this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'merged_to_high_intent');
-                } else if (action === 'child') {
-                    // 创建为子节点（低级意图）
-                    const newNodeId = this.createNetworkNodeFromStaged(stagedData, 'low-intent', position);
-                    this.establishParentChildRelation(targetNodeId, newNodeId);
-                    this.addNodeConnection(targetNodeId, newNodeId);
-                    this.updateNetworkLayout();
-                    console.log('Staged node created as child of high-intent:', newNodeId, 'Parent:', targetNodeId);
-                    // 从暂存区域移除该节点（操作成功）
-                    this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'created_as_child_node');
-                }
+                // 执行相应的操作
+                this.executeStagedNodeReorganization(stagedData, targetNodeId, action, position, stateSnapshot);
+                
             }).catch(error => {
-                console.error('High-intent dialog error:', error);
-                // 对话框出错时，清理暂存节点
+                console.error('Staged node collision dialog error:', error);
                 this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'dialog_error');
             }).finally(() => {
-                // 无论如何都清理对话框状态
+                // 清理对话框状态
                 this.stagedNodeRemovalManager.activeDialogs.delete(stateSnapshot.stagedNodeId);
-                console.log('Dialog completed, removed from active dialogs:', stateSnapshot.stagedNodeId);
+                console.log('Staged node dialog completed, removed from active dialogs:', stateSnapshot.stagedNodeId);
                 
-                // 额外保护：如果暂存节点仍然存在，说明可能有未处理的情况
+                // 额外保护：延迟检查清理
                 setTimeout(() => {
                     if (this.intentCreationPanel && this.intentCreationPanel.stagedNodes.has(stateSnapshot.stagedNodeId)) {
                         console.log('Post-dialog cleanup: staged node still exists, scheduling removal');
@@ -1094,12 +1098,6 @@ class NetworkVisualizationV2 {
                     }
                 }, 500);
             });
-            // High-Intent是异步操作，不需要返回值
-        } else if (targetType === 'low-intent') {
-            // 拖拽到低级意图节点：直接合并 - 同步操作，立即移除暂存节点
-            this.mergeStagedNodeToTarget(stagedData, targetNodeId);
-            this.stagedNodeRemovalManager.scheduleRemoval(this.dragState.stagedNodeDrag.stagedNodeId, 'merged_to_low_intent');
-        }
     }
     
     // 验证状态快照是否仍然有效
@@ -1142,10 +1140,163 @@ class NetworkVisualizationV2 {
         console.log('Node returned to staging area:', nodeId);
     }
     
+    // 显示暂存节点碰撞对话框 - 使用统一样式但针对暂存节点的操作
+    showStagedNodeCollisionDialog(stagedData, targetNodeId, sourceType, targetType, options, stateSnapshot) {
+        return new Promise((resolve) => {
+            const targetNode = this.nodes.get(targetNodeId);
+            
+            // 创建对话框 - 复用现有的样式但调整内容
+            const dialog = document.createElement('div');
+            dialog.id = 'stagedNodeCollisionDialog';
+            dialog.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: white;
+                    border-radius: 12px;
+                    padding: 24px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                    z-index: 10001;
+                    min-width: 320px;
+                    max-width: 480px;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                ">
+                    <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;">
+                        Staged Node Integration Options
+                    </h3>
+                    <div style="margin: 16px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #666;">
+                        <div><strong>Staged Node:</strong> ${stagedData.text.substring(0, 50)}${stagedData.text.length > 50 ? '...' : ''} (${this.getNodeTypeLabel(sourceType)})</div>
+                        <div style="margin-top: 4px;"><strong>Target Node:</strong> ${targetNode.label} (${this.getNodeTypeLabel(targetType)})</div>
+                    </div>
+                    <div style="margin: 20px 0;">
+                        ${options.map(option => `
+                            <button 
+                                class="staged-collision-option-btn"
+                                data-action="${option.action}"
+                                style="
+                                    display: block;
+                                    width: 100%;
+                                    padding: 12px 16px;
+                                    margin: 8px 0;
+                                    background: ${option.primary ? '#007bff' : '#6c757d'};
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    font-size: 14px;
+                                    font-weight: 500;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                "
+                                onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)';"
+                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+                            >
+                                ${option.icon} ${option.label}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button id="cancelStagedReorganization" style="
+                            flex: 1;
+                            padding: 10px 16px;
+                            background: #f8f9fa;
+                            color: #666;
+                            border: 1px solid #dee2e6;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 14px;
+                        ">Cancel</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dialog);
+
+            // 绑定事件
+            dialog.querySelectorAll('.staged-collision-option-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const action = btn.dataset.action;
+                    dialog.remove();
+                    resolve(action);
+                };
+            });
+
+            document.getElementById('cancelStagedReorganization').onclick = () => {
+                dialog.remove();
+                resolve('cancel');
+            };
+        });
+    }
+    
+    // 执行暂存节点重组操作
+    executeStagedNodeReorganization(stagedData, targetNodeId, action, position, stateSnapshot) {
+        const sourceType = stateSnapshot.sourceType;
+        const targetType = stateSnapshot.targetType;
+        
+        console.log(`Executing staged reorganization: ${action} for ${sourceType} -> ${targetType}`);
+        
+        switch (action) {
+            case 'merge':
+                if (sourceType === targetType) {
+                    // 同类型合并
+                    this.mergeStagedNodeToTarget(stagedData, targetNodeId);
+                    this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'merged_same_type');
+                } else if (sourceType === 'high-intent' && targetType === 'low-intent') {
+                    // 高级意图降级并合并到低级意图
+                    this.mergeStagedNodeToTarget(stagedData, targetNodeId);
+                    this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'demoted_and_merged');
+                }
+                break;
+                
+            case 'attach':
+                if (sourceType === 'low-intent' && targetType === 'high-intent') {
+                    // 低级意图移动到高级意图下
+                    const newNodeId = this.createNetworkNodeFromStaged(stagedData, 'low-intent', position);
+                    this.establishParentChildRelation(targetNodeId, newNodeId);
+                    this.addNodeConnection(targetNodeId, newNodeId);
+                    this.updateNetworkLayout();
+                    console.log('Staged low-intent attached to high-intent:', newNodeId, 'Parent:', targetNodeId);
+                    this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'attached_to_high_intent');
+                } else if (sourceType === targetType && sourceType === 'high-intent') {
+                    // 高级意图降级为子节点
+                    const newNodeId = this.createNetworkNodeFromStaged(stagedData, 'low-intent', position);
+                    this.establishParentChildRelation(targetNodeId, newNodeId);
+                    this.addNodeConnection(targetNodeId, newNodeId);
+                    this.updateNetworkLayout();
+                    console.log('Staged high-intent demoted as child:', newNodeId, 'Parent:', targetNodeId);
+                    this.stagedNodeRemovalManager.scheduleRemoval(stateSnapshot.stagedNodeId, 'demoted_as_child');
+                }
+                break;
+        }
+        
+        // 临时禁用物理引擎确保位置调整生效
+        this.network.setOptions({ physics: { enabled: false } });
+        
+        // 延迟恢复物理引擎
+        setTimeout(() => {
+            this.network.setOptions({
+                physics: {
+                    enabled: true,
+                    stabilization: { enabled: false },
+                    solver: 'repulsion',
+                    repulsion: {
+                        nodeDistance: 0,
+                        centralGravity: 0,
+                        springLength: 0,
+                        springConstant: 0,
+                        damping: 1
+                    }
+                }
+            });
+            this.updateNetworkLayout();
+        }, 300);
+    }
+
     // 将暂存节点作为独立节点添加
     addStagedNodeAsIndependent(stagedData, position) {
-        // 拖拽到空白处：始终创建为高级意图节点
-        const newNodeType = 'high-intent';
+        // 根据暂存节点的级别设置创建类型，而不是总是创建高级意图
+        const newNodeType = stagedData.level || stagedData.type || 'high-intent';
         
         // 创建新的网络节点
         const newNodeId = this.createNetworkNodeFromStaged(stagedData, newNodeType, position);
@@ -1261,131 +1412,6 @@ class NetworkVisualizationV2 {
         console.log('Integration success effect applied to:', nodeId);
     }
     
-    // 显示高级意图节点附加对话框
-    showHighIntentAttachDialog(stagedData, targetNodeId) {
-        return new Promise((resolve) => {
-            // 清除现有菜单
-            this.clearDragIntegrationMenu();
-            
-            // 获取拖拽位置，在鼠标位置显示菜单
-            const networkContainer = document.getElementById('v2NetworkContainer');
-            const rect = networkContainer.getBoundingClientRect();
-            const targetNode = this.nodes.get(targetNodeId);
-            const canvasPos = this.network.canvasToDOM({x: targetNode.x, y: targetNode.y});
-            
-            // 创建自定义菜单
-            const menu = document.createElement('div');
-            menu.id = 'dragIntegrationMenu';
-            menu.innerHTML = `
-                <div style="
-                    position: fixed;
-                    top: ${rect.top + canvasPos.y - 50}px;
-                    left: ${rect.left + canvasPos.x + 30}px;
-                    background: white;
-                    border-radius: 12px;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-                    z-index: 10003;
-                    padding: 12px 0;
-                    min-width: 200px;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    font-size: 14px;
-                    border: 1px solid #e0e0e0;
-                    backdrop-filter: blur(8px);
-                    background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,249,250,0.9));
-                ">
-                    <div style="
-                        padding: 8px 16px 12px 16px;
-                        font-weight: 600;
-                        color: #333;
-                        border-bottom: 1px solid #eee;
-                        font-size: 13px;
-                    ">
-                        Integration Options
-                    </div>
-                    <div class="integration-menu-item" data-action="merge" style="
-                        padding: 12px 16px;
-                        cursor: pointer;
-                        transition: background-color 0.2s;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        color: #333;
-                    " onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='transparent'">
-                        <span style="font-size: 16px;">🔗</span>
-                        <div>
-                            <div style="font-weight: 500;">Merge Content</div>
-                            <div style="font-size: 12px; color: #666; margin-top: 2px;">
-                                Combine with existing High-Intent
-                            </div>
-                        </div>
-                    </div>
-                    <div class="integration-menu-item" data-action="child" style="
-                        padding: 12px 16px;
-                        cursor: pointer;
-                        transition: background-color 0.2s;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        color: #333;
-                    " onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='transparent'">
-                        <span style="font-size: 16px;">🔻</span>
-                        <div>
-                            <div style="font-weight: 500;">Create Child Node</div>
-                            <div style="font-size: 12px; color: #666; margin-top: 2px;">
-                                Add as Low-Intent under this node
-                            </div>
-                        </div>
-                    </div>
-                    <div style="height: 1px; background: #eee; margin: 8px 0;"></div>
-                    <div class="integration-menu-item" data-action="cancel" style="
-                        padding: 12px 16px;
-                        cursor: pointer;
-                        transition: background-color 0.2s;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        color: #dc3545;
-                    " onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor='transparent'">
-                        <span style="font-size: 16px;">❌</span>
-                        <div>
-                            <div style="font-weight: 500;">Cancel</div>
-                            <div style="font-size: 12px; color: #999; margin-top: 2px;">
-                                Return to staging area
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(menu);
-            
-            // 绑定事件
-            menu.querySelectorAll('.integration-menu-item').forEach(item => {
-                item.onclick = (e) => {
-                    e.stopPropagation();
-                    const action = item.dataset.action;
-                    this.clearDragIntegrationMenu();
-                    resolve(action);
-                };
-            });
-            
-            // 点击其他地方关闭菜单
-            setTimeout(() => {
-                document.addEventListener('click', () => {
-                    this.clearDragIntegrationMenu();
-                    resolve('cancel');
-                }, { once: true });
-            }, 100);
-        });
-    }
-    
-    // 清除拖拽集成菜单
-    clearDragIntegrationMenu() {
-        const existingMenu = document.getElementById('dragIntegrationMenu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
-    }
     
     // 合并暂存节点到目标节点
     mergeStagedNodeToTarget(stagedData, targetNodeId) {
