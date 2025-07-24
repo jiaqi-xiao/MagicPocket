@@ -455,11 +455,26 @@ class NetworkVisualizationV2 {
                 }
             },
             edges: {
-                smooth: { type: 'dynamic' },
-                color: { color: '#848484', highlight: '#ff6b6b' },
+                smooth: {
+                    enabled: true,
+                    type: 'straightCross', // 使用直线连接，减少不必要的弧度
+                    roundness: 0.1 // 轻微圆角，保持视觉美观
+                },
+                color: { 
+                    color: '#848484', 
+                    highlight: '#ff6b6b',
+                    hover: '#74b9ff'
+                },
                 arrows: {
-                    to: { enabled: true, scaleFactor: 0.8 }
-                }
+                    to: { 
+                        enabled: true, 
+                        scaleFactor: 0.8,
+                        type: 'arrow'
+                    }
+                },
+                width: 2,
+                selectionWidth: 3,
+                hoverWidth: 3
             },
             physics: {
                 enabled: true,
@@ -629,13 +644,17 @@ class NetworkVisualizationV2 {
     
     // 开始暂存节点拖拽
     startStagedNodeDrag(stagedNodeId, stagedNodeData) {
+        // 获取原始位置信息（已在IntentCreationPanel中存储）
+        const originalPosition = stagedNodeData.originalPosition || null;
+        
         this.dragState.stagedNodeDrag = {
             isActive: true,
             stagedNodeId: stagedNodeId,
-            stagedNodeData: stagedNodeData
+            stagedNodeData: stagedNodeData,
+            originalPosition: originalPosition
         };
         
-        console.log('Staged node drag started:', stagedNodeId, stagedNodeData);
+        console.log('Staged node drag started:', stagedNodeId, 'Original position:', originalPosition);
     }
     
     // 结束暂存节点拖拽
@@ -646,7 +665,8 @@ class NetworkVisualizationV2 {
         this.dragState.stagedNodeDrag = {
             isActive: false,
             stagedNodeId: null,
-            stagedNodeData: null
+            stagedNodeData: null,
+            originalPosition: null
         };
         
         this.hideNetworkDropFeedback();
@@ -685,6 +705,58 @@ class NetworkVisualizationV2 {
         } else {
             console.log(`Fallback cleanup: staged node ${stagedNodeId} already removed`);
         }
+    }
+    
+    // 将暂存节点返回到原始位置
+    returnStagedNodeToOriginalPosition(nodeId) {
+        if (!this.intentCreationPanel) {
+            console.warn('IntentCreationPanel not available for return operation');
+            return;
+        }
+        
+        const stagedData = this.intentCreationPanel.stagedNodes.get(nodeId);
+        if (!stagedData) {
+            console.warn('Staged node data not found:', nodeId);
+            return;
+        }
+        
+        const stagedElement = stagedData.element;
+        if (!stagedElement || !stagedData.originalPosition) {
+            console.warn('Staged node element or original position not found:', nodeId);
+            return;
+        }
+        
+        console.log('Returning staged node to original position:', nodeId, stagedData.originalPosition);
+        
+        // 移除拖拽状态
+        stagedElement.classList.remove('dragging');
+        
+        // 添加返回动画
+        stagedElement.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        stagedElement.style.transform = 'scale(1.1)';
+        
+        // 恢复到原始位置（通过重新添加到容器来实现位置重置）
+        setTimeout(() => {
+            const container = this.intentCreationPanel.stagingArea.querySelector('.staged-nodes-container');
+            if (container && stagedElement.parentNode !== container) {
+                container.appendChild(stagedElement);
+            }
+            
+            // 恢复正常状态
+            stagedElement.style.transform = '';
+            stagedElement.style.transition = '';
+            
+            console.log('Staged node returned successfully:', nodeId);
+        }, 50);
+        
+        // 取消任何预定的移除操作
+        if (this.stagedNodeRemovalManager.pendingRemovals.has(nodeId)) {
+            this.stagedNodeRemovalManager.pendingRemovals.delete(nodeId);
+            console.log('Cancelled pending removal for returned node:', nodeId);
+        }
+        
+        // 结束拖拽状态但不移除节点
+        this.endStagedNodeDrag();
     }
     
     // 显示网络拖拽反馈
@@ -1007,7 +1079,17 @@ class NetworkVisualizationV2 {
         const stagedData = this.dragState.stagedNodeDrag.stagedNodeData;
         if (!stagedData) return;
         
-        // 获取放置位置
+        // 检查是否是返回到暂存区域的操作
+        if (this.intentCreationPanel) {
+            const dropZone = this.intentCreationPanel.detectDropZone(e.clientX, e.clientY);
+            if (dropZone.isInStagingArea) {
+                console.log('Drop detected in staging area, returning node to stage');
+                this.returnStagedNodeToOriginalPosition(this.dragState.stagedNodeDrag.stagedNodeId);
+                return;
+            }
+        }
+        
+        // 获取放置位置（网络区域）
         const rect = e.currentTarget.getBoundingClientRect();
         const canvasPos = {
             x: e.clientX - rect.left,
@@ -1483,18 +1565,91 @@ class NetworkVisualizationV2 {
     // 添加节点连接
     addNodeConnection(fromNodeId, toNodeId) {
         const edgeId = `${fromNodeId}->${toNodeId}`;
-        
-        const edge = {
-            id: edgeId,
-            from: fromNodeId,
-            to: toNodeId,
-            color: { color: '#848484' },
-            width: 2,
-            smooth: { enabled: true, type: 'cubicBezier' }
-        };
+        const edge = this.createOptimizedEdge(edgeId, fromNodeId, toNodeId);
         
         this.edges.add(edge);
         console.log('Node connection added:', edgeId);
+    }
+    
+    // 创建优化的边配置
+    createOptimizedEdge(edgeId, fromNodeId, toNodeId) {
+        const fromType = this.nodeRelations.nodeTypes.get(fromNodeId);
+        const toType = this.nodeRelations.nodeTypes.get(toNodeId);
+        
+        // 基础边配置
+        const baseEdge = {
+            id: edgeId,
+            from: fromNodeId,
+            to: toNodeId,
+            arrows: { to: { enabled: true, scaleFactor: 0.8, type: 'arrow' } }
+        };
+        
+        // 根据节点层级关系优化边样式
+        if (fromType === 'high-intent' && toType === 'high-intent') {
+            // 高级意图之间：较粗的边，较长的曲线
+            return {
+                ...baseEdge,
+                width: 3,
+                color: { color: '#ff7675', highlight: '#fd79a8' },
+                smooth: {
+                    enabled: true,
+                    type: 'cubicBezier',
+                    roundness: 0.3
+                },
+                length: 200
+            };
+        } else if (fromType === 'high-intent' && toType === 'low-intent') {
+            // 高级到低级意图：中等粗细，适度曲线
+            return {
+                ...baseEdge,
+                width: 2,
+                color: { color: '#74b9ff', highlight: '#0984e3' },
+                smooth: {
+                    enabled: true,
+                    type: 'straightCross',
+                    roundness: 0.15
+                },
+                length: 150
+            };
+        } else if (fromType === 'low-intent' && toType === 'low-intent') {
+            // 低级意图之间：中等边，短曲线
+            return {
+                ...baseEdge,
+                width: 2,
+                color: { color: '#00b894', highlight: '#00cec9' },
+                smooth: {
+                    enabled: true,
+                    type: 'straightCross',
+                    roundness: 0.1
+                },
+                length: 100
+            };
+        } else if (toType === 'record') {
+            // 连接到记录节点：较细的虚线
+            return {
+                ...baseEdge,
+                width: 1,
+                color: { color: '#636e72', highlight: '#74b9ff' },
+                dashes: [3, 3],
+                smooth: {
+                    enabled: false // 记录连接使用直线
+                },
+                length: 80
+            };
+        } else {
+            // 默认样式
+            return {
+                ...baseEdge,
+                width: 2,
+                color: { color: '#848484', highlight: '#ff6b6b' },
+                smooth: {
+                    enabled: true,
+                    type: 'straightCross',
+                    roundness: 0.1
+                },
+                length: 120
+            };
+        }
     }
     
     // 查找最近的高级意图节点
@@ -1928,13 +2083,9 @@ class NetworkVisualizationV2 {
         this.nodeRelations.children.set(lowIntentId, [...newSiblings, recordId]);
 
         // 创建新连接
-        this.edges.add({
-            from: lowIntentId,
-            to: recordId,
-            arrows: 'to',
-            width: 1,
-            dashes: [3, 3]
-        });
+        const edgeId = `${lowIntentId}->${recordId}`;
+        const optimizedEdge = this.createOptimizedEdge(edgeId, lowIntentId, recordId);
+        this.edges.add(optimizedEdge);
 
         // 调整记录节点位置
         this.adjustChildPosition(recordId, lowIntentId);
@@ -2011,12 +2162,9 @@ class NetworkVisualizationV2 {
         this.nodeRelations.children.set(targetHighId, [...targetChildren, sourceHighId]);
         
         // 创建新的父子连接
-        this.edges.add({
-            from: targetHighId,
-            to: sourceHighId,
-            arrows: 'to',
-            width: 2
-        });
+        const edgeId = `${targetHighId}->${sourceHighId}`;
+        const optimizedEdge = this.createOptimizedEdge(edgeId, targetHighId, sourceHighId);
+        this.edges.add(optimizedEdge);
         
         // 4. 将所有叶子节点连接到降级后的低级意图下
         this.nodeRelations.children.set(sourceHighId, leafNodes);
@@ -2032,13 +2180,9 @@ class NetworkVisualizationV2 {
             this.edges.remove(oldEdges.map(edge => edge.id));
             
             // 创建新连接
-            this.edges.add({
-                from: sourceHighId,
-                to: leafId,
-                arrows: 'to',
-                width: 1,
-                dashes: [3, 3]
-            });
+            const leafEdgeId = `${sourceHighId}->${leafId}`;
+            const optimizedLeafEdge = this.createOptimizedEdge(leafEdgeId, sourceHighId, leafId);
+            this.edges.add(optimizedLeafEdge);
         });
         
         // 5. 调整降级后节点的位置
@@ -2076,12 +2220,9 @@ class NetworkVisualizationV2 {
                 this.edges.remove(edgeToRemove[0].id);
             }
             
-            this.edges.add({
-                from: targetId,
-                to: childId,
-                arrows: 'to',
-                width: 2
-            });
+            const childEdgeId = `${targetId}->${childId}`;
+            const optimizedChildEdge = this.createOptimizedEdge(childEdgeId, targetId, childId);
+            this.edges.add(optimizedChildEdge);
         });
 
         // 更新目标节点的子节点列表
@@ -2974,14 +3115,14 @@ class NetworkVisualizationV2 {
         return undefined; // 不设置shape，使用vis.js默认圆形
     }
 
-    // 计算标准树状布局位置 - 抽取的共用函数（与buildNetworkData保持一致）
+    // 计算优化的树状布局位置 - 增强版本，支持碰撞检测和自适应间距
     calculateTreeLayoutPositions() {
         const positions = {};
-        const containerWidth = this.container ? this.container.offsetWidth * 0.8 : 800;
-        const levelHeight = 180;
-        const baseY = -200;
+        const containerWidth = this.container ? this.container.offsetWidth * 0.9 : 900;
+        const levelHeight = 200; // 增加层级高度
+        const baseY = -250;
+        const minNodeDistance = 60; // 最小节点间距
         
-        // 按照buildNetworkData的逻辑重新计算位置
         // 获取所有节点并按层级分组
         const nodesByLevel = { 0: [], 1: [], 2: [] };
         this.nodes.get().forEach(node => {
@@ -2990,28 +3131,47 @@ class NetworkVisualizationV2 {
             }
         });
         
-        console.log('Calculating tree positions for nodes by level:', {
+        const totalNodes = nodesByLevel[0].length + nodesByLevel[1].length + nodesByLevel[2].length;
+        console.log('Calculating optimized tree positions for', totalNodes, 'nodes by level:', {
             'High-Intent': nodesByLevel[0].length,
             'Low-Intent': nodesByLevel[1].length,
             'Record': nodesByLevel[2].length
         });
         
-        // 高级意图节点布局 - 与buildNetworkData保持一致
+        // 动态计算间距，适应不同规模的网络
+        const calculateAdaptiveSpacing = (nodeCount, level) => {
+            const levelMultipliers = { 0: 1.5, 1: 1.2, 2: 1.0 }; // 高级意图需要更大间距
+            const baseSpacing = level === 0 ? 180 : level === 1 ? 120 : 100;
+            
+            if (nodeCount <= 3) return baseSpacing * levelMultipliers[level];
+            if (nodeCount <= 6) return Math.max(baseSpacing * 0.8, minNodeDistance * 1.5) * levelMultipliers[level];
+            if (nodeCount <= 10) return Math.max(baseSpacing * 0.6, minNodeDistance * 1.2) * levelMultipliers[level];
+            return Math.max(baseSpacing * 0.5, minNodeDistance) * levelMultipliers[level];
+        };
+        
+        // 碰撞检测辅助函数
+        const hasCollision = (pos1, pos2) => {
+            const distance = Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
+            return distance < minNodeDistance;
+        };
+        
+        // 高级意图节点布局 - 改进的分布算法
         const highNodes = nodesByLevel[0];
         if (highNodes.length > 0) {
-            const highNodeSpacing = Math.max(150, containerWidth * 0.8 / (highNodes.length + 1));
-            const highTotalWidth = (highNodes.length - 1) * highNodeSpacing;
-            const highStartX = -highTotalWidth / 2;
+            const highSpacing = calculateAdaptiveSpacing(highNodes.length, 0);
+            const maxWidth = Math.min(containerWidth, highNodes.length * highSpacing);
+            const actualSpacing = highNodes.length > 1 ? maxWidth / (highNodes.length - 1) : 0;
+            const startX = -(maxWidth / 2);
             
             highNodes.forEach((node, index) => {
                 positions[node.id] = {
-                    x: highStartX + index * highNodeSpacing,
+                    x: startX + index * actualSpacing,
                     y: baseY
                 };
             });
         }
         
-        // 低级意图节点布局 - 按父节点分组
+        // 低级意图节点布局 - 改进的父子分组算法
         const lowNodes = nodesByLevel[1];
         if (lowNodes.length > 0) {
             const lowNodesByParent = new Map();
@@ -3031,26 +3191,43 @@ class NetworkVisualizationV2 {
             lowNodesByParent.forEach((children, parentId) => {
                 const parentPos = positions[parentId];
                 if (parentPos) {
+                    const childSpacing = calculateAdaptiveSpacing(children.length, 1);
+                    
                     children.forEach((child, childIndex) => {
                         let childX = parentPos.x;
                         
-                        // 如果有多个子节点，进行水平分布
                         if (children.length > 1) {
-                            const lowSpacing = 100; // 与buildNetworkData保持一致
-                            const lowTotalWidth = (children.length - 1) * lowSpacing;
-                            childX = parentPos.x - lowTotalWidth / 2 + childIndex * lowSpacing;
+                            const totalWidth = (children.length - 1) * childSpacing;
+                            childX = parentPos.x - totalWidth / 2 + childIndex * childSpacing;
+                        }
+                        
+                        // 碰撞检测和位置调整
+                        let finalY = baseY + levelHeight;
+                        const proposedPos = { x: childX, y: finalY };
+                        
+                        // 检查与已有位置的碰撞
+                        let collisionDetected = false;
+                        Object.values(positions).forEach(existingPos => {
+                            if (hasCollision(proposedPos, existingPos)) {
+                                collisionDetected = true;
+                            }
+                        });
+                        
+                        // 如果有碰撞，垂直调整位置
+                        if (collisionDetected) {
+                            finalY += 30; // 向下偏移避免碰撞
                         }
                         
                         positions[child.id] = {
                             x: childX,
-                            y: baseY + levelHeight
+                            y: finalY
                         };
                     });
                 }
             });
         }
         
-        // 记录节点布局 - 按父节点分组
+        // 记录节点布局 - 优化的密集排列
         const recordNodes = nodesByLevel[2];
         if (recordNodes.length > 0) {
             const recordNodesByParent = new Map();
@@ -3070,25 +3247,43 @@ class NetworkVisualizationV2 {
             recordNodesByParent.forEach((children, parentId) => {
                 const parentPos = positions[parentId];
                 if (parentPos) {
+                    const recordSpacing = calculateAdaptiveSpacing(children.length, 2);
+                    
+                    // 如果子节点太多，考虑多行排列
+                    const maxNodesPerRow = Math.floor(containerWidth / recordSpacing / 2);
+                    const shouldUseMultiRow = children.length > maxNodesPerRow && maxNodesPerRow >= 3;
+                    
                     children.forEach((child, childIndex) => {
                         let childX = parentPos.x;
+                        let childY = baseY + levelHeight * 2;
                         
-                        // 如果有多个记录，进行水平分布
-                        if (children.length > 1) {
-                            const recordSpacing = 80; // 与buildNetworkData保持一致
-                            const recordTotalWidth = (children.length - 1) * recordSpacing;
-                            childX = parentPos.x - recordTotalWidth / 2 + childIndex * recordSpacing;
+                        if (shouldUseMultiRow) {
+                            // 多行布局
+                            const row = Math.floor(childIndex / maxNodesPerRow);
+                            const col = childIndex % maxNodesPerRow;
+                            const rowWidth = Math.min(children.length - row * maxNodesPerRow, maxNodesPerRow);
+                            const totalRowWidth = (rowWidth - 1) * recordSpacing;
+                            
+                            childX = parentPos.x - totalRowWidth / 2 + col * recordSpacing;
+                            childY += row * 40; // 行间距
+                        } else {
+                            // 单行布局
+                            if (children.length > 1) {
+                                const totalWidth = (children.length - 1) * recordSpacing;
+                                childX = parentPos.x - totalWidth / 2 + childIndex * recordSpacing;
+                            }
                         }
                         
                         positions[child.id] = {
                             x: childX,
-                            y: baseY + levelHeight * 2
+                            y: childY
                         };
                     });
                 }
             });
         }
         
+        console.log('Optimized tree layout positions calculated for', Object.keys(positions).length, 'nodes');
         return positions;
     }
     
@@ -3107,57 +3302,128 @@ class NetworkVisualizationV2 {
         console.log(`Applying tree layout positions to ${positionedNodes} nodes`);
         
         if (positionedNodes > 0) {
-            // 临时禁用物理引擎以确保位置设置生效
-            this.network.setOptions({
-                physics: { enabled: false }
-            });
+            // 使用动画模式移动节点到新位置
+            this.animateNodesToPositions(newPositions);
+        } else {
+            console.warn('No positions calculated - tree layout reset failed');
+        }
+    }
+    
+    // 使用动画将节点移动到新位置
+    animateNodesToPositions(targetPositions) {
+        console.log('Starting smooth position animation...');
+        
+        // 禁用物理引擎以实现精确控制
+        this.network.setOptions({
+            physics: { enabled: false }
+        });
+        
+        // 获取当前节点位置
+        const currentPositions = this.network.getPositions();
+        const animationDuration = 800; // 800ms动画时长
+        const frameRate = 60; // 60fps
+        const totalFrames = Math.ceil((animationDuration / 1000) * frameRate);
+        let currentFrame = 0;
+        
+        // 创建平滑动画函数
+        const animateFrame = () => {
+            currentFrame++;
+            const progress = currentFrame / totalFrames;
             
-            // 使用正确的vis.js API更新节点位置
-            const nodesToUpdate = [];
-            Object.keys(newPositions).forEach(nodeId => {
+            // 使用easeInOutQuad缓动函数
+            const easeProgress = progress < 0.5 
+                ? 2 * progress * progress 
+                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+            
+            // 计算当前帧的位置
+            const framePositions = [];
+            Object.keys(targetPositions).forEach(nodeId => {
                 const currentNode = this.nodes.get(nodeId);
-                if (currentNode) {
-                    nodesToUpdate.push({
+                const currentPos = currentPositions[nodeId];
+                const targetPos = targetPositions[nodeId];
+                
+                if (currentNode && currentPos && targetPos) {
+                    const newX = currentPos.x + (targetPos.x - currentPos.x) * easeProgress;
+                    const newY = currentPos.y + (targetPos.y - currentPos.y) * easeProgress;
+                    
+                    framePositions.push({
                         ...currentNode,
-                        x: newPositions[nodeId].x,
-                        y: newPositions[nodeId].y,
-                        fixed: { x: false, y: false } // 确保可以拖拽
+                        x: newX,
+                        y: newY,
+                        fixed: { x: false, y: false }
                     });
                 }
             });
             
-            if (nodesToUpdate.length > 0) {
-                this.nodes.update(nodesToUpdate);
-                console.log(`Tree layout positions applied successfully to ${nodesToUpdate.length} nodes`);
-                
-                // 延迟后恢复物理引擎设置
-                setTimeout(() => {
-                    this.network.setOptions({
-                        physics: {
-                            enabled: true,
-                            stabilization: { enabled: false },
-                            solver: 'repulsion',
-                            repulsion: {
-                                nodeDistance: 0,
-                                centralGravity: 0,
-                                springLength: 0,
-                                springConstant: 0,
-                                damping: 1
-                            }
-                        }
-                    });
-                }, 100);
+            // 更新节点位置
+            if (framePositions.length > 0) {
+                this.nodes.update(framePositions);
             }
-        } else {
-            console.warn('No positions calculated - tree layout reset failed');
+            
+            // 继续动画或结束
+            if (currentFrame < totalFrames) {
+                requestAnimationFrame(animateFrame);
+            } else {
+                // 动画结束，应用最终位置并恢复设置
+                this.finishLayoutAnimation(targetPositions);
+            }
+        };
+        
+        // 开始动画
+        requestAnimationFrame(animateFrame);
+    }
+    
+    // 完成布局动画
+    finishLayoutAnimation(finalPositions) {
+        console.log('Finishing layout animation...');
+        
+        // 确保最终位置准确
+        const finalNodes = [];
+        Object.keys(finalPositions).forEach(nodeId => {
+            const currentNode = this.nodes.get(nodeId);
+            if (currentNode) {
+                finalNodes.push({
+                    ...currentNode,
+                    x: finalPositions[nodeId].x,
+                    y: finalPositions[nodeId].y,
+                    fixed: { x: false, y: false }
+                });
+            }
+        });
+        
+        if (finalNodes.length > 0) {
+            this.nodes.update(finalNodes);
         }
         
-        // 调整完毕后适配视图
+        // 恢复优化的物理引擎设置
         setTimeout(() => {
-            this.network.fit({
-                animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+            this.network.setOptions({
+                physics: {
+                    enabled: true,
+                    stabilization: { enabled: false },
+                    solver: 'repulsion',
+                    repulsion: {
+                        nodeDistance: 0,
+                        centralGravity: 0,
+                        springLength: 0,
+                        springConstant: 0,
+                        damping: 1
+                    }
+                }
             });
-        }, 300);
+            
+            // 最后适配视图
+            setTimeout(() => {
+                this.network.fit({
+                    animation: { 
+                        duration: 600, 
+                        easingFunction: 'easeInOutQuad' 
+                    }
+                });
+            }, 100);
+        }, 100);
+        
+        console.log('Layout animation completed successfully');
     }
 
     // 更新网络布局

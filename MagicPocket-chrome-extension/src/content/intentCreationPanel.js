@@ -81,6 +81,9 @@ class IntentCreationPanel {
             </div>
         `;
         
+        // 设置暂存区域为拖放目标
+        this.setupStagingAreaDropZone();
+        
         // 添加到网络容器
         const networkContainer = document.getElementById('v2NetworkContainer');
         if (networkContainer) {
@@ -275,6 +278,79 @@ class IntentCreationPanel {
         }
     }
     
+    // 设置暂存区域拖放目标
+    setupStagingAreaDropZone() {
+        // 防止默认行为并允许拖放
+        this.stagingArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // 添加视觉反馈
+            this.stagingArea.classList.add('drag-hover');
+        });
+        
+        this.stagingArea.addEventListener('dragleave', (e) => {
+            // 检查是否真的离开了暂存区域
+            if (!this.stagingArea.contains(e.relatedTarget)) {
+                this.stagingArea.classList.remove('drag-hover');
+            }
+        });
+        
+        this.stagingArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            this.stagingArea.classList.remove('drag-hover');
+            
+            // 处理节点返回到暂存区域
+            this.handleReturnToStage(e);
+        });
+    }
+    
+    // 检测拖放目标区域
+    detectDropZone(clientX, clientY) {
+        const stagingRect = this.stagingArea.getBoundingClientRect();
+        
+        // 检查点是否在暂存区域内
+        const isInStagingArea = clientX >= stagingRect.left && 
+                               clientX <= stagingRect.right && 
+                               clientY >= stagingRect.top && 
+                               clientY <= stagingRect.bottom;
+        
+        return {
+            isInStagingArea,
+            stagingArea: this.stagingArea
+        };
+    }
+    
+    // 处理节点返回到暂存区域
+    handleReturnToStage(e) {
+        const nodeId = e.dataTransfer.getData('text/plain');
+        if (!nodeId) return;
+        
+        console.log('Node returned to staging area:', nodeId);
+        
+        // 通知网络可视化处理返回
+        if (this.networkViz) {
+            this.networkViz.returnStagedNodeToOriginalPosition(nodeId);
+        }
+    }
+    
+    // 存储暂存节点的原始位置
+    storeOriginalPosition(nodeId) {
+        const stagedData = this.stagedNodes.get(nodeId);
+        if (stagedData && stagedData.element) {
+            const rect = stagedData.element.getBoundingClientRect();
+            const containerRect = this.stagingArea.querySelector('.staged-nodes-container').getBoundingClientRect();
+            
+            // 存储相对于容器的位置
+            stagedData.originalPosition = {
+                x: rect.left - containerRect.left,
+                y: rect.top - containerRect.top
+            };
+            
+            console.log('Stored original position for node:', nodeId, stagedData.originalPosition);
+        }
+    }
+    
     // 创建暂存节点
     createStageNode(intentText, nodeId, isRestored = false, selectedLevel = 'high-intent') {
         // 如果是恢复操作且nodeId为true，生成新的nodeId
@@ -362,6 +438,9 @@ class IntentCreationPanel {
         stagedNode.addEventListener('dragstart', (e) => {
             const nodeId = stagedNode.dataset.nodeId;
             const stagedData = this.stagedNodes.get(nodeId);
+            
+            // 存储原始位置
+            this.storeOriginalPosition(nodeId);
             
             e.dataTransfer.setData('text/plain', nodeId);
             e.dataTransfer.effectAllowed = 'move';
@@ -728,6 +807,13 @@ class IntentCreationPanel {
                 box-shadow: 0 8px 32px rgba(0,0,0,0.1);
                 z-index: 10001;
                 transition: all 0.3s ease;
+            }
+            
+            .staging-area.drag-hover {
+                border-color: #74b9ff;
+                box-shadow: 0 8px 32px rgba(116, 185, 255, 0.3), 0 0 0 2px rgba(116, 185, 255, 0.2);
+                background: linear-gradient(135deg, rgba(116, 185, 255, 0.1), rgba(248, 249, 250, 0.95));
+                transform: scale(1.02);
             }
             
             .staging-header {
