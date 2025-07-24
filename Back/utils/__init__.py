@@ -1,6 +1,6 @@
 from fastapi import Query
-from pydantic import BaseModel, Field, field_validator
-from typing import Union
+from pydantic import BaseModel, Field, RootModel, field_validator
+from typing import Literal, Union
 from .utils import *
 from .Prompts import Prompts
 
@@ -76,7 +76,7 @@ class NodesList(BaseModel):
         return v
 
 class NodeGroupsIndex(BaseModel):
-    item: list[dict[str, list[int]]]
+    groups: dict[str, list[int]]
 
 
 class sentenceGroupsIndex(BaseModel):
@@ -132,3 +132,21 @@ class RAGRequest(BaseModel):
 
 class SplitContent(BaseModel):
     data: list[str]
+
+
+class GranularityOutput(BaseModel):
+    familiarity: Literal["very unfamiliar", "unfamiliar", "neutral", "familiar", "very familiar"]
+    specificity: Literal["very general", "general", "moderate", "specific", "very specific"]
+
+class RecordGroups(BaseModel):
+    groups: dict[str, list[Record]]
+
+class IntentNode(BaseModel):
+    intent_id: int
+    intent_name: str
+    intent_description: str
+    level: Literal['1', '2']
+    parent: int | None
+
+class ExtractResult(RootModel[list[IntentNode]]):
+    pass
