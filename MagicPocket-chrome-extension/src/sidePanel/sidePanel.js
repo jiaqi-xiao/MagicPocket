@@ -299,25 +299,23 @@ function initializeRecordsArea() {
                 }));
             }
 
-            const constructResponse = await fetch(`${host}construct/`, {
+            const constructResponse = await fetch(`${host}extract/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     scenario: taskDescription,
-                    groupsOfNodes: {
-                        item: groupsOfNodes.item || []
-                    },
-                    intentTree: intentTreeData,
-                    target_level: 3
+                    groupsOfNodes: groupsOfNodes.groupsOfNodes,
+                    familiarity: groupsOfNodes.granularity.familiarity,
+                    specificity: groupsOfNodes.granularity.specificity
                 })
             });
             
             const constructApiTime = performance.now() - constructStartTime;
             window.Logger.log(window.LogCategory.NETWORK, 'side_panel_construct_api_called', {
                 duration_ms: Math.round(constructApiTime),
-                groups_count: groupsOfNodes.item.length
+                groups_count: groupsOfNodes.groupsOfNodes.length
             });
             
             if (!constructResponse.ok) {
