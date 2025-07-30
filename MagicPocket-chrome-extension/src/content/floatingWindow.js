@@ -474,7 +474,7 @@ class FloatingContainer {
                     // 调用后端 construct API
                     const constructRequestBody = {
                         scenario: taskDescription,
-                        groupsOfNodes: groupsOfNodes,
+                        groupsOfNodes: groupsOfNodes.groupsOfNodes,
                         target_level: 3
                     };
                     
@@ -911,7 +911,7 @@ async function handleShowNetwork() {
         // 调用构建API
         const intentTree = await callConstructAPI({
             scenario: taskDescription,
-            groupsOfNodes,
+            groupsOfNodes: groupsOfNodes.groupsOfNodes,
             target_level: 3
         });
         

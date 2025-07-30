@@ -189,40 +189,80 @@ class NetworkManager {
         // 设置根节点的初始状态为已确认
         this.nodeStates.set(rootId, true);
 
-        // 遍历每个意图组
-        Object.entries(intentTree.item).forEach(([intentName, intentData], index) => {
-            // Skip intents that start with 'remaining_intent_'
-            if (intentName.startsWith('remaining_intent_')) {
-                return;
-            }
-
-            const intentId = `intent_${nodeId++}`;
-            const isImmutable = NetworkManager.immutableIntents.has(intentName);
+        // 递归处理节点的函数
+        const processNode = (parentId, nodeData, nodeName, level) => {
+            const currentNodeId = `intent_${nodeId++}`;
+            const isImmutable = NetworkManager.immutableIntents.has(nodeName);
             
+            // 添加当前节点
             nodes.push({
-                id: intentId,
-                label: this.wrapLabel(intentName, 15, 'intent'),
-                originalLabel: intentName, // 添加原始标签
+                id: currentNodeId,
+                label: this.wrapLabel(nodeName, 15, 'intent'),
+                originalLabel: nodeName,
                 type: 'intent',
                 color: this.getNodeColor('intent'),
                 size: this.getNodeSize('intent'),
-                level: this.layout === 'hierarchical' ? 1 : undefined,
-                opacity: isImmutable ? 1 : 0.3  // 如果是 immutable，设置为不透明
+                level: this.layout === 'hierarchical' ? level : undefined,
+                opacity: isImmutable ? 1 : 0.3
             });
-            // 设置意图节点的初始状态
-            this.nodeStates.set(intentId, isImmutable);
+            
+            // 设置节点状态
+            this.nodeStates.set(currentNodeId, isImmutable);
 
-            // 连接根节点到意图节点
-            edges.push({
-                from: rootId,
-                to: intentId,
-                arrows: 'to',
-                dashes: !isImmutable  // 如果是 immutable，使用实线
-            });
+            // 连接父节点到当前节点
+            if (parentId) {
+                edges.push({
+                    from: parentId,
+                    to: currentNodeId,
+                    arrows: 'to',
+                    dashes: !isImmutable
+                });
+            }
 
-            // 处理记录
-            if (intentData.group && Array.isArray(intentData.group)) {
-                intentData.group.forEach(record => {
+            // 检查是否有子节点
+            if (nodeData.child && Array.isArray(nodeData.child) && nodeData.child.length > 0) {
+                // 检查子节点是否是意图节点（有intent属性）
+                const hasChildIntents = nodeData.child.some(child => child.intent);
+                
+                if (hasChildIntents) {
+                    // 递归处理子意图节点
+                    nodeData.child.forEach(childNode => {
+                        if (childNode.intent) {
+                            processNode(currentNodeId, childNode, childNode.intent, level + 1);
+                        }
+                    });
+                } else {
+                    // 子节点是记录，直接显示
+                    nodeData.child.forEach(record => {
+                        const recordId = `record_${nodeId++}`;
+                        const recordNode = {
+                            id: recordId,
+                            label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12, 'record'),
+                            type: 'record',
+                            color: this.getNodeColor('record'),
+                            size: this.getNodeSize('record'),
+                            level: this.layout === 'hierarchical' ? level + 1 : undefined,
+                            opacity: isImmutable ? 1 : 0.3,
+                            title: this.formatRecordTooltip({
+                                content: record.content || record.text || record.description || 'No content',
+                                context: record.context || nodeData.description || '',
+                                comment: record.comment || ''
+                            })
+                        };
+                        nodes.push(recordNode);
+                        this.nodeStates.set(recordId, isImmutable);
+
+                        edges.push({
+                            from: currentNodeId,
+                            to: recordId,
+                            arrows: 'to',
+                            dashes: !isImmutable
+                        });
+                    });
+                }
+            } else if (nodeData.group && Array.isArray(nodeData.group)) {
+                // 没有子节点但有group，显示group中的记录
+                nodeData.group.forEach(record => {
                     const recordId = `record_${nodeId++}`;
                     const recordNode = {
                         id: recordId,
@@ -230,30 +270,38 @@ class NetworkManager {
                         type: 'record',
                         color: this.getNodeColor('record'),
                         size: this.getNodeSize('record'),
-                        level: this.layout === 'hierarchical' ? 2 : undefined,
+                        level: this.layout === 'hierarchical' ? level + 1 : undefined,
                         opacity: isImmutable ? 1 : 0.3,
                         title: this.formatRecordTooltip({
                             content: record.content || record.text || record.description || 'No content',
-                            context: record.context || intentData.description || '',
+                            context: record.context || nodeData.description || '',
                             comment: record.comment || ''
                         })
                     };
                     nodes.push(recordNode);
-
-                    // 设置记录节点的初始状态与父意图节点一致
                     this.nodeStates.set(recordId, isImmutable);
 
-                    // 连接意图节点到记录节点
                     edges.push({
-                        from: intentId,
+                        from: currentNodeId,
                         to: recordId,
                         arrows: 'to',
-                        dashes: !isImmutable  // 如果父意图是 immutable，使用实线
+                        dashes: !isImmutable
                     });
                 });
             } else {
-                console.warn(`No valid group array found for intent "${intentName}"`, intentData);
+                console.warn(`No valid child or group data found for intent "${nodeName}"`, nodeData);
             }
+        };
+
+        // 遍历每个意图组
+        Object.entries(intentTree.item).forEach(([intentName, intentData], index) => {
+            // Skip intents that start with 'remaining_intent_'
+            if (intentName.startsWith('remaining_intent_')) {
+                return;
+            }
+
+            // 处理每个意图节点
+            processNode(rootId, intentData, intentName, 1);
         });
 
         console.log('Final network structure:', {
@@ -1317,6 +1365,48 @@ class NetworkManager {
             child: []
         };
         
+        // 递归处理节点的函数
+        const processIntentNode = (intentData, intentName, idCounter) => {
+            const description = intentData?.description || intentName;
+            const intentObj = {
+                id: idCounter,
+                intent: intentName,
+                description: description,
+                isLeafNode: false,
+                immutable: NetworkManager.immutableIntents?.has(intentName) || false,
+                child: [],
+                child_num: 0,
+                priority: 1
+            };
+
+            // 检查是否有子节点
+            if (intentData.child && Array.isArray(intentData.child) && intentData.child.length > 0) {
+                // 检查子节点是否是意图节点（有intent属性）
+                const hasChildIntents = intentData.child.some(child => child.intent);
+                
+                if (hasChildIntents) {
+                    // 递归处理子意图节点
+                    intentData.child.forEach(childNode => {
+                        if (childNode.intent) {
+                            const childIntent = processIntentNode(childNode, childNode.intent, idCounter + 1);
+                            intentObj.child.push(childIntent);
+                            intentObj.child_num++;
+                        }
+                    });
+                } else {
+                    // 子节点是记录，直接添加到child
+                    intentObj.child = intentData.child;
+                    intentObj.child_num = intentData.child.length;
+                }
+            } else if (intentData.group && Array.isArray(intentData.group)) {
+                // 没有子节点但有group，使用group中的记录
+                intentObj.child = intentData.group;
+                intentObj.child_num = intentData.group.length;
+            }
+
+            return intentObj;
+        };
+        
         if (this.intentTree?.item) {
             let idCounter = 1;
             Object.keys(this.intentTree.item).forEach(intentName => {
@@ -1330,18 +1420,7 @@ class NetworkManager {
                     return;
                 }
 
-                const description = intentData?.description || intentName;
-                const intentObj = {
-                    id: idCounter++,
-                    intent: intentName,
-                    description: description,
-                    isLeafNode: false,
-                    immutable: NetworkManager.immutableIntents?.has(intentName) || false,
-                    child: Array.isArray(intentData.group) ? intentData.group : [],
-                    child_num: Array.isArray(intentData.group) ? intentData.group.length : 0,
-                    priority: 1
-                };
-
+                const intentObj = processIntentNode(intentData, intentName, idCounter++);
                 newIntentTree.child.push(intentObj);
             });
         }
