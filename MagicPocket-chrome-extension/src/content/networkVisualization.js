@@ -3,6 +3,13 @@ class NetworkManager {
     static activeNodeMenu = false;  // 跟踪节点菜单状态
     static immutableIntents = new Set();  // 存储所有 immutable 的意图名称
     static hierarchicalDirection = 'LR';  // 存储层级布局方向配置
+    
+    // 节点类型常量
+    static NodeTypes = {
+        HIGH_INTENT: 'high-intent',    // 高级意图节点 - 红色
+        LOW_INTENT: 'low-intent',      // 低级意图节点 - 蓝色
+        RECORD: 'record'               // 记录节点 - 青色
+    };
 
     constructor(intentTree, containerArea = null, mode = 'standalone', layout = 'force') {
         this.intentTree = intentTree;
@@ -158,50 +165,19 @@ class NetworkManager {
             throw new Error('Invalid intent tree structure');
         }
 
-        // 添加根节点
-        const rootId = 'root';
-        const rootSize = this.getNodeSize('root');
-        const padding = 30;
-        const rootNode = {
-            id: rootId,
-            label: this.wrapLabelVertical(intentTree.scenario || 'Current Task'),
-            type: 'root',
-            color: this.getNodeColor('root'),
-            size: rootSize,
-            opacity: 1,
-            fixed: true,
-            physics: false,
-            level: this.layout === 'hierarchical' ? 0 : undefined,
-            font: { 
-                size: 14,
-                align: 'center',
-                multi: true,
-                face: 'system-ui, -apple-system, sans-serif',
-                color: '#333333',
-                yalign: 'middle',
-                ygap: 3,
-                x: -(rootSize + padding),
-                y: 0
-            }
-        };
-        nodes.push(rootNode);
-        
-        // 设置根节点的初始状态为已确认
-        this.nodeStates.set(rootId, true);
-
-        // 递归处理节点的函数
-        const processNode = (parentId, nodeData, nodeName, level) => {
-            const currentNodeId = `intent_${nodeId++}`;
+        // 递归处理意图节点的函数 - 支持两级意图层级
+        const processIntentNode = (parentId, nodeData, nodeName, level, nodeType = NetworkManager.NodeTypes.HIGH_INTENT) => {
+            const currentNodeId = `${nodeType}_${nodeId++}`;
             const isImmutable = NetworkManager.immutableIntents.has(nodeName);
             
-            // 添加当前节点
+            // 添加当前意图节点
             nodes.push({
                 id: currentNodeId,
-                label: this.wrapLabel(nodeName, 15, 'intent'),
+                label: this.wrapLabel(nodeName, nodeType === NetworkManager.NodeTypes.HIGH_INTENT ? 20 : 15, nodeType),
                 originalLabel: nodeName,
-                type: 'intent',
-                color: this.getNodeColor('intent'),
-                size: this.getNodeSize('intent'),
+                type: nodeType,
+                color: this.getNodeColor(nodeType),
+                size: this.getNodeSize(nodeType),
                 level: this.layout === 'hierarchical' ? level : undefined,
                 opacity: isImmutable ? 1 : 0.3
             });
@@ -219,89 +195,73 @@ class NetworkManager {
                 });
             }
 
-            // 检查是否有子节点
+            // 检查是否有子节点 - 支持三层级结构
             if (nodeData.child && Array.isArray(nodeData.child) && nodeData.child.length > 0) {
                 // 检查子节点是否是意图节点（有intent属性）
                 const hasChildIntents = nodeData.child.some(child => child.intent);
                 
                 if (hasChildIntents) {
+                    // 如果当前是高级意图，子节点应该是低级意图
+                    const childNodeType = nodeType === NetworkManager.NodeTypes.HIGH_INTENT ? 
+                        NetworkManager.NodeTypes.LOW_INTENT : NetworkManager.NodeTypes.LOW_INTENT;
+                    
                     // 递归处理子意图节点
                     nodeData.child.forEach(childNode => {
                         if (childNode.intent) {
-                            processNode(currentNodeId, childNode, childNode.intent, level + 1);
+                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType);
                         }
                     });
                 } else {
                     // 子节点是记录，直接显示
-                    nodeData.child.forEach(record => {
-                        const recordId = `record_${nodeId++}`;
-                        const recordNode = {
-                            id: recordId,
-                            label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12, 'record'),
-                            type: 'record',
-                            color: this.getNodeColor('record'),
-                            size: this.getNodeSize('record'),
-                            level: this.layout === 'hierarchical' ? level + 1 : undefined,
-                            opacity: isImmutable ? 1 : 0.3,
-                            title: this.formatRecordTooltip({
-                                content: record.content || record.text || record.description || 'No content',
-                                context: record.context || nodeData.description || '',
-                                comment: record.comment || ''
-                            })
-                        };
-                        nodes.push(recordNode);
-                        this.nodeStates.set(recordId, isImmutable);
-
-                        edges.push({
-                            from: currentNodeId,
-                            to: recordId,
-                            arrows: 'to',
-                            dashes: !isImmutable
-                        });
-                    });
+                    this.processRecordNodes(nodeData.child, currentNodeId, level + 1, isImmutable);
                 }
             } else if (nodeData.group && Array.isArray(nodeData.group)) {
                 // 没有子节点但有group，显示group中的记录
-                nodeData.group.forEach(record => {
-                    const recordId = `record_${nodeId++}`;
-                    const recordNode = {
-                        id: recordId,
-                        label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12, 'record'),
-                        type: 'record',
-                        color: this.getNodeColor('record'),
-                        size: this.getNodeSize('record'),
-                        level: this.layout === 'hierarchical' ? level + 1 : undefined,
-                        opacity: isImmutable ? 1 : 0.3,
-                        title: this.formatRecordTooltip({
-                            content: record.content || record.text || record.description || 'No content',
-                            context: record.context || nodeData.description || '',
-                            comment: record.comment || ''
-                        })
-                    };
-                    nodes.push(recordNode);
-                    this.nodeStates.set(recordId, isImmutable);
-
-                    edges.push({
-                        from: currentNodeId,
-                        to: recordId,
-                        arrows: 'to',
-                        dashes: !isImmutable
-                    });
-                });
+                this.processRecordNodes(nodeData.group, currentNodeId, level + 1, isImmutable);
             } else {
                 console.warn(`No valid child or group data found for intent "${nodeName}"`, nodeData);
             }
         };
+        
+        // 处理记录节点的辅助函数
+        this.processRecordNodes = (records, parentId, level, isImmutable) => {
+            records.forEach(record => {
+                const recordId = `record_${nodeId++}`;
+                const recordNode = {
+                    id: recordId,
+                    label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12, NetworkManager.NodeTypes.RECORD),
+                    type: NetworkManager.NodeTypes.RECORD,
+                    color: this.getNodeColor(NetworkManager.NodeTypes.RECORD),
+                    size: this.getNodeSize(NetworkManager.NodeTypes.RECORD),
+                    level: this.layout === 'hierarchical' ? level : undefined,
+                    opacity: isImmutable ? 1 : 0.3,
+                    title: this.formatRecordTooltip({
+                        content: record.content || record.text || record.description || 'No content',
+                        context: record.context || '',
+                        comment: record.comment || ''
+                    })
+                };
+                nodes.push(recordNode);
+                this.nodeStates.set(recordId, isImmutable);
 
-        // 遍历每个意图组
-        Object.entries(intentTree.item).forEach(([intentName, intentData], index) => {
+                edges.push({
+                    from: parentId,
+                    to: recordId,
+                    arrows: 'to',
+                    dashes: !isImmutable
+                });
+            });
+        };
+
+        // 遍历每个意图组 - 直接创建高级意图节点，无根节点
+        Object.entries(intentTree.item).forEach(([intentName, intentData]) => {
             // Skip intents that start with 'remaining_intent_'
             if (intentName.startsWith('remaining_intent_')) {
                 return;
             }
 
-            // 处理每个意图节点
-            processNode(rootId, intentData, intentName, 1);
+            // 处理每个高级意图节点（原来的一级意图现在变为高级意图）
+            processIntentNode(null, intentData, intentName, 0, NetworkManager.NodeTypes.HIGH_INTENT);
         });
 
         console.log('Final network structure:', {
@@ -535,9 +495,11 @@ class NetworkManager {
     // 获取节点颜色
     getNodeColor(type) {
         const colors = {
-            root: { background: '#ff7675', border: '#d63031' },    // 红色系
-            intent: { background: '#74b9ff', border: '#0984e3' },  // 蓝色系
-            record: { background: '#81ecec', border: '#00cec9' }   // 青色系
+            root: { background: '#ff7675', border: '#d63031' },                    // 根节点 - 红色系 (保留兼容性)
+            intent: { background: '#74b9ff', border: '#0984e3' },                 // 意图节点 - 蓝色系 (保留兼容性)
+            [NetworkManager.NodeTypes.HIGH_INTENT]: { background: '#ff7675', border: '#d63031' },  // 高级意图 - 红色系
+            [NetworkManager.NodeTypes.LOW_INTENT]: { background: '#74b9ff', border: '#0984e3' },   // 低级意图 - 蓝色系
+            [NetworkManager.NodeTypes.RECORD]: { background: '#81ecec', border: '#00cec9' }        // 记录节点 - 青色系
         };
         return colors[type] || { background: '#a29bfe', border: '#6c5ce7' };
     }
@@ -545,9 +507,11 @@ class NetworkManager {
     // 获取节点大小
     getNodeSize(type) {
         const sizes = {
-            root: 30,
-            intent: 15,
-            record: 10
+            root: 30,                                              // 根节点 (保留兼容性)
+            intent: 15,                                            // 意图节点 (保留兼容性)
+            [NetworkManager.NodeTypes.HIGH_INTENT]: 20,           // 高级意图 - 比低级稍大
+            [NetworkManager.NodeTypes.LOW_INTENT]: 15,            // 低级意图 - 与原intent相同
+            [NetworkManager.NodeTypes.RECORD]: 10                 // 记录节点
         };
         return sizes[type] || 10;
     }
@@ -672,8 +636,8 @@ class NetworkManager {
     addMenuItems(menu, nodeId) {
         const node = this.nodes.get(nodeId);
         
-        // 如果是根节点，添加"添加子意图"按钮
-        if (nodeId === 'root') {
+        // 如果是高级意图节点，添加"添加子意图"按钮
+        if (node.type === NetworkManager.NodeTypes.HIGH_INTENT) {
             const addChildBtn = this.createMenuItem(
                 nodeId,
                 'Add Child Intent',
@@ -684,8 +648,10 @@ class NetworkManager {
             this.setupAddChildIntentAction(addChildBtn, nodeId);
         }
         
-        // 如果是意图节点，添加"编辑意图"按钮
-        if (node.type === 'intent') {
+        // 如果是意图节点（高级或低级），添加"编辑意图"按钮
+        if (node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+            node.type === NetworkManager.NodeTypes.LOW_INTENT || 
+            node.type === 'intent') {
             const editIntentBtn = this.createMenuItem(
                 nodeId,
                 'Edit Intent',
@@ -861,7 +827,7 @@ class NetworkManager {
             this.createDialog('Add New Intent', defaultValue, async (intentName) => {
                 const newNodeId = this.generateUniqueNodeId();
                 
-                // 添加新节点到数据集
+                // 添加新节点到数据集 - 使用 V2 版本的配置格式
                 this.nodes.add({
                     id: newNodeId,
                     label: this.wrapLabel(intentName, 15, 'intent'),
@@ -869,10 +835,8 @@ class NetworkManager {
                     type: 'intent',
                     color: this.getNodeColor('intent'),
                     size: this.getNodeSize('intent'),
-                    level: this.layout === 'hierarchical' ? 1 : undefined,
                     opacity: 1,
-                    fixed: false,
-                    physics: false
+                    fixed: { x: false, y: false }  // V2 版本的配置方式
                 });
 
                 // 添加连接边
@@ -936,9 +900,6 @@ class NetworkManager {
 
     // 删除节点
     async deleteNode(nodeId, menuItem) {
-        if (nodeId === 'root') {
-            return; // 不允许删除根节点
-        }
         const node = this.nodes.get(nodeId);
         // 记录节点删除日志
         window.Logger.log(window.LogCategory.UI, 'network_node_deleted', {
@@ -974,7 +935,9 @@ class NetworkManager {
             this.nodeStates.delete(nodeId);
 
             // 如果是意图节点，从意图树中删除相应的数据
-            if (node.type === 'intent' && this.intentTree.item) {
+            if ((node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+                 node.type === NetworkManager.NodeTypes.LOW_INTENT || 
+                 node.type === 'intent') && this.intentTree.item) {
                 const intentName = node.originalLabel || node.label;
                 delete this.intentTree.item[intentName];
                 NetworkManager.immutableIntents.delete(intentName);
@@ -1002,11 +965,15 @@ class NetworkManager {
                     this.edges.add(edge);
                 });
                 // 恢复节点状态
-                if (deletedNode.type === 'intent') {
+                if (deletedNode.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+                    deletedNode.type === NetworkManager.NodeTypes.LOW_INTENT || 
+                    deletedNode.type === 'intent') {
                     this.nodeStates.set(nodeId, NetworkManager.immutableIntents.has(deletedNode.originalLabel || deletedNode.label));
                 }
                 // 恢复意图树数据
-                if (deletedNode.type === 'intent' && this.intentTree.item) {
+                if ((deletedNode.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+                     deletedNode.type === NetworkManager.NodeTypes.LOW_INTENT || 
+                     deletedNode.type === 'intent') && this.intentTree.item) {
                     const intentName = deletedNode.originalLabel || deletedNode.label;
                     this.intentTree.item[intentName] = [];
                 }
@@ -1070,8 +1037,10 @@ class NetworkManager {
             window.Logger.log(window.LogCategory.UI, 'network_visualization_initialized', {
                 total_nodes: nodes.length,
                 edges_count: this.edges.length,
+                high_intent_nodes: nodes.filter(node => node.type === NetworkManager.NodeTypes.HIGH_INTENT).length,
+                low_intent_nodes: nodes.filter(node => node.type === NetworkManager.NodeTypes.LOW_INTENT).length,
                 intent_nodes: nodes.filter(node => node.type === 'intent').length,
-                record_nodes: nodes.filter(node => node.type === 'record').length
+                record_nodes: nodes.filter(node => node.type === NetworkManager.NodeTypes.RECORD || node.type === 'record').length
             });
         }, 100);
     }
@@ -1109,17 +1078,29 @@ class NetworkManager {
             edges: {
                 width: 2,
                 smooth: {
-                    type: 'cubicBezier',
-                    forceDirection: this.layout === 'hierarchical' ? 
-                        (NetworkManager.hierarchicalDirection === 'LR' ? 'horizontal' : 'vertical') : 
-                        'none'
+                    type: 'curvedCW',     // 使用曲线连接，提升视觉效果
+                    roundness: 0.2        // 设置曲线的弧度
                 },
                 arrows: {
-                    to: { enabled: true, scaleFactor: 0.5 }
-                }
+                    to: { 
+                        enabled: true, 
+                        scaleFactor: 0.5,
+                        type: 'arrow'        // 使用箭头类型
+                    }
+                },
+                length: 120,              // 设置边长度
+                color: {
+                    color: '#848484',     // 边的颜色
+                    highlight: '#2B7CE9', // 高亮时的颜色
+                    hover: '#2B7CE9',     // 悬停时的颜色
+                    inherit: false,       // 不继承节点颜色
+                    opacity: 0.8          // 透明度
+                },
+                shadow: false,            // 禁用阴影提升性能
+                hoverWidth: 3             // 悬停时的边宽度
             },
             interaction: {
-                dragNodes: true,
+                dragNodes: true,        // 启用所有节点拖动
                 dragView: true,
                 zoomView: true,
                 hover: true,
@@ -1130,7 +1111,7 @@ class NetworkManager {
                 multiselect: false,
                 selectConnectedEdges: true,
                 hoverConnectedEdges: true,
-                zoomSpeed: 0.3  // 添加这个配置来减慢缩放速度
+                zoomSpeed: 0.3
             },
             layout: {
                 randomSeed: 1,
@@ -1138,56 +1119,33 @@ class NetworkManager {
             }
         };
 
-        // 根据布局类型设置不同的布局参数
-        if (this.layout === 'hierarchical') {
-            baseOptions.layout = {
-                hierarchical: {
-                    direction: NetworkManager.hierarchicalDirection, // 使用静态变量
-                    sortMethod: 'directed',
-                    levelSeparation: 150,
-                    nodeSpacing: 100,
-                    treeSpacing: 150,
-                    blockShifting: true,
-                    edgeMinimization: true,
-                    parentCentralization: true
-                }
-            };
-            // 在层级布局中禁用物理引擎以允许自由拖动
-            baseOptions.physics = {
-                enabled: false
-            };
-        } else {
-            // 力导向布局的物理引擎参数
-            baseOptions.physics = {
-                enabled: true,
-                barnesHut: {
-                    gravitationalConstant: -3000,
-                    centralGravity: 0.5,
-                    springLength: 130,
-                    springConstant: 0.08,
-                    damping: 0.09,
-                    avoidOverlap: 1
-                },
-                stabilization: {
-                    enabled: true,
-                    iterations: 1000,
-                    updateInterval: 50
-                }
-            };
-        }
-
-        // 设置根节点固定在左侧
-        const containerWidth = this.visContainer.clientWidth;
-        const containerHeight = this.visContainer.clientHeight;
-        this.nodes.get().forEach(node => {
-            if (node.id === 'root') {
-                this.nodes.update({
-                    id: node.id,
-                    fixed: true,
-                    x: -containerWidth * 0.3,  // 将根节点固定在容器左侧30%的位置
-                    y: containerHeight * 0.5    // 垂直居中
-                });
+        // 使用简单的布局配置，参考 V2 版本
+        baseOptions.layout = {
+            randomSeed: 42
+        };
+        
+        // 使用 V2 版本的简化物理引擎配置 - 拖到哪里停在哪里
+        baseOptions.physics = {
+            enabled: true,
+            stabilization: { 
+                enabled: false // 关闭自动稳定，允许自由拖拽
+            },
+            solver: 'repulsion',
+            repulsion: {
+                nodeDistance: 0,
+                centralGravity: 0,
+                springLength: 0,
+                springConstant: 0,
+                damping: 1
             }
+        };
+
+        // 使用 V2 版本的节点配置 - 允许自由移动
+        this.nodes.get().forEach(node => {
+            this.nodes.update({
+                id: node.id,
+                fixed: { x: false, y: false }  // V2 版本的配置方式
+            });
         });
 
         // 为侧边栏模式添加特殊配置
@@ -1288,9 +1246,15 @@ class NetworkManager {
             }
         });
 
-        // 添加拖动结束事件
+        // 添加拖动结束事件 - 添加碰撞检测
         this.network.on('dragEnd', (params) => {
             this.container.style.cursor = 'default';
+            
+            // 检查是否有节点被拖动
+            if (params.nodes.length > 0) {
+                const draggedNodeId = params.nodes[0];
+                this.checkNodeCollision(draggedNodeId);
+            }
         });
 
         // 添加选择事件
@@ -1298,7 +1262,7 @@ class NetworkManager {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
                 const node = this.nodes.get(nodeId);
-                if (node.type === 'record') {
+                if (node.type === NetworkManager.NodeTypes.RECORD || node.type === 'record') {
                     // 高亮显示相关节点
                     this.highlightConnectedNodes(nodeId);
                 }
@@ -1572,49 +1536,15 @@ class NetworkManager {
         };
 
         horizontalBtn.addEventListener("click", () => {
-            if (NetworkManager.hierarchicalDirection !== 'LR') {
-                updateButtonStyles(true);
-                
-                // 如果当前是层级布局，立即更新视图
-                if (this.layout === 'hierarchical' && this.network) {
-                    this.network.setOptions({
-                        layout: {
-                            hierarchical: {
-                                direction: NetworkManager.hierarchicalDirection
-                            }
-                        },
-                        edges: {
-                            smooth: {
-                                type: 'cubicBezier',
-                                forceDirection: 'horizontal'
-                            }
-                        }
-                    });
-                }
-            }
+            updateButtonStyles(true);
+            // 执行水平自动排版，保持自由拖动能力
+            this.arrangeHorizontalLayout();
         });
 
         verticalBtn.addEventListener("click", () => {
-            if (NetworkManager.hierarchicalDirection !== 'UD') {
-                updateButtonStyles(false);
-                
-                // 如果当前是层级布局，立即更新视图
-                if (this.layout === 'hierarchical' && this.network) {
-                    this.network.setOptions({
-                        layout: {
-                            hierarchical: {
-                                direction: NetworkManager.hierarchicalDirection
-                            }
-                        },
-                        edges: {
-                            smooth: {
-                                type: 'cubicBezier',
-                                forceDirection: 'vertical'
-                            }
-                        }
-                    });
-                }
-            }
+            updateButtonStyles(false);
+            // 执行垂直自动排版，保持自由拖动能力
+            this.arrangeVerticalLayout();
         });
 
         directionSwitch.appendChild(horizontalBtn);
@@ -1831,6 +1761,542 @@ class NetworkManager {
         });
 
         return intentDialog;
+    }
+    
+    // 检查节点碰撞
+    checkNodeCollision(nodeId) {
+        const draggedNode = this.nodes.get(nodeId);
+        if (!draggedNode) return;
+        
+        const draggedPosition = this.network.getPositions([nodeId])[nodeId];
+        const draggedSize = draggedNode.size || 15;
+        
+        // 检查与其他节点的碰撞
+        const allNodes = this.nodes.get();
+        for (const otherNode of allNodes) {
+            if (otherNode.id === nodeId) continue;
+            
+            const otherPosition = this.network.getPositions([otherNode.id])[otherNode.id];
+            const otherSize = otherNode.size || 15;
+            
+            // 计算距离
+            const distance = Math.sqrt(
+                Math.pow(draggedPosition.x - otherPosition.x, 2) + 
+                Math.pow(draggedPosition.y - otherPosition.y, 2)
+            );
+            
+            // 碰撞阈值：两个节点的半径之和加上一些缓冲
+            const collisionThreshold = (draggedSize + otherSize) / 2 + 10;
+            
+            if (distance < collisionThreshold) {
+                // 检查是否为意图节点之间的碰撞
+                if (this.isIntentNode(draggedNode) && this.isIntentNode(otherNode)) {
+                    this.showMergePreviewDialog(draggedNode, otherNode);
+                    return; // 只处理第一个碰撞
+                }
+            }
+        }
+    }
+    
+    // 判断是否为意图节点
+    isIntentNode(node) {
+        return node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+               node.type === NetworkManager.NodeTypes.LOW_INTENT || 
+               node.type === 'intent';
+    }
+    
+    // 显示合并预览对话框
+    showMergePreviewDialog(node1, node2) {
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.className = 'mp-custom-dialog';
+        
+        const dialogContent = document.createElement('div');
+        dialogContent.className = 'mp-dialog-content';
+        
+        const message = document.createElement('p');
+        message.textContent = `Collision detected between "${node1.originalLabel || node1.label}" and "${node2.originalLabel || node2.label}". Future versions will support merging these nodes.`;
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'mp-dialog-buttons';
+        
+        const confirmButton = document.createElement('button');
+        confirmButton.className = 'mp-retry-btn';
+        confirmButton.textContent = 'OK';
+        confirmButton.onclick = () => {
+            document.body.removeChild(dialog);
+        };
+        
+        buttonContainer.appendChild(confirmButton);
+        dialogContent.appendChild(message);
+        dialogContent.appendChild(buttonContainer);
+        dialog.appendChild(dialogContent);
+        document.body.appendChild(dialog);
+        
+        // 记录碰撞事件
+        window.Logger.log(window.LogCategory.UI, 'network_node_collision_detected', {
+            node1_id: node1.id,
+            node1_type: node1.type,
+            node1_label: node1.originalLabel || node1.label,
+            node2_id: node2.id,
+            node2_type: node2.type,
+            node2_label: node2.originalLabel || node2.label
+        });
+    }
+    
+    // 垂直自动排版 - 高级意图一横排在上，低级意图一横排在下，记录节点在下方
+    arrangeVerticalLayout() {
+        const allNodes = this.nodes.get();
+        const allEdges = this.edges.get();
+        const containerWidth = this.visContainer.clientWidth;
+        const containerHeight = this.visContainer.clientHeight;
+        
+        // 分类节点
+        const highIntentNodes = allNodes.filter(node => node.type === NetworkManager.NodeTypes.HIGH_INTENT);
+        const lowIntentNodes = allNodes.filter(node => node.type === NetworkManager.NodeTypes.LOW_INTENT || node.type === 'intent');
+        const recordNodes = allNodes.filter(node => node.type === NetworkManager.NodeTypes.RECORD || node.type === 'record');
+        
+        const updates = [];
+        
+        // 全局间距配置 - 统一控制所有层级的间距
+        const globalSpacing = {
+            horizontal: Math.max(120, containerWidth * 0.08),  // 水平间距，最小120px
+            vertical: Math.max(80, containerHeight * 0.15),    // 垂直层间距，最小80px
+            subTree: Math.max(60, containerWidth * 0.04),      // 子树内间距，最小60px
+            record: Math.max(80, containerWidth * 0.06)        // 记录节点间距，最小80px
+        };
+        
+        // 三层结构的Y坐标
+        const highIntentY = -globalSpacing.vertical;   // 高级意图在上方
+        const lowIntentY = 0;                          // 低级意图在中间
+        const recordY = globalSpacing.vertical;        // 记录节点在下方
+        
+        // 1. 计算所有层级的总宽度，确保全局布局协调
+        const allGroupWidths = [];
+        
+        // 计算高级意图层的总宽度
+        const highIntentTotalWidth = highIntentNodes.length > 1 
+            ? (highIntentNodes.length - 1) * globalSpacing.horizontal 
+            : 0;
+        allGroupWidths.push(highIntentTotalWidth);
+        
+        // 计算低级意图层的总宽度
+        let lowIntentTotalWidth = 0;
+        if (lowIntentNodes.length > 0) {
+            // 按父节点分组计算宽度
+            const childGroups = new Map();
+            highIntentNodes.forEach(highNode => {
+                childGroups.set(highNode.id, []);
+            });
+            
+            lowIntentNodes.forEach(lowNode => {
+                const parentEdge = allEdges.find(edge => 
+                    edge.to === lowNode.id && 
+                    highIntentNodes.some(h => h.id === edge.from)
+                );
+                
+                if (parentEdge) {
+                    const parentId = parentEdge.from;
+                    if (childGroups.has(parentId)) {
+                        childGroups.get(parentId).push(lowNode);
+                    }
+                } else {
+                    const firstHighIntent = highIntentNodes[0];
+                    if (firstHighIntent && childGroups.has(firstHighIntent.id)) {
+                        childGroups.get(firstHighIntent.id).push(lowNode);
+                    }
+                }
+            });
+            
+            // 计算每组的宽度并求总宽度
+            let totalSubTreeWidth = 0;
+            childGroups.forEach((children, parentId) => {
+                if (children.length > 0) {
+                    const groupWidth = children.length > 1 
+                        ? (children.length - 1) * globalSpacing.subTree 
+                        : 0;
+                    totalSubTreeWidth = Math.max(totalSubTreeWidth, groupWidth);
+                }
+            });
+            lowIntentTotalWidth = Math.max(totalSubTreeWidth, highIntentTotalWidth);
+        }
+        allGroupWidths.push(lowIntentTotalWidth);
+        
+        // 使用最大宽度作为全局布局基准
+        const maxLayoutWidth = Math.max(...allGroupWidths);
+        
+        // 2. 排列高级意图节点 - 基于全局最大宽度居中
+        if (highIntentNodes.length > 0) {
+            const actualSpacing = highIntentNodes.length > 1 
+                ? Math.min(globalSpacing.horizontal, maxLayoutWidth / (highIntentNodes.length - 1))
+                : globalSpacing.horizontal;
+            const totalWidth = (highIntentNodes.length - 1) * actualSpacing;
+            const startX = -totalWidth / 2;
+            
+            highIntentNodes.forEach((node, index) => {
+                updates.push({
+                    id: node.id,
+                    x: startX + index * actualSpacing,
+                    y: highIntentY,
+                    fixed: { x: false, y: false }
+                });
+            });
+        }
+        
+        // 3. 根据连接关系排列低级意图节点
+        if (lowIntentNodes.length > 0) {
+            const childGroups = new Map();
+            
+            // 初始化每个高级意图的子节点组
+            highIntentNodes.forEach(highNode => {
+                childGroups.set(highNode.id, []);
+            });
+            
+            // 根据边的连接关系分组低级意图节点
+            lowIntentNodes.forEach(lowNode => {
+                const parentEdge = allEdges.find(edge => 
+                    edge.to === lowNode.id && 
+                    highIntentNodes.some(h => h.id === edge.from)
+                );
+                
+                if (parentEdge) {
+                    const parentId = parentEdge.from;
+                    if (childGroups.has(parentId)) {
+                        childGroups.get(parentId).push(lowNode);
+                    }
+                } else {
+                    const firstHighIntent = highIntentNodes[0];
+                    if (firstHighIntent && childGroups.has(firstHighIntent.id)) {
+                        childGroups.get(firstHighIntent.id).push(lowNode);
+                    }
+                }
+            });
+            
+            // 为每组低级意图节点定位
+            childGroups.forEach((childNodes, parentId) => {
+                if (childNodes.length === 0) return;
+                
+                // 找到父节点的位置
+                const parentUpdate = updates.find(u => u.id === parentId);
+                const parentX = parentUpdate ? parentUpdate.x : 0;
+                
+                // 计算子节点间距，考虑全局布局协调
+                const maxChildWidth = childNodes.length > 1 
+                    ? Math.min(globalSpacing.subTree, maxLayoutWidth / (childNodes.length - 1))
+                    : globalSpacing.subTree;
+                const totalChildWidth = (childNodes.length - 1) * maxChildWidth;
+                const startChildX = parentX - totalChildWidth / 2;
+                
+                childNodes.forEach((childNode, index) => {
+                    updates.push({
+                        id: childNode.id,
+                        x: startChildX + index * maxChildWidth,
+                        y: lowIntentY,
+                        fixed: { x: false, y: false }
+                    });
+                });
+            });
+        }
+        
+        // 4. 根据连接关系排列记录节点
+        if (recordNodes.length > 0) {
+            const recordGroups = new Map();
+            
+            // 初始化每个低级意图的子记录组
+            lowIntentNodes.forEach(lowNode => {
+                recordGroups.set(lowNode.id, []);
+            });
+            
+            // 根据边的连接关系分组记录节点
+            recordNodes.forEach(recordNode => {
+                const parentEdge = allEdges.find(edge => 
+                    edge.to === recordNode.id && 
+                    lowIntentNodes.some(l => l.id === edge.from)
+                );
+                
+                if (parentEdge) {
+                    const parentId = parentEdge.from;
+                    if (recordGroups.has(parentId)) {
+                        recordGroups.get(parentId).push(recordNode);
+                    }
+                } else {
+                    const firstLowIntent = lowIntentNodes[0];
+                    if (firstLowIntent && recordGroups.has(firstLowIntent.id)) {
+                        recordGroups.get(firstLowIntent.id).push(recordNode);
+                    }
+                }
+            });
+            
+            // 为每组记录节点定位
+            recordGroups.forEach((recordNodesList, parentId) => {
+                if (recordNodesList.length === 0) return;
+                
+                // 找到父节点的位置
+                const parentUpdate = updates.find(u => u.id === parentId);
+                const parentX = parentUpdate ? parentUpdate.x : 0;
+                
+                // 计算记录节点间距，与全局布局保持一致
+                const maxRecordWidth = recordNodesList.length > 1 
+                    ? Math.min(globalSpacing.record, maxLayoutWidth / (recordNodesList.length - 1))
+                    : globalSpacing.record;
+                const totalRecordWidth = (recordNodesList.length - 1) * maxRecordWidth;
+                const startRecordX = parentX - totalRecordWidth / 2;
+                
+                recordNodesList.forEach((recordNode, index) => {
+                    updates.push({
+                        id: recordNode.id,
+                        x: startRecordX + index * maxRecordWidth,
+                        y: recordY,
+                        fixed: { x: false, y: false }
+                    });
+                });
+            });
+        }
+        
+        // 批量更新节点位置
+        this.nodes.update(updates);
+        
+        // 添加平滑的动画过渡
+        this.network.setOptions({
+            physics: {
+                enabled: true,
+                stabilization: { 
+                    enabled: true,
+                    iterations: 100,
+                    updateInterval: 25
+                },
+                solver: 'repulsion',
+                repulsion: {
+                    nodeDistance: 0,
+                    centralGravity: 0,
+                    springLength: 0,
+                    springConstant: 0,
+                    damping: 1
+                }
+            }
+        });
+        
+        // 在动画完成后恢复原配置
+        setTimeout(() => {
+            this.network.setOptions({
+                physics: {
+                    enabled: true,
+                    stabilization: { enabled: false },
+                    solver: 'repulsion',
+                    repulsion: {
+                        nodeDistance: 0,
+                        centralGravity: 0,
+                        springLength: 0,
+                        springConstant: 0,
+                        damping: 1
+                    }
+                }
+            });
+        }, 1000);
+        
+        // 记录排版事件
+        window.Logger.log(window.LogCategory.UI, 'network_vertical_layout_applied', {
+            high_intent_count: highIntentNodes.length,
+            low_intent_count: lowIntentNodes.length,
+            record_count: recordNodes.length
+        });
+    }
+    
+    // 水平自动排版 - 高级意图一列在左，低级意图一列在中，记录节点在右侧
+    arrangeHorizontalLayout() {
+        const allNodes = this.nodes.get();
+        const allEdges = this.edges.get();
+        const containerWidth = this.visContainer.clientWidth;
+        const containerHeight = this.visContainer.clientHeight;
+        
+        // 分类节点
+        const highIntentNodes = allNodes.filter(node => node.type === NetworkManager.NodeTypes.HIGH_INTENT);
+        const lowIntentNodes = allNodes.filter(node => node.type === NetworkManager.NodeTypes.LOW_INTENT || node.type === 'intent');
+        const recordNodes = allNodes.filter(node => node.type === NetworkManager.NodeTypes.RECORD || node.type === 'record');
+        
+        const updates = [];
+        
+        // 三列结构的X坐标
+        const layerWidth = containerWidth * 0.25;  // 每列的间距
+        const highIntentX = -layerWidth;    // 高级意图在左侧
+        const lowIntentX = 0;              // 低级意图在中间
+        const recordX = layerWidth;        // 记录节点在右侧
+        
+        // 1. 排列高级意图节点 - 一列在左侧
+        if (highIntentNodes.length > 0) {
+            const nodeSpacing = 120;  // 节点间固定间距
+            const totalHeight = (highIntentNodes.length - 1) * nodeSpacing;
+            const startY = -totalHeight / 2;
+            
+            highIntentNodes.forEach((node, index) => {
+                updates.push({
+                    id: node.id,
+                    x: highIntentX,
+                    y: startY + index * nodeSpacing,
+                    fixed: { x: false, y: false }
+                });
+            });
+        }
+        
+        // 2. 根据连接关系排列低级意图节点
+        if (lowIntentNodes.length > 0) {
+            // 为每个高级意图找到其子低级意图
+            const childGroups = new Map();
+            
+            // 初始化每个高级意图的子节点组
+            highIntentNodes.forEach(highNode => {
+                childGroups.set(highNode.id, []);
+            });
+            
+            // 根据边的连接关系分组低级意图节点
+            lowIntentNodes.forEach(lowNode => {
+                // 找到这个低级意图的父高级意图
+                const parentEdge = allEdges.find(edge => 
+                    edge.to === lowNode.id && 
+                    highIntentNodes.some(h => h.id === edge.from)
+                );
+                
+                if (parentEdge) {
+                    const parentId = parentEdge.from;
+                    if (childGroups.has(parentId)) {
+                        childGroups.get(parentId).push(lowNode);
+                    }
+                } else {
+                    // 如果没有找到父节点，放在第一个组
+                    const firstHighIntent = highIntentNodes[0];
+                    if (firstHighIntent && childGroups.has(firstHighIntent.id)) {
+                        childGroups.get(firstHighIntent.id).push(lowNode);
+                    }
+                }
+            });
+            
+            // 为每组低级意图节点定位
+            childGroups.forEach((childNodes, parentId) => {
+                if (childNodes.length === 0) return;
+                
+                // 找到父节点的位置
+                const parentUpdate = updates.find(u => u.id === parentId);
+                const parentY = parentUpdate ? parentUpdate.y : 0;
+                
+                // 在父节点右侧排列子节点
+                const childSpacing = 80;  // 子节点间间距
+                const totalChildHeight = (childNodes.length - 1) * childSpacing;
+                const startChildY = parentY - totalChildHeight / 2;
+                
+                childNodes.forEach((childNode, index) => {
+                    updates.push({
+                        id: childNode.id,
+                        x: lowIntentX,
+                        y: startChildY + index * childSpacing,
+                        fixed: { x: false, y: false }
+                    });
+                });
+            });
+        }
+        
+        // 3. 根据连接关系排列记录节点
+        if (recordNodes.length > 0) {
+            // 为每个低级意图找到其记录节点
+            const recordGroups = new Map();
+            
+            // 初始化每个低级意图的子记录组
+            lowIntentNodes.forEach(lowNode => {
+                recordGroups.set(lowNode.id, []);
+            });
+            
+            // 根据边的连接关系分组记录节点
+            recordNodes.forEach(recordNode => {
+                // 找到这个记录节点的父低级意图
+                const parentEdge = allEdges.find(edge => 
+                    edge.to === recordNode.id && 
+                    lowIntentNodes.some(l => l.id === edge.from)
+                );
+                
+                if (parentEdge) {
+                    const parentId = parentEdge.from;
+                    if (recordGroups.has(parentId)) {
+                        recordGroups.get(parentId).push(recordNode);
+                    }
+                } else {
+                    // 如果没有找到父节点，放在第一个组
+                    const firstLowIntent = lowIntentNodes[0];
+                    if (firstLowIntent && recordGroups.has(firstLowIntent.id)) {
+                        recordGroups.get(firstLowIntent.id).push(recordNode);
+                    }
+                }
+            });
+            
+            // 为每组记录节点定位
+            recordGroups.forEach((recordNodesList, parentId) => {
+                if (recordNodesList.length === 0) return;
+                
+                // 找到父节点的位置
+                const parentUpdate = updates.find(u => u.id === parentId);
+                const parentY = parentUpdate ? parentUpdate.y : 0;
+                
+                // 在父节点右侧排列记录节点
+                const recordSpacing = 60;  // 记录节点间间距
+                const totalRecordHeight = (recordNodesList.length - 1) * recordSpacing;
+                const startRecordY = parentY - totalRecordHeight / 2;
+                
+                recordNodesList.forEach((recordNode, index) => {
+                    updates.push({
+                        id: recordNode.id,
+                        x: recordX,
+                        y: startRecordY + index * recordSpacing,
+                        fixed: { x: false, y: false }
+                    });
+                });
+            });
+        }
+        
+        // 批量更新节点位置
+        this.nodes.update(updates);
+        
+        // 添加平滑的动画过渡
+        this.network.setOptions({
+            physics: {
+                enabled: true,
+                stabilization: { 
+                    enabled: true,
+                    iterations: 100,
+                    updateInterval: 25
+                },
+                solver: 'repulsion',
+                repulsion: {
+                    nodeDistance: 0,
+                    centralGravity: 0,
+                    springLength: 0,
+                    springConstant: 0,
+                    damping: 1
+                }
+            }
+        });
+        
+        // 在动画完成后恢复原配置
+        setTimeout(() => {
+            this.network.setOptions({
+                physics: {
+                    enabled: true,
+                    stabilization: { enabled: false },
+                    solver: 'repulsion',
+                    repulsion: {
+                        nodeDistance: 0,
+                        centralGravity: 0,
+                        springLength: 0,
+                        springConstant: 0,
+                        damping: 1
+                    }
+                }
+            });
+        }, 1000);
+        
+        // 记录排版事件
+        window.Logger.log(window.LogCategory.UI, 'network_horizontal_layout_applied', {
+            high_intent_count: highIntentNodes.length,
+            low_intent_count: lowIntentNodes.length,
+            record_count: recordNodes.length
+        });
     }
 }
 
