@@ -78,15 +78,23 @@ async function resetHighlightState() {
 
 function initializeTaskDescription() {
     const taskDescription = document.getElementById("currentTaskDescription");
+    const taskEditButton = document.getElementById("taskEditButton");
+    
+    // 初始化任务描述显示
     chrome.storage.local.get("currentTask", (data) => {
         if (data.currentTask && data.currentTask.description) {
             taskDescription.textContent = `📋 ${data.currentTask.description}`;
+            taskEditButton.style.display = "block";
         } else {
             taskDescription.textContent = "📋 No active task";
             taskDescription.style.color = "#a0aec0";
             taskDescription.style.fontStyle = "italic";
+            taskEditButton.style.display = "none";
         }
     });
+
+    // 设置编辑按钮事件监听器
+    taskEditButton.addEventListener('click', handleTaskEdit);
 
     // 监听任务更新
     chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -96,11 +104,160 @@ function initializeTaskDescription() {
                 taskDescription.textContent = `📋 ${newTask.description}`;
                 taskDescription.style.color = "#4a5568";
                 taskDescription.style.fontStyle = "normal";
+                taskEditButton.style.display = "block";
             } else {
                 taskDescription.textContent = "📋 No active task";
                 taskDescription.style.color = "#a0aec0";
                 taskDescription.style.fontStyle = "italic";
+                taskEditButton.style.display = "none";
             }
+        }
+    });
+}
+
+// 处理任务编辑按钮点击
+function handleTaskEdit() {
+    window.Logger.log(window.LogCategory.UI, 'side_panel_task_edit_btn_clicked', {});
+    
+    chrome.storage.local.get("currentTask", (data) => {
+        const currentDescription = data.currentTask?.description || "";
+        showTaskEditDialog(currentDescription);
+    });
+}
+
+// 显示任务编辑对话框
+function showTaskEditDialog(currentDescription) {
+    // 创建对话框
+    const dialog = document.createElement('div');
+    dialog.id = 'mp-task-edit-dialog';
+    dialog.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10002;
+        min-width: 320px;
+        max-width: 500px;
+    `;
+
+    // 创建标题
+    const title = document.createElement('h3');
+    title.textContent = 'Edit Task Description';
+    title.style.cssText = `
+        margin: 0 0 15px 0;
+        color: #2d3436;
+        font-size: 16px;
+        font-weight: 600;
+    `;
+
+    // 创建输入框
+    const input = document.createElement('textarea');
+    input.value = currentDescription;
+    input.placeholder = 'Enter task description';
+    input.style.cssText = `
+        width: 100%;
+        min-height: 80px;
+        padding: 8px;
+        margin-bottom: 15px;
+        border: 1px solid #dfe6e9;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 14px;
+        font-family: system-ui, -apple-system, sans-serif;
+        resize: vertical;
+    `;
+
+    // 创建按钮容器
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    `;
+
+    // 创建取消按钮
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.cssText = `
+        padding: 8px 16px;
+        background: #95a5a6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    `;
+
+    // 创建确认按钮
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Save';
+    confirmButton.style.cssText = `
+        padding: 8px 16px;
+        background: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    `;
+
+    // 添加事件监听器
+    cancelButton.onclick = () => {
+        document.body.removeChild(dialog);
+    };
+
+    confirmButton.onclick = async () => {
+        const newDescription = input.value.trim();
+        if (!newDescription) {
+            alert('Please enter a task description');
+            return;
+        }
+
+        try {
+            // 获取当前任务数据
+            const { currentTask } = await chrome.storage.local.get('currentTask');
+            const updatedTask = {
+                ...currentTask,
+                description: newDescription
+            };
+
+            // 保存更新后的任务
+            await chrome.storage.local.set({ currentTask: updatedTask });
+            
+            window.Logger.log(window.LogCategory.UI, 'side_panel_task_description_updated', {
+                old_description: currentTask?.description || '',
+                new_description: newDescription
+            });
+
+            document.body.removeChild(dialog);
+        } catch (error) {
+            console.error('Error updating task description:', error);
+            alert('Failed to update task description. Please try again.');
+        }
+    };
+
+    // 组装对话框
+    buttonContainer.appendChild(cancelButton);
+    buttonContainer.appendChild(confirmButton);
+    dialog.appendChild(title);
+    dialog.appendChild(input);
+    dialog.appendChild(buttonContainer);
+    document.body.appendChild(dialog);
+
+    // 聚焦输入框并选中文本
+    input.focus();
+    input.select();
+
+    // 添加键盘快捷键
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            confirmButton.click();
+        } else if (event.key === 'Escape') {
+            cancelButton.click();
         }
     });
 }
