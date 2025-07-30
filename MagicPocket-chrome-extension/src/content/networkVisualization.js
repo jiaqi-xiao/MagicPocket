@@ -1022,14 +1022,20 @@ class NetworkManager {
             // 添加网络事件监听
             this.setupNetworkEvents();
             
-            // 等待布局稳定后进行初始缩放适配
+            // 等待布局稳定后进行初始缩放适配和自动排版
             this.network.once('stabilized', () => {
-                this.network.fit({
-                    animation: {
-                        duration: 1000,
-                        easingFunction: 'easeInOutQuad'
-                    }
-                });
+                // 首次展示时自动执行横向排版，确保节点位置合理
+                this.arrangeHorizontalLayout();
+                
+                // 延迟执行缩放适配，确保排版完成后再适配视图
+                setTimeout(() => {
+                    this.network.fit({
+                        animation: {
+                            duration: 1000,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
+                }, 300);
             });
 
             // 添加网络可视化初始化完成的日志
