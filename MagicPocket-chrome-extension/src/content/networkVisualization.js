@@ -988,7 +988,16 @@ class NetworkManager {
     toggleNodeState(nodeId, menuItem) {
         const newState = !this.nodeStates.get(nodeId);
         this.updateNodeState(nodeId, newState);
+        
+        // 移除菜单
         menuItem.parentElement.remove();
+        NetworkManager.activeNodeMenu = false;
+        
+        // 记录状态切换日志
+        window.Logger.log(window.LogCategory.UI, 'network_node_state_toggled', {
+            node_id: nodeId,
+            new_state: newState ? 'confirmed' : 'pending'
+        });
     }
 
     // 设置菜单关闭事件
@@ -1177,7 +1186,7 @@ class NetworkManager {
         let isTooltipVisible = false;
         let tooltipNode = null;
 
-        // 点击节点显示菜单
+        // 左键点击节点 - 仅记录日志，不显示菜单
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
@@ -1190,7 +1199,21 @@ class NetworkManager {
                     label: node.label,
                     confirmed: this.nodeStates.get(nodeId)
                 });
+            } else {
+                // 点击空白区域时重置所有节点的状态显示
+                this.resetAllNodeStates();
+            }
+        });
 
+        // 右键点击节点显示菜单
+        this.network.on('oncontext', (params) => {
+            params.event.preventDefault();
+            
+            // 检查是否右键点击在节点上
+            const nodeId = this.network.getNodeAt(params.pointer.DOM);
+            if (nodeId) {
+                // 直接显示右键菜单，无需先选中节点
+                // this.showContextMenu(nodeId, params.pointer.DOM);
                 this.createNodeMenu(nodeId);
             }
         });
@@ -1323,6 +1346,38 @@ class NetworkManager {
         allEdges.forEach(edge => {
             this.edges.update({
                 id: edge.id,
+                opacity: 1.0
+            });
+        });
+    }
+
+    // 重置所有节点状态显示 - 根据确认状态设置正确的透明度
+    resetAllNodeStates() {
+        const allNodes = this.nodes.get();
+        
+        // 根据节点的确认状态重置透明度
+        allNodes.forEach(node => {
+            const isConfirmed = this.nodeStates.get(node.id);
+            this.nodes.update({
+                id: node.id,
+                opacity: isConfirmed ? 1.0 : 0.3
+            });
+        });
+
+        // 同时重置边的状态
+        this.updateAllEdgesStates();
+    }
+
+    // 更新所有边的状态
+    updateAllEdgesStates() {
+        const allEdges = this.edges.get();
+        
+        allEdges.forEach(edge => {
+            const fromConfirmed = this.nodeStates.get(edge.from);
+            const toConfirmed = this.nodeStates.get(edge.to);
+            this.edges.update({
+                id: edge.id,
+                dashes: !(fromConfirmed && toConfirmed),
                 opacity: 1.0
             });
         });
