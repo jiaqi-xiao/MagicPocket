@@ -895,7 +895,7 @@ class NetworkManager {
                         // 更新节点显示
                         this.nodes.update({
                             id: nodeId,
-                            label: this.wrapLabel(newIntentName, 20, 'intent'),
+                            label: this.wrapLabel(newIntentName, 50, 'intent'),
                             originalLabel: newIntentName
                         });
 
@@ -1724,6 +1724,10 @@ class NetworkManager {
         directionSwitch.appendChild(verticalBtn);
         toolbar.appendChild(directionSwitch);
         
+        // 添加手动创建意图节点按钮
+        const createNodeBtn = this.createIntentNodeButton();
+        toolbar.appendChild(createNodeBtn);
+        
         this.container.appendChild(toolbar);
         this.container.appendChild(this.visContainer);
         
@@ -1737,6 +1741,396 @@ class NetworkManager {
             color: "#666"
         });
         this.visContainer.appendChild(loader);
+    }
+
+    // 创建手动添加意图节点按钮
+    createIntentNodeButton() {
+        const createBtn = document.createElement("div");
+        Object.assign(createBtn.style, {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "20px",
+            height: "20px", 
+            padding: "2px",
+            backgroundColor: "#4CAF50",
+            borderRadius: "4px",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            position: "relative",
+            zIndex: "1001"
+        });
+
+        createBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+        `;
+        
+        // 添加数据属性用于调试
+        createBtn.setAttribute('data-debug', 'intent-create-button');
+
+        createBtn.title = "Create Intent Node";
+
+        // 悬停效果
+        createBtn.addEventListener("mouseenter", () => {
+            Object.assign(createBtn.style, {
+                backgroundColor: "#45a049",
+                transform: "scale(1.05)"
+            });
+        });
+
+        createBtn.addEventListener("mouseleave", () => {
+            Object.assign(createBtn.style, {
+                backgroundColor: "#4CAF50",
+                transform: "scale(1)"
+            });
+        });
+
+        // 点击事件
+        createBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showIntentCreationPanel();
+        });
+
+        return createBtn;
+    }
+
+    // 显示意图创建面板
+    showIntentCreationPanel() {
+        // 如果面板已存在，直接显示
+        const existingPanel = document.getElementById('intent-creation-panel');
+        if (existingPanel) {
+            existingPanel.style.display = 'flex';
+            return;
+        }
+
+        const panel = document.createElement('div');
+        panel.id = 'intent-creation-panel';
+        Object.assign(panel.style, {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '400px',
+            padding: '24px',
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+            zIndex: '10001',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            fontFamily: 'Arial, sans-serif'
+        });
+
+        panel.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h3 style="margin: 0; color: #333; font-size: 18px;">Create Intent Node</h3>
+                <button id="close-creation-panel" style="
+                    background: none; 
+                    border: none; 
+                    font-size: 24px; 
+                    cursor: pointer; 
+                    color: #666;
+                    padding: 0;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">×</button>
+            </div>
+            
+            <div>
+                <label style="display: block; margin-bottom: 8px; color: #555; font-weight: 500;">Intent Description:</label>
+                <input type="text" id="intent-description-input" 
+                       placeholder="Enter intent description..." 
+                       maxlength="200"
+                       style="
+                           width: 100%; 
+                           padding: 12px; 
+                           border: 2px solid #e1e5e9; 
+                           border-radius: 8px; 
+                           font-size: 14px;
+                           outline: none;
+                           transition: border-color 0.2s ease;
+                           box-sizing: border-box;
+                       ">
+            </div>
+            
+            <div>
+                <label style="display: block; margin-bottom: 8px; color: #555; font-weight: 500;">Node Level:</label>
+                <div style="display: flex; gap: 12px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="radio" name="intent-level" value="high" checked 
+                               style="width: 16px; height: 16px;">
+                        <span style="color: #d32f2f; font-weight: 500;">🔴 High-Level Intent</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="radio" name="intent-level" value="low" 
+                               style="width: 16px; height: 16px;">
+                        <span style="color: #1976d2; font-weight: 500;">🔵 Low-Level Intent</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+                <button id="cancel-creation" style="
+                    padding: 10px 20px; 
+                    border: 2px solid #e1e5e9; 
+                    background: white; 
+                    color: #666; 
+                    border-radius: 6px; 
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: all 0.2s ease;
+                ">Cancel</button>
+                <button id="confirm-creation" style="
+                    padding: 10px 20px; 
+                    border: none; 
+                    background: #4CAF50; 
+                    color: white; 
+                    border-radius: 6px; 
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: all 0.2s ease;
+                ">Create Node</button>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+
+        // 输入框焦点样式
+        const input = panel.querySelector('#intent-description-input');
+        input.addEventListener('focus', () => {
+            input.style.borderColor = '#4CAF50';
+        });
+        input.addEventListener('blur', () => {
+            input.style.borderColor = '#e1e5e9';
+        });
+
+        // 按钮悬停效果
+        const cancelBtn = panel.querySelector('#cancel-creation');
+        const confirmBtn = panel.querySelector('#confirm-creation');
+        
+        cancelBtn.addEventListener('mouseenter', () => {
+            cancelBtn.style.backgroundColor = '#f5f5f5';
+        });
+        cancelBtn.addEventListener('mouseleave', () => {
+            cancelBtn.style.backgroundColor = 'white';
+        });
+
+        confirmBtn.addEventListener('mouseenter', () => {
+            confirmBtn.style.backgroundColor = '#45a049';
+        });
+        confirmBtn.addEventListener('mouseleave', () => {
+            confirmBtn.style.backgroundColor = '#4CAF50';
+        });
+
+        // 事件监听器
+        panel.querySelector('#close-creation-panel').addEventListener('click', () => {
+            this.hideIntentCreationPanel();
+        });
+
+        panel.querySelector('#cancel-creation').addEventListener('click', () => {
+            this.hideIntentCreationPanel();
+        });
+
+        panel.querySelector('#confirm-creation').addEventListener('click', () => {
+            this.handleIntentCreation();
+        });
+
+        // 回车键提交
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.handleIntentCreation();
+            }
+        });
+
+        // 点击面板外部关闭 - 延迟添加事件监听器，避免立即触发
+        setTimeout(() => {
+            const closeHandler = (e) => {
+                if (!panel.contains(e.target) && panel.parentNode) {
+                    this.hideIntentCreationPanel();
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            document.addEventListener('click', closeHandler);
+        }, 100);
+    }
+
+    // 隐藏意图创建面板
+    hideIntentCreationPanel() {
+        const panel = document.getElementById('intent-creation-panel');
+        if (panel) {
+            panel.remove();
+        }
+    }
+
+    // 处理意图创建
+    handleIntentCreation() {
+        const panel = document.getElementById('intent-creation-panel');
+        if (!panel) return;
+
+        const input = panel.querySelector('#intent-description-input');
+        const levelRadios = panel.querySelectorAll('input[name="intent-level"]');
+        
+        const description = input.value.trim();
+        const selectedLevel = Array.from(levelRadios).find(radio => radio.checked)?.value;
+
+        if (!description) {
+            alert('Please enter an intent description.');
+            input.focus();
+            return;
+        }
+
+        // 创建新的意图节点
+        this.createManualIntentNode(description, selectedLevel);
+        
+        // 关闭面板
+        this.hideIntentCreationPanel();
+    }
+
+    // 创建手动意图节点
+    createManualIntentNode(description, level) {
+        const nodeType = level === 'high' ? NetworkManager.NodeTypes.HIGH_INTENT : NetworkManager.NodeTypes.LOW_INTENT;
+        
+        // 生成唯一ID
+        const nodeId = `manual-${nodeType}-${Date.now()}`;
+        
+        // 获取合适的位置
+        const position = this.getOptimalNodePosition();
+        
+        // 创建节点数据
+        const maxLength = nodeType === NetworkManager.NodeTypes.HIGH_INTENT ? 20 : 15;
+        const nodeData = {
+            id: nodeId,
+            label: this.wrapLabel(description, maxLength, nodeType),
+            color: this.getNodeColor(nodeType),
+            size: this.getNodeSize(nodeType),
+            x: position.x,
+            y: position.y,
+            physics: false, // 固定位置，但可拖动
+            type: nodeType,
+            intent: description,
+            confirmed: true, // 手动创建的节点默认确认状态
+            isManuallyCreated: true
+        };
+
+        // 添加到网络中
+        this.nodes.add(nodeData);
+        
+        // 更新节点状态管理
+        this.nodeStates.set(nodeId, {
+            confirmed: true,
+            type: nodeType,
+            intent: description
+        });
+
+        // 同步存储
+        this.syncManualNodeToStorage(nodeData);
+
+        // 记录日志
+        window.Logger?.log(window.LogCategory.USER_ACTION, 'manual_intent_created', {
+            node_id: nodeId,
+            intent: description,
+            level: level,
+            position: position
+        });
+
+        console.log(`Manual intent node created: ${description} (${level}-level)`);
+    }
+
+    // 获取最优节点位置
+    getOptimalNodePosition() {
+        // 获取当前视口的位置和尺寸
+        const viewPosition = this.network.getViewPosition();
+        const scale = this.network.getScale();
+        
+        // 计算视口中心位置
+        const viewportCenterX = viewPosition.x;
+        const viewportCenterY = viewPosition.y;
+        
+        // 使用视口正中央位置
+        const baseX = viewportCenterX;
+        const baseY = viewportCenterY + 50;
+        
+        // 检查是否有其他手动创建的节点在附近（在基础位置附近的区域）
+        const manualNodes = this.nodes.get().filter(node => 
+            node.isManuallyCreated && 
+            Math.abs(node.x - baseX) < 300 && 
+            Math.abs(node.y - baseY) < 100
+        );
+        
+        if (manualNodes.length === 0) {
+            // 没有其他手动节点，使用基础位置
+            return { x: baseX, y: baseY };
+        } else {
+            // 有其他手动节点，向右排布
+            const rightmostX = Math.max(...manualNodes.map(node => node.x));
+            const spacing = 50; // 节点间距
+            return { x: rightmostX + spacing, y: baseY };
+        }
+    }
+
+    // 同步手动节点到存储
+    syncManualNodeToStorage(nodeData) {
+        chrome.storage.local.get(['intentTree'], (result) => {
+            let intentTree = result.intentTree || { item: {} };
+            
+            if (nodeData.type === NetworkManager.NodeTypes.HIGH_INTENT) {
+                // 高级意图节点作为新的意图分类
+                intentTree.item[nodeData.intent] = {
+                    intent: nodeData.intent,
+                    priority: 1,
+                    child_num: 0,
+                    child: [],
+                    confirmed: true,
+                    isManuallyCreated: true
+                };
+            } else {
+                // 低级意图节点需要找到合适的父节点或创建新的分类
+                const parentIntentKey = Object.keys(intentTree.item)[0]; // 简化：选择第一个高级意图
+                if (parentIntentKey) {
+                    const parentIntent = intentTree.item[parentIntentKey];
+                    parentIntent.child.push({
+                        intent: nodeData.intent,
+                        priority: 1,
+                        child_num: 0,
+                        child: [],
+                        confirmed: true,
+                        isManuallyCreated: true
+                    });
+                    parentIntent.child_num = parentIntent.child.length;
+                } else {
+                    // 如果没有高级意图，创建一个默认的
+                    const defaultHighIntent = 'General Tasks';
+                    intentTree.item[defaultHighIntent] = {
+                        intent: defaultHighIntent,
+                        priority: 1,
+                        child_num: 1,
+                        child: [{
+                            intent: nodeData.intent,
+                            priority: 1,
+                            child_num: 0,
+                            child: [],
+                            confirmed: true,
+                            isManuallyCreated: true
+                        }],
+                        confirmed: true,
+                        isManuallyCreated: true
+                    };
+                }
+            }
+            
+            // 保存更updated的意图树
+            chrome.storage.local.set({ intentTree }, () => {
+                console.log('Manual intent node synced to storage');
+            });
+        });
     }
 
     switchDisplayMode(newMode, containerArea = null) {
