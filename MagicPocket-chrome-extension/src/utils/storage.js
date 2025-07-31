@@ -1,5 +1,9 @@
 function saveData(data) {
     return new Promise((resolve, reject) => {
+        if (!chrome || !chrome.storage || !chrome.storage.local) {
+            reject(new Error('Chrome storage API not available'));
+            return;
+        }
         chrome.storage.local.get("records", (result) => {
             let records = result.records || [];
             records.push(data);
@@ -16,6 +20,10 @@ function saveData(data) {
 
 function getRecords() {
     return new Promise((resolve) => {
+        if (!chrome || !chrome.storage || !chrome.storage.local) {
+            resolve([]);
+            return;
+        }
         chrome.storage.local.get("records", (data) => {
             resolve(data.records || []);
         });
@@ -24,6 +32,10 @@ function getRecords() {
 
 function deleteRecord(index) {
     return new Promise((resolve) => {
+        if (!chrome || !chrome.storage || !chrome.storage.local) {
+            resolve();
+            return;
+        }
         chrome.storage.local.get("records", (data) => {
             const records = data.records || [];
             records.splice(index, 1);
@@ -34,6 +46,10 @@ function deleteRecord(index) {
 
 function getGoogleAPIKey() {
     return new Promise((resolve) => {
+        if (!chrome || !chrome.storage || !chrome.storage.sync) {
+            resolve(null);
+            return;
+        }
         chrome.storage.sync.get('googleApiKey', (data) => {
             if (data.googleApiKey) {
                 resolve(data.googleApiKey);

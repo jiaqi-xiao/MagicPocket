@@ -1,0 +1,1182 @@
+// IntentCreationPanel.js - 意图创建UI系统
+// 拆分自 networkVisualizationV2.js，负责意图创建和暂存区域管理
+
+class IntentCreationPanel {
+    constructor(networkVisualization) {
+        this.networkViz = networkVisualization;
+        this.container = null;
+        this.inputField = null;
+        this.submitButton = null;
+        this.stagingArea = null;
+        this.stagedNodes = new Map(); // nodeId -> DOM element
+        this.nodeIdCounter = 10000; // 新节点从高ID开始
+        this.isCollapsed = false; // 折叠状态
+        this.toggleButton = null; // 切换按钮
+        
+        console.log('IntentCreationPanel initialized');
+    }
+    
+    // 初始化UI组件
+    initialize() {
+        this.createPanel();
+        this.createStagingArea();
+        this.createToggleButton();
+        this.setupEventHandlers();
+        this.injectStyles();
+        console.log('IntentCreationPanel UI ready');
+    }
+    
+    // 创建主面板
+    createPanel() {
+        this.container = document.createElement('div');
+        this.container.className = 'intent-creation-panel';
+        
+        this.container.innerHTML = `
+            <div class="panel-content">
+                <div class="input-section">
+                    <input type="text" 
+                           class="intent-input" 
+                           placeholder="Enter intent description or leave empty for AI suggestions..." 
+                           maxlength="400">
+                    <div class="level-selector">
+                        <span class="level-label">Level:</span>
+                        <div class="level-option active" data-level="high-intent">
+                            <span class="level-indicator high-level">🔴 High</span>
+                        </div>
+                        <div class="level-option" data-level="low-intent">
+                            <span class="level-indicator low-level">🔵 Low</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="intent-submit-btn">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">Create</span>
+                </button>
+            </div>
+        `;
+        
+        // 获取输入和按钮元素
+        this.inputField = this.container.querySelector('.intent-input');
+        this.submitButton = this.container.querySelector('.intent-submit-btn');
+        this.levelOptions = this.container.querySelectorAll('.level-option');
+        
+        // 添加到网络容器
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (networkContainer) {
+            networkContainer.appendChild(this.container);
+        }
+    }
+    
+    // 创建暂存区域
+    createStagingArea() {
+        this.stagingArea = document.createElement('div');
+        this.stagingArea.className = 'staging-area';
+        this.stagingArea.innerHTML = `
+            <div class="staging-header">
+                <span class="staging-title">💫 Staged Intents</span>
+                <span class="staging-subtitle">Drag to main network</span>
+            </div>
+            <div class="staged-nodes-container">
+                <!-- 暂存的节点将在此显示 -->
+            </div>
+        `;
+        
+        // 设置暂存区域为拖放目标
+        this.setupStagingAreaDropZone();
+        
+        // 添加到网络容器
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (networkContainer) {
+            networkContainer.appendChild(this.stagingArea);
+        }
+    }
+    
+    // 创建切换按钮
+    createToggleButton() {
+        this.toggleButton = document.createElement('button');
+        this.toggleButton.className = 'panel-toggle-button';
+        this.toggleButton.innerHTML = `
+            <span class="toggle-icon">‹</span>
+            <span class="toggle-tooltip">Hide Panel</span>
+        `;
+        
+        // 添加到网络容器
+        const networkContainer = document.getElementById('v2NetworkContainer');
+        if (networkContainer) {
+            networkContainer.appendChild(this.toggleButton);
+            console.log('Toggle button created and added to network container');
+            console.log('Toggle button element:', this.toggleButton);
+            console.log('Network container:', networkContainer);
+            
+            // // 强制样式确保可见
+            // this.toggleButton.style.position = 'fixed';
+            // this.toggleButton.style.top = '20px';
+            // this.toggleButton.style.right = '20px';
+            // this.toggleButton.style.zIndex = '99999';
+            // this.toggleButton.style.background = 'red';
+            // this.toggleButton.style.width = '40px';
+            // this.toggleButton.style.height = '40px';
+            // this.toggleButton.style.borderRadius = '50%';
+            // this.toggleButton.style.display = 'flex';
+            // this.toggleButton.style.alignItems = 'center';
+            // this.toggleButton.style.justifyContent = 'center';
+        } else {
+            console.error('Network container not found - adding to body as fallback');
+            // 备用方案：添加到body
+            // document.body.appendChild(this.toggleButton);
+            // this.toggleButton.style.position = 'fixed';
+            // this.toggleButton.style.top = '20px';
+            // this.toggleButton.style.right = '20px';
+            // this.toggleButton.style.zIndex = '99999';
+            // this.toggleButton.style.background = 'red';
+            // this.toggleButton.style.width = '40px';
+            // this.toggleButton.style.height = '40px';
+            // this.toggleButton.style.borderRadius = '50%';
+            // this.toggleButton.style.display = 'flex';
+            // this.toggleButton.style.alignItems = 'center';
+            // this.toggleButton.style.justifyContent = 'center';
+        }
+    }
+    
+    // 设置事件处理器
+    setupEventHandlers() {
+        // 提交按钮点击
+        this.submitButton.addEventListener('click', () => {
+            this.handleIntentCreation();
+        });
+        
+        // 输入框回车
+        this.inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.handleIntentCreation();
+            }
+        });
+        
+        // 输入框状态变化
+        this.inputField.addEventListener('input', () => {
+            this.updateButtonState();
+        });
+        
+        // 级别选择器点击事件
+        this.levelOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                this.setSelectedLevel(option.dataset.level);
+            });
+        });
+        
+        // 切换按钮点击
+        if (this.toggleButton) {
+            this.toggleButton.addEventListener('click', () => {
+                console.log('Toggle button clicked');
+                this.togglePanel();
+            });
+        } else {
+            console.error('Toggle button not found when setting up event handlers');
+        }
+    }
+    
+    // 设置选择的意图级别
+    setSelectedLevel(level) {
+        // 移除所有active状态
+        this.levelOptions.forEach(option => {
+            option.classList.remove('active');
+        });
+        
+        // 设置选中的级别
+        const selectedOption = this.container.querySelector(`[data-level="${level}"]`);
+        if (selectedOption) {
+            selectedOption.classList.add('active');
+        }
+        
+        console.log('Level selected:', level);
+    }
+    
+    // 获取当前选择的意图级别
+    getSelectedLevel() {
+        const activeOption = this.container.querySelector('.level-option.active');
+        return activeOption ? activeOption.dataset.level : 'high-intent'; // 默认为高级意图
+    }
+    
+    // 处理意图创建
+    handleIntentCreation() {
+        const inputText = this.inputField.value.trim();
+        const selectedLevel = this.getSelectedLevel();
+        
+        if (inputText) {
+            // 手动模式：创建单个意图节点
+            this.createManualIntent(inputText, selectedLevel);
+        } else {
+            // 自动模式：生成多个意图建议
+            this.generateAutoIntents(selectedLevel);
+        }
+        
+        // 清空输入框
+        this.inputField.value = '';
+        this.updateButtonState();
+    }
+    
+    // 创建手动意图节点
+    createManualIntent(intentText, selectedLevel) {
+        const nodeId = `staged_${this.nodeIdCounter++}`;
+        const stagedNode = this.createStageNode(intentText, nodeId, false, selectedLevel);
+        
+        this.stagedNodes.set(nodeId, {
+            element: stagedNode,
+            text: intentText,
+            type: selectedLevel, // 使用选择的级别而不是固定的 'idle-intent'
+            level: selectedLevel
+        });
+        
+        // 添加到暂存区域
+        const container = this.stagingArea.querySelector('.staged-nodes-container');
+        container.appendChild(stagedNode);
+        
+        // 添加创建动画
+        setTimeout(() => {
+            stagedNode.classList.add('bubble-animation');
+        }, 100);
+        
+        console.log('Manual intent created:', intentText, 'Level:', selectedLevel);
+    }
+    
+    // 生成自动意图建议
+    async generateAutoIntents(selectedLevel) {
+        this.showLoadingAnimation();
+        
+        try {
+            // 模拟异步LLM调用
+            const autoIntents = await this.mockIntentGenerator();
+            
+            // 创建建议的意图节点
+            autoIntents.forEach((intent, index) => {
+                setTimeout(() => {
+                    const nodeId = `staged_${this.nodeIdCounter++}`;
+                    const stagedNode = this.createStageNode(intent.text, nodeId, false, selectedLevel);
+                    
+                    this.stagedNodes.set(nodeId, {
+                        element: stagedNode,
+                        text: intent.text,
+                        type: selectedLevel, // 使用选择的级别
+                        level: selectedLevel,
+                        confidence: intent.confidence
+                    });
+                    
+                    const container = this.stagingArea.querySelector('.staged-nodes-container');
+                    container.appendChild(stagedNode);
+                    
+                    // 添加气泡动画
+                    setTimeout(() => {
+                        stagedNode.classList.add('bubble-animation');
+                    }, 100);
+                }, index * 200); // 错开显示时间
+            });
+            
+        } catch (error) {
+            console.error('Failed to generate auto intents:', error);
+        } finally {
+            this.hideLoadingAnimation();
+        }
+    }
+    
+    // 设置暂存区域拖放目标
+    setupStagingAreaDropZone() {
+        // 防止默认行为并允许拖放
+        this.stagingArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // 添加视觉反馈
+            this.stagingArea.classList.add('drag-hover');
+        });
+        
+        this.stagingArea.addEventListener('dragleave', (e) => {
+            // 检查是否真的离开了暂存区域
+            if (!this.stagingArea.contains(e.relatedTarget)) {
+                this.stagingArea.classList.remove('drag-hover');
+            }
+        });
+        
+        this.stagingArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            this.stagingArea.classList.remove('drag-hover');
+            
+            // 处理节点返回到暂存区域
+            this.handleReturnToStage(e);
+        });
+    }
+    
+    // 检测拖放目标区域
+    detectDropZone(clientX, clientY) {
+        const stagingRect = this.stagingArea.getBoundingClientRect();
+        
+        // 检查点是否在暂存区域内
+        const isInStagingArea = clientX >= stagingRect.left && 
+                               clientX <= stagingRect.right && 
+                               clientY >= stagingRect.top && 
+                               clientY <= stagingRect.bottom;
+        
+        return {
+            isInStagingArea,
+            stagingArea: this.stagingArea
+        };
+    }
+    
+    // 处理节点返回到暂存区域
+    handleReturnToStage(e) {
+        const nodeId = e.dataTransfer.getData('text/plain');
+        if (!nodeId) return;
+        
+        console.log('Node returned to staging area:', nodeId);
+        
+        // 通知网络可视化处理返回
+        if (this.networkViz) {
+            this.networkViz.returnStagedNodeToOriginalPosition(nodeId);
+        }
+    }
+    
+    // 存储暂存节点的原始位置
+    storeOriginalPosition(nodeId) {
+        const stagedData = this.stagedNodes.get(nodeId);
+        if (stagedData && stagedData.element) {
+            const rect = stagedData.element.getBoundingClientRect();
+            const containerRect = this.stagingArea.querySelector('.staged-nodes-container').getBoundingClientRect();
+            
+            // 存储相对于容器的位置
+            stagedData.originalPosition = {
+                x: rect.left - containerRect.left,
+                y: rect.top - containerRect.top
+            };
+            
+            console.log('Stored original position for node:', nodeId, stagedData.originalPosition);
+        }
+    }
+    
+    // 创建暂存节点
+    createStageNode(intentText, nodeId, isRestored = false, selectedLevel = 'high-intent') {
+        // 如果是恢复操作且nodeId为true，生成新的nodeId
+        if (isRestored && nodeId === true) {
+            nodeId = `staged_${this.nodeIdCounter++}`;
+        }
+        
+        const stagedNode = document.createElement('div');
+        stagedNode.className = `staged-node ${selectedLevel}`;
+        stagedNode.dataset.nodeId = nodeId;
+        stagedNode.dataset.level = selectedLevel;
+        stagedNode.draggable = true;
+        
+        // 截断过长的文本
+        const displayText = intentText.length > 50 ? 
+                           intentText.substring(0, 47) + '...' : intentText;
+        
+        // 根据级别选择图标和颜色
+        const levelIcon = selectedLevel === 'high-intent' ? '🔴' : '🔵';
+        const levelText = selectedLevel === 'high-intent' ? 'High' : 'Low';
+        
+        stagedNode.innerHTML = `
+            <div class="staged-node-content">
+                <div class="staged-node-header">
+                    <span class="level-badge">${levelIcon} ${levelText}</span>
+                </div>
+                <span class="staged-node-text">${displayText}</span>
+                <button class="remove-staged-btn" title="Remove">×</button>
+            </div>
+        `;
+        
+        // 拖拽事件
+        this.setupStagedNodeDrag(stagedNode);
+        
+        // 删除按钮事件
+        const removeBtn = stagedNode.querySelector('.remove-staged-btn');
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.removeStagedNode(nodeId);
+        });
+        
+        // 如果是恢复操作，直接添加到暂存区并设置映射
+        if (isRestored) {
+            this.stagedNodes.set(nodeId, {
+                element: stagedNode,
+                text: intentText,
+                type: selectedLevel,
+                level: selectedLevel
+            });
+            
+            // 确保暂存区域存在
+            this.ensureStagingAreaExists();
+            
+            // 添加到暂存区域
+            const container = this.stagingArea.querySelector('.staged-nodes-container');
+            container.appendChild(stagedNode);
+            
+            // 添加恢复动画
+            stagedNode.style.opacity = '0';
+            stagedNode.style.transform = 'scale(0.8)';
+            setTimeout(() => {
+                stagedNode.style.transition = 'all 0.3s ease';
+                stagedNode.style.opacity = '1';
+                stagedNode.style.transform = 'scale(1)';
+                
+                // 添加气泡动画
+                setTimeout(() => {
+                    stagedNode.classList.add('bubble-animation');
+                }, 300);
+            }, 50);
+        }
+        
+        return stagedNode;
+    }
+    
+    // 确保暂存区域存在
+    ensureStagingAreaExists() {
+        if (!this.stagingArea || !document.contains(this.stagingArea)) {
+            this.createStagingArea();
+        }
+    }
+    
+    // 设置暂存节点拖拽
+    setupStagedNodeDrag(stagedNode) {
+        stagedNode.addEventListener('dragstart', (e) => {
+            const nodeId = stagedNode.dataset.nodeId;
+            const stagedData = this.stagedNodes.get(nodeId);
+            
+            // 存储原始位置
+            this.storeOriginalPosition(nodeId);
+            
+            e.dataTransfer.setData('text/plain', nodeId);
+            e.dataTransfer.effectAllowed = 'move';
+            stagedNode.classList.add('dragging');
+            
+            // 通知网络可视化开始暂存节点拖拽
+            if (this.networkViz) {
+                this.networkViz.startStagedNodeDrag(nodeId, stagedData);
+            }
+            
+            console.log('Drag started for staged node:', nodeId);
+        });
+        
+        stagedNode.addEventListener('dragend', () => {
+            stagedNode.classList.remove('dragging');
+            
+            // 通知网络可视化结束暂存节点拖拽
+            if (this.networkViz) {
+                this.networkViz.endStagedNodeDrag();
+            }
+            
+            console.log('Drag ended for staged node');
+        });
+    }
+    
+    // 删除暂存节点
+    removeStagedNode(nodeId) {
+        const stagedData = this.stagedNodes.get(nodeId);
+        if (stagedData) {
+            stagedData.element.remove();
+            this.stagedNodes.delete(nodeId);
+            console.log('Staged node removed:', nodeId);
+        }
+    }
+    
+    // 模拟LLM意图生成器
+    async mockIntentGenerator() {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const templates = [
+                    "Analyze data patterns",
+                    "Generate comprehensive report",
+                    "Optimize workflow process",
+                    "Review content quality",
+                    "Plan strategic activities"
+                ];
+                
+                const intents = templates
+                    .sort(() => 0.5 - Math.random())
+                    .slice(0, 3)
+                    .map(intent => ({
+                        text: intent,
+                        confidence: Math.random() * 0.4 + 0.6,
+                        type: 'idle-intent'
+                    }));
+                
+                resolve(intents);
+            }, 1500); // 模拟加载时间
+        });
+    }
+    
+    // 显示加载动画
+    showLoadingAnimation() {
+        this.submitButton.classList.add('loading');
+        this.submitButton.innerHTML = `
+            <span class="loading-spinner"></span>
+            <span class="btn-text">Generating...</span>
+        `;
+        this.submitButton.disabled = true;
+        
+        // 添加光晕动画到整个面板
+        this.container.classList.add('loading-glow');
+        
+        // 在暂存区域显示等待提示
+        this.showStagingLoadingState();
+    }
+    
+    // 隐藏加载动画
+    hideLoadingAnimation() {
+        this.submitButton.classList.remove('loading');
+        this.submitButton.innerHTML = `
+            <span class="btn-icon">✨</span>
+            <span class="btn-text">Create</span>
+        `;
+        this.submitButton.disabled = false;
+        
+        // 移除光晕动画
+        this.container.classList.remove('loading-glow');
+        
+        // 隐藏暂存区域的加载状态
+        this.hideStagingLoadingState();
+    }
+    
+    // 显示暂存区域加载状态
+    showStagingLoadingState() {
+        const container = this.stagingArea.querySelector('.staged-nodes-container');
+        
+        // 创建加载指示器
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'staging-loading-indicator';
+        loadingIndicator.innerHTML = `
+            <div class="ai-thinking-animation">
+                <div class="thinking-dots">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+                <div class="thinking-text">AI is generating intent suggestions...</div>
+            </div>
+        `;
+        
+        container.appendChild(loadingIndicator);
+    }
+    
+    // 隐藏暂存区域加载状态
+    hideStagingLoadingState() {
+        const loadingIndicator = this.stagingArea.querySelector('.staging-loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    // 更新按钮状态
+    updateButtonState() {
+        const hasInput = this.inputField.value.trim().length > 0;
+        const text = this.submitButton.querySelector('.btn-text');
+        
+        if (hasInput) {
+            text.textContent = 'Create';
+        } else {
+            text.textContent = 'Generate';
+        }
+    }
+    
+    // 切换面板显示/隐藏
+    togglePanel() {
+        this.isCollapsed = !this.isCollapsed;
+        
+        if (this.isCollapsed) {
+            // 隐藏面板
+            this.container.classList.add('collapsed');
+            this.stagingArea.classList.add('collapsed');
+            this.toggleButton.classList.add('collapsed');
+            
+            // 更新按钮状态
+            const icon = this.toggleButton.querySelector('.toggle-icon');
+            const tooltip = this.toggleButton.querySelector('.toggle-tooltip');
+            icon.textContent = '›';
+            tooltip.textContent = 'Show Panel';
+            
+            console.log('Panel collapsed');
+        } else {
+            // 显示面板
+            this.container.classList.remove('collapsed');
+            this.stagingArea.classList.remove('collapsed');
+            this.toggleButton.classList.remove('collapsed');
+            
+            // 更新按钮状态
+            const icon = this.toggleButton.querySelector('.toggle-icon');
+            const tooltip = this.toggleButton.querySelector('.toggle-tooltip');
+            icon.textContent = '‹';
+            tooltip.textContent = 'Hide Panel';
+            
+            console.log('Panel expanded');
+        }
+    }
+    
+    // 注入样式
+    injectStyles() {
+        const styleId = 'intent-creation-panel-styles';
+        if (document.getElementById(styleId)) return;
+        
+        const styles = document.createElement('style');
+        styles.id = styleId;
+        styles.textContent = `
+            .intent-creation-panel {
+                position: absolute;
+                top: 20px;
+                left: 20px;
+                background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,249,250,0.9));
+                border-radius: 16px;
+                padding: 16px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+                z-index: 10001;
+                backdrop-filter: blur(8px);
+                border: 1px solid rgba(255,255,255,0.2);
+                transition: all 0.3s ease;
+            }
+            
+            .intent-creation-panel:hover {
+                box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1);
+            }
+            
+            .panel-content {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .input-section {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .level-selector {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 12px;
+            }
+            
+            .level-label {
+                color: #666;
+                font-weight: 500;
+                margin-right: 4px;
+            }
+            
+            .level-option {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 12px;
+                transition: all 0.2s ease;
+                border: 1.5px solid transparent;
+                background: rgba(255, 255, 255, 0.3);
+            }
+            
+            .level-option:hover {
+                background: rgba(116, 185, 255, 0.15);
+                border-color: rgba(116, 185, 255, 0.3);
+            }
+            
+            /* 选中状态的高级意图 */
+            .level-option.active[data-level="high-intent"] {
+                background: linear-gradient(135deg, rgba(255, 118, 117, 0.2), rgba(225, 112, 85, 0.15));
+                border-color: #ff7675;
+                box-shadow: 0 2px 8px rgba(255, 118, 117, 0.2);
+            }
+            
+            /* 选中状态的低级意图 */
+            .level-option.active[data-level="low-intent"] {
+                background: linear-gradient(135deg, rgba(116, 185, 255, 0.2), rgba(9, 132, 227, 0.15));
+                border-color: #74b9ff;
+                box-shadow: 0 2px 8px rgba(116, 185, 255, 0.2);
+            }
+            
+            .level-indicator {
+                font-size: 11px;
+                font-weight: 600;
+                user-select: none;
+                transition: all 0.2s ease;
+            }
+            
+            /* 未选中状态的颜色 - 较淡 */
+            .level-indicator.high-level {
+                color: rgba(225, 112, 85, 0.6);
+            }
+            
+            .level-indicator.low-level {
+                color: rgba(9, 132, 227, 0.6);
+            }
+            
+            /* 选中状态的颜色 - 更鲜艳 */
+            .level-option.active .level-indicator.high-level {
+                color: #e17055;
+                text-shadow: 0 1px 2px rgba(225, 112, 85, 0.3);
+            }
+            
+            .level-option.active .level-indicator.low-level {
+                color: #0984e3;
+                text-shadow: 0 1px 2px rgba(9, 132, 227, 0.3);
+            }
+            
+            .intent-input {
+                width: 220px;
+                padding: 12px 16px;
+                border: 2px solid rgba(116, 185, 255, 0.3);
+                border-radius: 24px;
+                font-size: 14px;
+                background: rgba(255,255,255,0.8);
+                transition: all 0.3s ease;
+                outline: none;
+                color: #000;
+            }
+            
+            .intent-input:focus {
+                border-color: #74b9ff;
+                box-shadow: 0 0 0 3px rgba(116, 185, 255, 0.1);
+                background: rgba(255,255,255,1);
+            }
+            
+            .intent-input::placeholder {
+                color: #999;
+                font-style: italic;
+                font-size: 12px;
+            }
+            
+            .intent-submit-btn {
+                padding: 12px 20px;
+                background: linear-gradient(135deg, #74b9ff, #0984e3);
+                color: white;
+                border: none;
+                border-radius: 24px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(116, 185, 255, 0.3);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 100px;
+                justify-content: center;
+            }
+            
+            .intent-submit-btn:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(116, 185, 255, 0.4);
+            }
+            
+            .intent-submit-btn:active {
+                transform: translateY(0);
+            }
+            
+            .intent-submit-btn:disabled {
+                opacity: 0.7;
+                cursor: not-allowed;
+                transform: none;
+            }
+            
+            .intent-submit-btn.loading {
+                background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+            }
+            
+            .loading-spinner {
+                width: 16px;
+                height: 16px;
+                border: 2px solid rgba(255,255,255,0.3);
+                border-top: 2px solid white;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            .staging-area {
+                position: absolute;
+                top: 120px;
+                left: 20px;
+                width: 280px;
+                max-height: 320px;
+                background: linear-gradient(135deg, rgba(248, 249, 250, 0.95), rgba(255, 255, 255, 0.9));
+                border-radius: 20px;
+                padding: 16px;
+                overflow-y: auto;
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255,255,255,0.3);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                z-index: 10001;
+                transition: all 0.3s ease;
+            }
+            
+            .staging-area.drag-hover {
+                border-color: #74b9ff;
+                box-shadow: 0 8px 32px rgba(116, 185, 255, 0.3), 0 0 0 2px rgba(116, 185, 255, 0.2);
+                background: linear-gradient(135deg, rgba(116, 185, 255, 0.1), rgba(248, 249, 250, 0.95));
+                transform: scale(1.02);
+            }
+            
+            .staging-header {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 12px;
+                text-align: center;
+            }
+            
+            .staging-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 2px;
+            }
+            
+            .staging-subtitle {
+                font-size: 11px;
+                color: #666;
+                font-style: italic;
+            }
+            
+            .staged-nodes-container {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .staged-node {
+                display: block;
+                color: white;
+                border-radius: 20px;
+                cursor: grab;
+                font-size: 13px;
+                opacity: 0.9;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                position: relative;
+                overflow: hidden;
+                user-select: none;
+                border: 2px solid transparent;
+            }
+            
+            .staged-node.high-intent {
+                background: linear-gradient(135deg, #ff7675, #e17055);
+                border-color: rgba(255, 118, 117, 0.5);
+            }
+            
+            .staged-node.low-intent {
+                background: linear-gradient(135deg, #74b9ff, #0984e3);
+                border-color: rgba(116, 185, 255, 0.5);
+            }
+            
+            .staged-node:hover {
+                transform: translateY(-2px) scale(1.02);
+                box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                opacity: 1;
+            }
+            
+            .staged-node:active {
+                cursor: grabbing;
+                transform: scale(0.98);
+            }
+            
+            .staged-node.dragging {
+                opacity: 0.5;
+                transform: rotate(2deg);
+            }
+            
+            .staged-node-content {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                padding: 12px 16px;
+                position: relative;
+            }
+            
+            .staged-node-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 2px;
+            }
+            
+            .level-badge {
+                background: rgba(255, 255, 255, 0.2);
+                padding: 2px 6px;
+                border-radius: 8px;
+                font-size: 10px;
+                font-weight: bold;
+                backdrop-filter: blur(4px);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+            }
+            
+            .staged-node-text {
+                line-height: 1.3;
+                margin-bottom: 2px;
+            }
+            
+            .remove-staged-btn {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                font-size: 14px;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                flex-shrink: 0;
+            }
+            
+            .remove-staged-btn:hover {
+                background: rgba(255,255,255,0.3);
+                transform: scale(1.1);
+            }
+            
+            .staged-node::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+                transition: left 0.6s;
+            }
+            
+            .staged-node:hover::before {
+                left: 100%;
+            }
+            
+            @keyframes bubble-float {
+                0%, 100% { transform: translateY(0px) rotate(0deg); }
+                33% { transform: translateY(-6px) rotate(1deg); }
+                66% { transform: translateY(-3px) rotate(-1deg); }
+            }
+            
+            .staged-node.bubble-animation {
+                animation: bubble-float 3s ease-in-out infinite;
+            }
+            
+            @keyframes glow-pulse {
+                0%, 100% { 
+                    box-shadow: 0 0 5px rgba(116, 185, 255, 0.3),
+                                0 0 15px rgba(116, 185, 255, 0.2),
+                                0 0 25px rgba(116, 185, 255, 0.1);
+                }
+                50% { 
+                    box-shadow: 0 0 10px rgba(116, 185, 255, 0.6),
+                                0 0 25px rgba(116, 185, 255, 0.4),
+                                0 0 40px rgba(116, 185, 255, 0.3);
+                }
+            }
+            
+            .intent-creation-panel.loading-glow {
+                animation: glow-pulse 2s ease-in-out infinite;
+            }
+            
+            .staging-loading-indicator {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 20px;
+                background: linear-gradient(135deg, rgba(116, 185, 255, 0.1), rgba(255, 255, 255, 0.1));
+                border-radius: 12px;
+                margin: 8px 0;
+                border: 1px dashed rgba(116, 185, 255, 0.3);
+            }
+            
+            .ai-thinking-animation {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .thinking-dots {
+                display: flex;
+                gap: 6px;
+            }
+            
+            .thinking-dots .dot {
+                width: 8px;
+                height: 8px;
+                background: #74b9ff;
+                border-radius: 50%;
+                animation: thinking-bounce 1.4s ease-in-out infinite both;
+            }
+            
+            .thinking-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+            .thinking-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+            .thinking-dots .dot:nth-child(3) { animation-delay: 0s; }
+            
+            @keyframes thinking-bounce {
+                0%, 80%, 100% { 
+                    transform: scale(0.8);
+                    opacity: 0.5;
+                }
+                40% { 
+                    transform: scale(1.2);
+                    opacity: 1;
+                }
+            }
+            
+            .thinking-text {
+                font-size: 12px;
+                color: #666;
+                font-style: italic;
+                text-align: center;
+                animation: text-pulse 2s ease-in-out infinite;
+            }
+            
+            @keyframes text-pulse {
+                0%, 100% { opacity: 0.6; }
+                50% { opacity: 1; }
+            }
+            
+            /* 切换按钮样式 */
+            .panel-toggle-button {
+                position: absolute;
+                top: 20px;
+                left: 450px;
+                width: 40px;
+                height: 40px;
+                background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.8));
+                border: 2px solid rgba(116, 185, 255, 0.3);
+                border-radius: 50%;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                z-index: 10002;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                backdrop-filter: blur(8px);
+                /* Debug: Make button more visible */
+                // outline: 2px solid red;
+                opacity: 1;
+            }
+            
+            .panel-toggle-button:hover {
+                background: linear-gradient(135deg, rgba(255,255,255,1), rgba(248,249,250,0.95));
+                border-color: #74b9ff;
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            }
+            
+            .panel-toggle-button.collapsed {
+                left: 20px;
+                right: auto;
+                background: linear-gradient(135deg, #74b9ff, #0984e3);
+                border-color: rgba(255,255,255,0.3);
+            }
+            
+            .panel-toggle-button.collapsed .toggle-icon {
+                color: white;
+            }
+            
+            .panel-toggle-button.collapsed:hover {
+                background: linear-gradient(135deg, #0984e3, #74b9ff);
+                box-shadow: 0 6px 20px rgba(116, 185, 255, 0.4);
+            }
+            
+            .toggle-icon {
+                font-size: 20px;
+                font-weight: bold;
+                color: #74b9ff;
+                transition: all 0.3s ease;
+                user-select: none;
+            }
+            
+            .toggle-tooltip {
+                position: absolute;
+                bottom: -35px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                white-space: nowrap;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+                pointer-events: none;
+            }
+            
+            .panel-toggle-button:hover .toggle-tooltip {
+                opacity: 1;
+                visibility: visible;
+            }
+            
+            .toggle-tooltip::before {
+                content: '';
+                position: absolute;
+                top: -4px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 0;
+                height: 0;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 4px solid rgba(0,0,0,0.8);
+            }
+            
+            /* 折叠状态的面板样式 */
+            .intent-creation-panel.collapsed {
+                transform: translateX(-100%);
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            
+            .staging-area.collapsed {
+                transform: translateX(-100%);
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            
+            /* 折叠动画 */
+            .intent-creation-panel,
+            .staging-area {
+                transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                           opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                           visibility 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+        `;
+        
+        document.head.appendChild(styles);
+    }
+    
+    // 清理
+    cleanup() {
+        if (this.container) {
+            this.container.remove();
+        }
+        if (this.stagingArea) {
+            this.stagingArea.remove();
+        }
+        if (this.toggleButton) {
+            this.toggleButton.remove();
+        }
+        
+        // 清理样式
+        const styles = document.getElementById('intent-creation-panel-styles');
+        if (styles) {
+            styles.remove();
+        }
+        
+        console.log('IntentCreationPanel cleaned up');
+    }
+}
+
+// 导出类以供其他模块使用
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = IntentCreationPanel;
+}

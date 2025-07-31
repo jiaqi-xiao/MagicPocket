@@ -78,3 +78,6 @@ Temporary Items
 
 ### Chrome Extension Output ###
 *.zip
+
+CLAUDE.md
+.claude/

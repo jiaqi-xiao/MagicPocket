@@ -153,10 +153,7 @@ function handleGlobalMouseDown(e) {
     if (contextMenu) {
         if (contextMenu.contains(e.target)) {
             console.log("Mousedown inside context menu");
-            if (e.target.closest('.wcr-save-button')) {
-                console.log("Save button clicked");
-                saveSelection();
-            }
+            // 移除重复的保存调用，因为saveButton已经有click事件监听器
         } else {
             console.log("Mousedown outside context menu");
             removeContextMenu();

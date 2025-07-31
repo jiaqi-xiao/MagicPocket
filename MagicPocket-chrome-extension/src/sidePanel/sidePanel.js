@@ -3,6 +3,62 @@ let networkGraph = null;
 let networkManager = null;
 let lastIntentTree = null; // 添加一个变量来保存最后的 intentTree 状态
 
+// 测试环境控制变量
+const USE_MOCK_DATA = false;
+
+// 合并确认状态：将 lastIntentTree 中的确认状态合并到新的 intentTree 中
+function mergeConfirmationStates(newIntentTree, lastIntentTree) {
+    if (!newIntentTree || !newIntentTree.item || !lastIntentTree || !lastIntentTree.child) {
+        return;
+    }
+
+    console.log('Merging confirmation states from lastIntentTree to newIntentTree');
+    
+    // 创建一个映射来快速查找上次的确认状态
+    const lastStateMap = new Map();
+    
+    // 递归收集 lastIntentTree 中的所有确认状态
+    function collectLastStates(children) {
+        children.forEach(child => {
+            if (child.intent || child.description) {
+                const intentName = child.intent || child.description;
+                if (child.immutable || child.confirmed) {
+                    lastStateMap.set(intentName, true);
+                    console.log(`Found confirmed intent in lastIntentTree: ${intentName}`);
+                }
+                
+                // 递归处理子节点
+                if (child.child && Array.isArray(child.child)) {
+                    collectLastStates(child.child);
+                }
+            }
+        });
+    }
+    
+    collectLastStates(lastIntentTree.child);
+    
+    // 将确认状态应用到新的意图树中
+    Object.entries(newIntentTree.item).forEach(([intentName, intentData]) => {
+        // 检查高级意图的确认状态
+        if (lastStateMap.has(intentName)) {
+            intentData.confirmed = true;
+            console.log(`Applied confirmation to high-level intent: ${intentName}`);
+        }
+        
+        // 检查低级意图的确认状态
+        if (intentData.child && Array.isArray(intentData.child)) {
+            intentData.child.forEach(childIntent => {
+                if (childIntent.intent && lastStateMap.has(childIntent.intent)) {
+                    childIntent.confirmed = true;
+                    console.log(`Applied confirmation to low-level intent: ${childIntent.intent}`);
+                }
+            });
+        }
+    });
+    
+    console.log('Confirmation states merged successfully');
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'closeSidePanel') {
         window.close();
@@ -78,15 +134,23 @@ async function resetHighlightState() {
 
 function initializeTaskDescription() {
     const taskDescription = document.getElementById("currentTaskDescription");
+    const taskEditButton = document.getElementById("taskEditButton");
+    
+    // 初始化任务描述显示
     chrome.storage.local.get("currentTask", (data) => {
         if (data.currentTask && data.currentTask.description) {
             taskDescription.textContent = `📋 ${data.currentTask.description}`;
+            taskEditButton.style.display = "block";
         } else {
             taskDescription.textContent = "📋 No active task";
             taskDescription.style.color = "#a0aec0";
             taskDescription.style.fontStyle = "italic";
+            taskEditButton.style.display = "none";
         }
     });
+
+    // 设置编辑按钮事件监听器
+    taskEditButton.addEventListener('click', handleTaskEdit);
 
     // 监听任务更新
     chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -96,11 +160,160 @@ function initializeTaskDescription() {
                 taskDescription.textContent = `📋 ${newTask.description}`;
                 taskDescription.style.color = "#4a5568";
                 taskDescription.style.fontStyle = "normal";
+                taskEditButton.style.display = "block";
             } else {
                 taskDescription.textContent = "📋 No active task";
                 taskDescription.style.color = "#a0aec0";
                 taskDescription.style.fontStyle = "italic";
+                taskEditButton.style.display = "none";
             }
+        }
+    });
+}
+
+// 处理任务编辑按钮点击
+function handleTaskEdit() {
+    window.Logger.log(window.LogCategory.UI, 'side_panel_task_edit_btn_clicked', {});
+    
+    chrome.storage.local.get("currentTask", (data) => {
+        const currentDescription = data.currentTask?.description || "";
+        showTaskEditDialog(currentDescription);
+    });
+}
+
+// 显示任务编辑对话框
+function showTaskEditDialog(currentDescription) {
+    // 创建对话框
+    const dialog = document.createElement('div');
+    dialog.id = 'mp-task-edit-dialog';
+    dialog.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10002;
+        min-width: 320px;
+        max-width: 500px;
+    `;
+
+    // 创建标题
+    const title = document.createElement('h3');
+    title.textContent = 'Edit Task Description';
+    title.style.cssText = `
+        margin: 0 0 15px 0;
+        color: #2d3436;
+        font-size: 16px;
+        font-weight: 600;
+    `;
+
+    // 创建输入框
+    const input = document.createElement('textarea');
+    input.value = currentDescription;
+    input.placeholder = 'Enter task description';
+    input.style.cssText = `
+        width: 100%;
+        min-height: 80px;
+        padding: 8px;
+        margin-bottom: 15px;
+        border: 1px solid #dfe6e9;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 14px;
+        font-family: system-ui, -apple-system, sans-serif;
+        resize: vertical;
+    `;
+
+    // 创建按钮容器
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    `;
+
+    // 创建取消按钮
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.cssText = `
+        padding: 8px 16px;
+        background: #95a5a6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    `;
+
+    // 创建确认按钮
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Save';
+    confirmButton.style.cssText = `
+        padding: 8px 16px;
+        background: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    `;
+
+    // 添加事件监听器
+    cancelButton.onclick = () => {
+        document.body.removeChild(dialog);
+    };
+
+    confirmButton.onclick = async () => {
+        const newDescription = input.value.trim();
+        if (!newDescription) {
+            alert('Please enter a task description');
+            return;
+        }
+
+        try {
+            // 获取当前任务数据
+            const { currentTask } = await chrome.storage.local.get('currentTask');
+            const updatedTask = {
+                ...currentTask,
+                description: newDescription
+            };
+
+            // 保存更新后的任务
+            await chrome.storage.local.set({ currentTask: updatedTask });
+            
+            window.Logger.log(window.LogCategory.UI, 'side_panel_task_description_updated', {
+                old_description: currentTask?.description || '',
+                new_description: newDescription
+            });
+
+            document.body.removeChild(dialog);
+        } catch (error) {
+            console.error('Error updating task description:', error);
+            alert('Failed to update task description. Please try again.');
+        }
+    };
+
+    // 组装对话框
+    buttonContainer.appendChild(cancelButton);
+    buttonContainer.appendChild(confirmButton);
+    dialog.appendChild(title);
+    dialog.appendChild(input);
+    dialog.appendChild(buttonContainer);
+    document.body.appendChild(dialog);
+
+    // 聚焦输入框并选中文本
+    input.focus();
+    input.select();
+
+    // 添加键盘快捷键
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            confirmButton.click();
+        } else if (event.key === 'Escape') {
+            cancelButton.click();
         }
     });
 }
@@ -189,6 +402,15 @@ function initializeRecordsArea() {
             const host = selectedHost || 'http://localhost:8000/';
             
             async function makeGroupRequest() {
+                if (USE_MOCK_DATA) {
+                    // 返回模拟响应
+                    return {
+                        ok: true,
+                        status: 200,
+                        json: async () => (mockGroupData)
+                    };
+                }
+
                 return await fetch(`${host}group/?scenario=${encodeURIComponent(taskDescription)}`, {
                     method: 'POST',
                     headers: {
@@ -287,7 +509,16 @@ function initializeRecordsArea() {
             const constructStartTime = performance.now();
             console.log("networkManager status: ", networkManager);
             console.log("lastIntentTree: ", lastIntentTree);
-            const intentTreeData = networkManager ? networkManager.getIntentTreeWithStates() : lastIntentTree;
+            
+            // 优先使用 networkManager 的状态数据，如果不存在则使用 lastIntentTree
+            // 但确保 lastIntentTree 格式正确且保留已确认状态
+            let intentTreeData = null;
+            if (networkManager) {
+                intentTreeData = networkManager.getIntentTreeWithStates();
+            } else if (lastIntentTree) {
+                // 使用 lastIntentTree，它已经包含了之前的确认状态
+                intentTreeData = lastIntentTree;
+            }
             
             // 验证数据格式
             if (intentTreeData && intentTreeData.child) {
@@ -299,25 +530,33 @@ function initializeRecordsArea() {
                 }));
             }
 
-            const constructResponse = await fetch(`${host}construct/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    scenario: taskDescription,
-                    groupsOfNodes: {
-                        item: groupsOfNodes.item || []
+            let constructResponse;
+            if (USE_MOCK_DATA) {
+                // 返回模拟响应
+                constructResponse = {
+                    ok: true,
+                    status: 200,
+                    json: async () => (mockExtractData)
+                };
+            } else {
+                constructResponse = await fetch(`${host}extract/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
                     },
-                    intentTree: intentTreeData,
-                    target_level: 3
-                })
-            });
+                    body: JSON.stringify({
+                        scenario: taskDescription,
+                        groupsOfNodes: groupsOfNodes.groupsOfNodes,
+                        familiarity: groupsOfNodes.granularity.familiarity,
+                        specificity: groupsOfNodes.granularity.specificity
+                    })
+                });
+            }
             
             const constructApiTime = performance.now() - constructStartTime;
             window.Logger.log(window.LogCategory.NETWORK, 'side_panel_construct_api_called', {
                 duration_ms: Math.round(constructApiTime),
-                groups_count: groupsOfNodes.item.length
+                groups_count: groupsOfNodes.groupsOfNodes.length
             });
             
             if (!constructResponse.ok) {
@@ -332,6 +571,15 @@ function initializeRecordsArea() {
 
             // 添加场景信息
             intentTree.scenario = taskDescription;
+            
+            // 合并之前保存的确认状态到新的意图树中
+            if (lastIntentTree && lastIntentTree.child) {
+                console.log('About to merge confirmation states');
+                console.log('lastIntentTree child count:', lastIntentTree.child.length);
+                mergeConfirmationStates(intentTree, lastIntentTree);
+            } else {
+                console.log('No lastIntentTree to merge states from');
+            }
             
             window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_intent_tree_generated', {
                 raw_response: JSON.stringify(intentTree)
@@ -1119,4 +1367,236 @@ function getButtonTextColor(id) {
         highlightTextBtn: "#D53F8C"
     };
     return colors[id] || "#4A5568";
+}
+
+
+// Mock extract data
+const mockExtractData = {
+    "scenario": "Today's Tech News",
+    "item": {
+        "Highlighting Tech Announcements": {
+            "id": 1,
+            "intent": "Highlighting Tech Announcements",
+            "description": "Summarizing recent technological advancements and updates introduced by major companies, focusing on new features, accessibility, and user experience improvements.",
+            "priority": 5,
+            "child_num": 1,
+            "group": [],
+            "level": "1",
+            "parent": null,
+            "immutable": false,
+            "child": [
+                {
+                    "id": 4,
+                    "intent": "Discussing Software and Browsing Innovations",
+                    "description": "Focusing on innovations in software development and web browsing, highlighting the introduction of new modes and tools that enhance productivity and user engagement.",
+                    "priority": 5,
+                    "child_num": 0,
+                    "group": [
+                        {
+                            "id": 1753934889130,
+                            "comment": "",
+                            "content": "7 月 28 日，微软为 Edge 浏览器引入 Copilot 模式，模式在 Copilot 上线的所有地区可用。开启该模式后，新建标签页会被替换为全新设计的对话框界面。Copilot 可以在对话中基于打开的所有标签页回答问题，支持语音页面导航，可以提供页面快速总结，还可以在开始浏览时提示你继续完成上次浏览的话题。",
+                            "context": "7 月 28 日，微软为 Edge 浏览器引入 Copilot 模式，模式在 Copilot 上线的所有地区可用。开启该模式后，新建标签页会被替换为全新设计的对话框界面。Copilot 可以在对话中基于打开的所有标签页回答问题，支持语音页面导航，可以提供页面快速总结，还可以在开始浏览时提示你继续完成上次浏览的话题。用户可以在官方页面打开该设置。来源",
+                            "isLeafNode": true
+                        },
+                        {
+                            "id": 1753939879306,
+                            "comment": "",
+                            "content": "阿里云于 7 月 26 日宣布通义灵码上线 Qwen3-Coder，即日起用户可在通义灵码 AIIDE、VSCode 和 Jetbrains 插件端免费使用。使用上没有限制，不限量服务也无需邀请码",
+                            "context": "阿里云于 7 月 26 日宣布通义灵码上线 Qwen3-Coder，即日起用户可在通义灵码 AIIDE、VSCode 和 Jetbrains 插件端免费使用。使用上没有限制，不限量服务也无需邀请码。此前阿里云通义开源了 Qwen3-Coder 模型，该模型在编程能力上超越了诸多闭源模型，能力上比肩全球最强的编程模型 Claude 4。来源",
+                            "isLeafNode": true
+                        }
+                    ],
+                    "level": "2",
+                    "parent": 1,
+                    "immutable": false,
+                    "child": []
+                }
+            ]
+        },
+        "Introducing New Electric Vehicles": {
+            "id": 2,
+            "intent": "Introducing New Electric Vehicles",
+            "description": "Providing details about the launch of new electric vehicles, including specifications, design features, and advanced technologies that enhance driving experience and safety.",
+            "priority": 5,
+            "child_num": 1,
+            "group": [],
+            "level": "1",
+            "parent": null,
+            "immutable": false,
+            "child": [
+                {
+                    "id": 5,
+                    "intent": "Detailing Electric Vehicle Features",
+                    "description": "Describing the technical specifications and innovative features of new electric vehicles, emphasizing energy efficiency, design, and safety enhancements.",
+                    "priority": 5,
+                    "child_num": 0,
+                    "group": [
+                        {
+                            "id": 1753939828523,
+                            "comment": "",
+                            "content": "7 月 29 日，理想汽车在北京首都国际会议中心发布家庭六座纯电 SUV 理想 i8，定价 32.18-36.98 万元，8 月 20 日开启交付",
+                            "context": "7 月 29 日，理想汽车在北京首都国际会议中心发布家庭六座纯电 SUV 理想 i8，定价 32.18-36.98 万元，8 月 20 日开启交付。",
+                            "isLeafNode": true
+                        },
+                        {
+                            "id": 1753939838226,
+                            "comment": "",
+                            "content": "理想 i8 采用风阻流线造型，配备立体式星环灯，风阻系数仅 0.218；全车采用大量隔声优化设计，前风挡、侧窗、天幕均采用双层声学夹胶玻璃，此外第一排搭载四个智能静音电动出风口",
+                            "context": "理想 i8 采用风阻流线造型，配备立体式星环灯，风阻系数仅 0.218；全车采用大量隔声优化设计，前风挡、侧窗、天幕均采用双层声学夹胶玻璃，此外第一排搭载四个智能静音电动出风口；搭载「5C 纯电平台」，全系标配三元锂 5C 超充电池，提供 90.1kWh 和 97.8kWh 两种电池版本，CLTC 续航分别达到 670 公里和 720 公里，在 0-80% 的电量区间内可持续提供 300kW 以上的充电功率；采用具备空间理解能力、思维能力、记忆和沟通能力的 VLA 司机大模型，全系标配激光雷达，在原有 AEB、AES 的基础上增加了慢车加塞、恶意别车、美式截停等，更多场景、更高难度的主动安全能力。来源",
+                            "isLeafNode": true
+                        }
+                    ],
+                    "level": "2",
+                    "parent": 2,
+                    "immutable": false,
+                    "child": []
+                }
+            ]
+        },
+        "Explaining AI Feature Enhancements": {
+            "id": 3,
+            "intent": "Explaining AI Feature Enhancements",
+            "description": "Detailing the introduction of new artificial intelligence features aimed at improving user interaction and fostering critical thinking skills through interactive modes.",
+            "priority": 5,
+            "child_num": 0,
+            "group": [
+                {
+                    "id": 1753939843428,
+                    "comment": "",
+                    "content": "7 月 29 日，OpenAI 宣布向 ChatGPT 的免费和付费用户推出「研究与学习」模式，该模式旨在帮助使用者建立批判思维能力，启用后 ChatGPT 不仅会主动提问来确认用户的信息理解情况，偶尔也会拒绝直接提供答案",
+                    "context": "7 月 29 日，OpenAI 宣布向 ChatGPT 的免费和付费用户推出「研究与学习」模式，该模式旨在帮助使用者建立批判思维能力，启用后 ChatGPT 不仅会主动提问来确认用户的信息理解情况，偶尔也会拒绝直接提供答案。",
+                    "isLeafNode": true
+                }
+            ],
+            "level": "1",
+            "parent": null,
+            "immutable": false,
+            "child": []
+        }
+    }
+}
+
+// Mock group data
+const mockGroupData = {
+    "groupsOfNodes": [
+        {
+            "records": [
+                {
+                    "id": 1753934889130,
+                    "comment": "",
+                    "content": "7 月 28 日，微软为 Edge 浏览器引入 Copilot 模式，模式在 Copilot 上线的所有地区可用。开启该模式后，新建标签页会被替换为全新设计的对话框界面。Copilot 可以在对话中基于打开的所有标签页回答问题，支持语音页面导航，可以提供页面快速总结，还可以在开始浏览时提示你继续完成上次浏览的话题。",
+                    "context": "7 月 28 日，微软为 Edge 浏览器引入 Copilot 模式，模式在 Copilot 上线的所有地区可用。开启该模式后，新建标签页会被替换为全新设计的对话框界面。Copilot 可以在对话中基于打开的所有标签页回答问题，支持语音页面导航，可以提供页面快速总结，还可以在开始浏览时提示你继续完成上次浏览的话题。用户可以在官方页面打开该设置。来源",
+                    "isLeafNode": true
+                },
+                {
+                    "id": 1753939843428,
+                    "comment": "",
+                    "content": "7 月 29 日，OpenAI 宣布向 ChatGPT 的免费和付费用户推出「研究与学习」模式，该模式旨在帮助使用者建立批判思维能力，启用后 ChatGPT 不仅会主动提问来确认用户的信息理解情况，偶尔也会拒绝直接提供答案",
+                    "context": "7 月 29 日，OpenAI 宣布向 ChatGPT 的免费和付费用户推出「研究与学习」模式，该模式旨在帮助使用者建立批判思维能力，启用后 ChatGPT 不仅会主动提问来确认用户的信息理解情况，偶尔也会拒绝直接提供答案。",
+                    "isLeafNode": true
+                }
+            ],
+            "intent_id": 1,
+            "intent_name": "____",
+            "intent_description": "____",
+            "level": "1",
+            "parent": null
+        },
+        {
+            "records": [
+                {
+                    "id": 1753939828523,
+                    "comment": "",
+                    "content": "7 月 29 日，理想汽车在北京首都国际会议中心发布家庭六座纯电 SUV 理想 i8，定价 32.18-36.98 万元，8 月 20 日开启交付",
+                    "context": "7 月 29 日，理想汽车在北京首都国际会议中心发布家庭六座纯电 SUV 理想 i8，定价 32.18-36.98 万元，8 月 20 日开启交付。",
+                    "isLeafNode": true
+                },
+                {
+                    "id": 1753939838226,
+                    "comment": "",
+                    "content": "理想 i8 采用风阻流线造型，配备立体式星环灯，风阻系数仅 0.218；全车采用大量隔声优化设计，前风挡、侧窗、天幕均采用双层声学夹胶玻璃，此外第一排搭载四个智能静音电动出风口",
+                    "context": "理想 i8 采用风阻流线造型，配备立体式星环灯，风阻系数仅 0.218；全车采用大量隔声优化设计，前风挡、侧窗、天幕均采用双层声学夹胶玻璃，此外第一排搭载四个智能静音电动出风口；搭载「5C 纯电平台」，全系标配三元锂 5C 超充电池，提供 90.1kWh 和 97.8kWh 两种电池版本，CLTC 续航分别达到 670 公里和 720 公里，在 0-80% 的电量区间内可持续提供 300kW 以上的充电功率；采用具备空间理解能力、思维能力、记忆和沟通能力的 VLA 司机大模型，全系标配激光雷达，在原有 AEB、AES 的基础上增加了慢车加塞、恶意别车、美式截停等，更多场景、更高难度的主动安全能力。来源",
+                    "isLeafNode": true
+                }
+            ],
+            "intent_id": 2,
+            "intent_name": "____",
+            "intent_description": "____",
+            "level": "1",
+            "parent": null
+        },
+        {
+            "records": [
+                {
+                    "id": 1753939879306,
+                    "comment": "",
+                    "content": "阿里云于 7 月 26 日宣布通义灵码上线 Qwen3-Coder，即日起用户可在通义灵码 AIIDE、VSCode 和 Jetbrains 插件端免费使用。使用上没有限制，不限量服务也无需邀请码",
+                    "context": "阿里云于 7 月 26 日宣布通义灵码上线 Qwen3-Coder，即日起用户可在通义灵码 AIIDE、VSCode 和 Jetbrains 插件端免费使用。使用上没有限制，不限量服务也无需邀请码。此前阿里云通义开源了 Qwen3-Coder 模型，该模型在编程能力上超越了诸多闭源模型，能力上比肩全球最强的编程模型 Claude 4。来源",
+                    "isLeafNode": true
+                }
+            ],
+            "intent_id": 3,
+            "intent_name": "____",
+            "intent_description": "____",
+            "level": "1",
+            "parent": null
+        },
+        {
+            "records": [
+                [
+                    {
+                        "id": 1753934889130,
+                        "comment": "",
+                        "content": "7 月 28 日，微软为 Edge 浏览器引入 Copilot 模式，模式在 Copilot 上线的所有地区可用。开启该模式后，新建标签页会被替换为全新设计的对话框界面。Copilot 可以在对话中基于打开的所有标签页回答问题，支持语音页面导航，可以提供页面快速总结，还可以在开始浏览时提示你继续完成上次浏览的话题。",
+                        "context": "7 月 28 日，微软为 Edge 浏览器引入 Copilot 模式，模式在 Copilot 上线的所有地区可用。开启该模式后，新建标签页会被替换为全新设计的对话框界面。Copilot 可以在对话中基于打开的所有标签页回答问题，支持语音页面导航，可以提供页面快速总结，还可以在开始浏览时提示你继续完成上次浏览的话题。用户可以在官方页面打开该设置。来源",
+                        "isLeafNode": true
+                    }
+                ],
+                [
+                    {
+                        "id": 1753939843428,
+                        "comment": "",
+                        "content": "7 月 29 日，OpenAI 宣布向 ChatGPT 的免费和付费用户推出「研究与学习」模式，该模式旨在帮助使用者建立批判思维能力，启用后 ChatGPT 不仅会主动提问来确认用户的信息理解情况，偶尔也会拒绝直接提供答案",
+                        "context": "7 月 29 日，OpenAI 宣布向 ChatGPT 的免费和付费用户推出「研究与学习」模式，该模式旨在帮助使用者建立批判思维能力，启用后 ChatGPT 不仅会主动提问来确认用户的信息理解情况，偶尔也会拒绝直接提供答案。",
+                        "isLeafNode": true
+                    }
+                ]
+            ],
+            "intent_id": 4,
+            "intent_name": "____",
+            "intent_description": "____",
+            "level": "2",
+            "parent": 1
+        },
+        {
+            "records": [
+                [
+                    {
+                        "id": 1753939828523,
+                        "comment": "",
+                        "content": "7 月 29 日，理想汽车在北京首都国际会议中心发布家庭六座纯电 SUV 理想 i8，定价 32.18-36.98 万元，8 月 20 日开启交付",
+                        "context": "7 月 29 日，理想汽车在北京首都国际会议中心发布家庭六座纯电 SUV 理想 i8，定价 32.18-36.98 万元，8 月 20 日开启交付。",
+                        "isLeafNode": true
+                    },
+                    {
+                        "id": 1753939838226,
+                        "comment": "",
+                        "content": "理想 i8 采用风阻流线造型，配备立体式星环灯，风阻系数仅 0.218；全车采用大量隔声优化设计，前风挡、侧窗、天幕均采用双层声学夹胶玻璃，此外第一排搭载四个智能静音电动出风口",
+                        "context": "理想 i8 采用风阻流线造型，配备立体式星环灯，风阻系数仅 0.218；全车采用大量隔声优化设计，前风挡、侧窗、天幕均采用双层声学夹胶玻璃，此外第一排搭载四个智能静音电动出风口；搭载「5C 纯电平台」，全系标配三元锂 5C 超充电池，提供 90.1kWh 和 97.8kWh 两种电池版本，CLTC 续航分别达到 670 公里和 720 公里，在 0-80% 的电量区间内可持续提供 300kW 以上的充电功率；采用具备空间理解能力、思维能力、记忆和沟通能力的 VLA 司机大模型，全系标配激光雷达，在原有 AEB、AES 的基础上增加了慢车加塞、恶意别车、美式截停等，更多场景、更高难度的主动安全能力。来源",
+                        "isLeafNode": true
+                    }
+                ]
+            ],
+            "intent_id": 5,
+            "intent_name": "____",
+            "intent_description": "____",
+            "level": "2",
+            "parent": 2
+        }
+    ],
+    "granularity": {
+        "familiarity": "neutral",
+        "specificity": "moderate"
+    }
 }

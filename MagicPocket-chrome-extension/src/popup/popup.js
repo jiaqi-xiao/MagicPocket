@@ -78,6 +78,30 @@ document.addEventListener("DOMContentLoaded", () => {
         window.close();
     });
 
+    // V2多层网络可视化按钮
+    // document.getElementById("mp-popup-dev-multilevel-btn").addEventListener("click", () => {
+    //     window.Logger.log(window.LogCategory.UI, 'popup_dev_multilevel_btn_clicked', {});
+    //     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    //         console.log('Sending V2 visualization message to tab:', tabs[0].id);
+    //         chrome.tabs.sendMessage(tabs[0].id, {
+    //             action: "showNetworkVisualizationV2"
+    //         }, (response) => {
+    //             if (chrome.runtime.lastError) {
+    //                 console.error('Error sending message:', chrome.runtime.lastError);
+    //                 window.Logger.log(window.LogCategory.UI, 'popup_dev_multilevel_failed', {
+    //                     error: chrome.runtime.lastError.message
+    //                 });
+    //             } else {
+    //                 console.log('V2 visualization message sent successfully:', response);
+    //                 window.Logger.log(window.LogCategory.UI, 'popup_dev_multilevel_success', {
+    //                     response: response
+    //                 });
+    //             }
+    //         });
+    //     });
+    //     window.close();
+    // });
+
     // 日志导出功能
     document.getElementById('mp-popup-export-logs-btn').addEventListener('click', async () => {
         window.Logger.log(window.LogCategory.UI, 'popup_export_logs_btn_clicked', {});
