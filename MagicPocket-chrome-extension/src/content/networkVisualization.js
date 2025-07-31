@@ -22,6 +22,7 @@ class NetworkManager {
         this.network = null;
         this.container = null;
         this.visContainer = null;
+        this.nodeMergeManager = null; // 节点合并管理器
 
         // 从初始意图树中收集 immutable 意图
         if (intentTree && intentTree.child) {
@@ -1031,6 +1032,11 @@ class NetworkManager {
             // 添加网络事件监听
             this.setupNetworkEvents();
             
+            // 延迟初始化节点合并管理器，确保网络完全准备就绪
+            setTimeout(() => {
+                this.initializeNodeMergeManager();
+            }, 100);
+            
             // 等待布局稳定后进行初始缩放适配和自动排版
             this.network.once('stabilized', () => {
                 // 首次展示时自动执行横向排版，确保节点位置合理
@@ -1268,23 +1274,8 @@ class NetworkManager {
             }
         }, { passive: false });
 
-        // 添加拖动开始事件
-        this.network.on('dragStart', (params) => {
-            if (params.nodes.length > 0) {
-                this.container.style.cursor = 'grabbing';
-            }
-        });
-
-        // 添加拖动结束事件 - 添加碰撞检测
-        this.network.on('dragEnd', (params) => {
-            this.container.style.cursor = 'default';
-            
-            // 检查是否有节点被拖动
-            if (params.nodes.length > 0) {
-                const draggedNodeId = params.nodes[0];
-                this.checkNodeCollision(draggedNodeId);
-            }
-        });
+        // 拖动事件现在由NodeMergeManager统一处理
+        // 移除重复的事件监听器以避免冲突
 
         // 添加选择事件
         this.network.on('select', (params) => {
@@ -1300,6 +1291,30 @@ class NetworkManager {
                 this.clearHighlight();
             }
         });
+    }
+
+    // 初始化节点合并管理器
+    initializeNodeMergeManager() {
+        console.log('Attempting to initialize NodeMergeManager...');
+        console.log('Network exists:', !!this.network);
+        console.log('NodeMergeManager defined:', typeof NodeMergeManager !== 'undefined');
+        
+        if (!this.network) {
+            console.error('Cannot initialize NodeMergeManager: network is null');
+            return;
+        }
+        
+        if (typeof NodeMergeManager === 'undefined') {
+            console.error('Cannot initialize NodeMergeManager: NodeMergeManager class is not defined');
+            return;
+        }
+        
+        try {
+            this.nodeMergeManager = new NodeMergeManager(this);
+            console.log('NodeMergeManager initialized successfully');
+        } catch (error) {
+            console.error('Error initializing NodeMergeManager:', error);
+        }
     }
 
     // 高亮相关节点
@@ -1822,87 +1837,6 @@ class NetworkManager {
         });
 
         return intentDialog;
-    }
-    
-    // 检查节点碰撞
-    checkNodeCollision(nodeId) {
-        const draggedNode = this.nodes.get(nodeId);
-        if (!draggedNode) return;
-        
-        const draggedPosition = this.network.getPositions([nodeId])[nodeId];
-        const draggedSize = draggedNode.size || 15;
-        
-        // 检查与其他节点的碰撞
-        const allNodes = this.nodes.get();
-        for (const otherNode of allNodes) {
-            if (otherNode.id === nodeId) continue;
-            
-            const otherPosition = this.network.getPositions([otherNode.id])[otherNode.id];
-            const otherSize = otherNode.size || 15;
-            
-            // 计算距离
-            const distance = Math.sqrt(
-                Math.pow(draggedPosition.x - otherPosition.x, 2) + 
-                Math.pow(draggedPosition.y - otherPosition.y, 2)
-            );
-            
-            // 碰撞阈值：两个节点的半径之和加上一些缓冲
-            const collisionThreshold = (draggedSize + otherSize) / 2 + 10;
-            
-            if (distance < collisionThreshold) {
-                // 检查是否为意图节点之间的碰撞
-                if (this.isIntentNode(draggedNode) && this.isIntentNode(otherNode)) {
-                    this.showMergePreviewDialog(draggedNode, otherNode);
-                    return; // 只处理第一个碰撞
-                }
-            }
-        }
-    }
-    
-    // 判断是否为意图节点
-    isIntentNode(node) {
-        return node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
-               node.type === NetworkManager.NodeTypes.LOW_INTENT || 
-               node.type === 'intent';
-    }
-    
-    // 显示合并预览对话框
-    showMergePreviewDialog(node1, node2) {
-        // 创建对话框
-        const dialog = document.createElement('div');
-        dialog.className = 'mp-custom-dialog';
-        
-        const dialogContent = document.createElement('div');
-        dialogContent.className = 'mp-dialog-content';
-        
-        const message = document.createElement('p');
-        message.textContent = `Collision detected between "${node1.originalLabel || node1.label}" and "${node2.originalLabel || node2.label}". Future versions will support merging these nodes.`;
-        
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'mp-dialog-buttons';
-        
-        const confirmButton = document.createElement('button');
-        confirmButton.className = 'mp-retry-btn';
-        confirmButton.textContent = 'OK';
-        confirmButton.onclick = () => {
-            document.body.removeChild(dialog);
-        };
-        
-        buttonContainer.appendChild(confirmButton);
-        dialogContent.appendChild(message);
-        dialogContent.appendChild(buttonContainer);
-        dialog.appendChild(dialogContent);
-        document.body.appendChild(dialog);
-        
-        // 记录碰撞事件
-        window.Logger.log(window.LogCategory.UI, 'network_node_collision_detected', {
-            node1_id: node1.id,
-            node1_type: node1.type,
-            node1_label: node1.originalLabel || node1.label,
-            node2_id: node2.id,
-            node2_type: node2.type,
-            node2_label: node2.originalLabel || node2.label
-        });
     }
     
     // 垂直自动排版 - 高级意图一横排在上，低级意图一横排在下，记录节点在下方
@@ -2443,5 +2377,470 @@ async function showNetworkVisualization(intentTree, containerArea = null, mode =
     } catch (error) {
         console.error('Error in network visualization:', error);
         alert('An error occurred while creating the network visualization.');
+    }
+}
+
+
+// 节点合并管理器 - 负责处理所有节点拖动合并操作
+class NodeMergeManager {
+    constructor(networkManager) {
+        console.log('NodeMergeManager constructor called');
+        this.networkManager = networkManager;
+        this.network = networkManager.network;
+        this.nodes = networkManager.nodes;
+        this.edges = networkManager.edges;
+        
+        // 合并操作状态
+        this.isDragging = false;
+        this.draggedNode = null;
+        this.potentialTarget = null;
+        
+        console.log('Network object:', this.network);
+        console.log('Nodes dataset:', this.nodes);
+        console.log('Edges dataset:', this.edges);
+        
+        this.initializeEventListeners();
+    }
+
+    // 初始化事件监听器
+    initializeEventListeners() {
+        if (!this.network) {
+            console.error('Cannot initialize event listeners: network is null');
+            return;
+        }
+
+        console.log('Initializing NodeMergeManager event listeners...');
+
+        // 监听拖动开始
+        this.network.on('dragStart', (params) => {
+            console.log('Drag start detected:', params);
+            if (params.nodes.length > 0) {
+                this.isDragging = true;
+                this.draggedNode = params.nodes[0];
+                console.log('Dragging node:', this.draggedNode);
+                
+                // 更新光标样式
+                if (this.networkManager.container) {
+                    this.networkManager.container.style.cursor = 'grabbing';
+                }
+            }
+        });
+
+        // 监听拖动结束
+        this.network.on('dragEnd', (params) => {
+            console.log('Drag end detected:', params);
+            if (this.isDragging && params.nodes.length > 0) {
+                console.log('Handling drag end for node:', params.nodes[0]);
+                this.handleDragEnd(params.nodes[0]);
+            }
+            
+            // 重置光标样式
+            if (this.networkManager.container) {
+                this.networkManager.container.style.cursor = 'default';
+            }
+            
+            this.resetDragState();
+        });
+
+        // 监听拖动过程中的碰撞检测
+        this.network.on('dragging', (params) => {
+            if (this.isDragging && params.nodes.length > 0) {
+                this.checkCollisionDuringDrag(params.nodes[0]);
+            }
+        });
+
+        console.log('Event listeners initialized successfully');
+    }
+
+    // 处理拖动结束事件
+    handleDragEnd(draggedNodeId) {
+        console.log('Handling drag end for node:', draggedNodeId);
+        const targetNode = this.findCollisionTarget(draggedNodeId);
+        console.log('Collision target found:', targetNode);
+        
+        if (targetNode && targetNode !== draggedNodeId) {
+            console.log('Showing merge dialog for collision between:', draggedNodeId, 'and', targetNode);
+            this.showMergeConfirmDialog(draggedNodeId, targetNode);
+        } else {
+            console.log('No valid collision target found or same node collision');
+        }
+    }
+
+    // 检测碰撞目标节点
+    findCollisionTarget(draggedNodeId) {
+        console.log('Finding collision target for:', draggedNodeId);
+        const draggedPosition = this.network.getPositions([draggedNodeId])[draggedNodeId];
+        console.log('Dragged node position:', draggedPosition);
+        
+        const allNodes = this.nodes.get();
+        console.log('Total nodes to check:', allNodes.length);
+        
+        for (const node of allNodes) {
+            if (node.id === draggedNodeId) continue;
+            
+            const nodePosition = this.network.getPositions([node.id])[node.id];
+            const distance = this.calculateDistance(draggedPosition, nodePosition);
+            
+            console.log(`Distance to node ${node.id}:`, distance);
+            
+            // 碰撞检测阈值
+            const collisionThreshold = 100;
+            if (distance < collisionThreshold) {
+                console.log('Collision detected with node:', node.id, 'distance:', distance);
+                return node.id;
+            }
+        }
+        
+        console.log('No collision found');
+        return null;
+    }
+
+    // 计算两点间距离
+    calculateDistance(pos1, pos2) {
+        const dx = pos1.x - pos2.x;
+        const dy = pos1.y - pos2.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // 显示合并确认对话框
+    showMergeConfirmDialog(sourceId, targetId) {
+        const sourceNode = this.nodes.get(sourceId);
+        const targetNode = this.nodes.get(targetId);
+        
+        const mergeType = this.detectMergeType(sourceNode, targetNode);
+        
+        if (!mergeType.allowed) {
+            this.showWarningDialog(mergeType.message);
+            return;
+        }
+
+        const dialog = this.createMergeDialog(sourceNode, targetNode, mergeType);
+        document.body.appendChild(dialog);
+    }
+
+    // 检测合并类型
+    detectMergeType(sourceNode, targetNode) {
+        const NodeTypes = this.networkManager.constructor.NodeTypes;
+        
+        // 记录节点不能合并到记录节点
+        if (sourceNode.type === NodeTypes.RECORD && targetNode.type === NodeTypes.RECORD) {
+            return { allowed: false, message: 'Record nodes cannot be merged together' };
+        }
+
+        // 同级合并
+        if (sourceNode.type === targetNode.type) {
+            return {
+                allowed: true,
+                type: 'same-level',
+                operation: `Merge ${sourceNode.type} nodes`
+            };
+        }
+
+        // 高级意图 → 低级意图
+        if (sourceNode.type === NodeTypes.HIGH_INTENT && targetNode.type === NodeTypes.LOW_INTENT) {
+            return {
+                allowed: true,
+                type: 'high-to-low',
+                operation: 'Move high-level intent records to low-level intent'
+            };
+        }
+
+        // 低级意图 → 高级意图
+        if (sourceNode.type === NodeTypes.LOW_INTENT && targetNode.type === NodeTypes.HIGH_INTENT) {
+            return {
+                allowed: true,
+                type: 'low-to-high',
+                operation: 'Move low-level intent as child of high-level intent'
+            };
+        }
+
+        // 记录 → 意图节点
+        if (sourceNode.type === NodeTypes.RECORD && 
+            (targetNode.type === NodeTypes.HIGH_INTENT || targetNode.type === NodeTypes.LOW_INTENT)) {
+            return {
+                allowed: true,
+                type: 'record-to-intent',
+                operation: 'Attach record to intent node'
+            };
+        }
+
+        return { allowed: false, message: 'This merge operation is not supported' };
+    }
+
+    // 创建合并对话框
+    createMergeDialog(sourceNode, targetNode, mergeType) {
+        const dialog = document.createElement('div');
+        dialog.className = 'merge-confirm-dialog';
+        dialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            min-width: 300px;
+        `;
+
+        dialog.innerHTML = `
+            <h3>Confirm Node Merge</h3>
+            <p><strong>Operation:</strong> ${mergeType.operation}</p>
+            <p><strong>Source:</strong> ${sourceNode.label}</p>
+            <p><strong>Target:</strong> ${targetNode.label}</p>
+            <div style="margin-top: 15px; text-align: right;">
+                <button id="merge-cancel" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ccc; border-radius: 4px; background: white;">Cancel</button>
+                <button id="merge-confirm" style="padding: 8px 16px; border: none; border-radius: 4px; background: #007cba; color: white;">Confirm</button>
+            </div>
+        `;
+
+        // 事件监听
+        dialog.querySelector('#merge-cancel').onclick = () => {
+            document.body.removeChild(dialog);
+        };
+
+        dialog.querySelector('#merge-confirm').onclick = () => {
+            this.performMerge(sourceNode, targetNode, mergeType);
+            document.body.removeChild(dialog);
+        };
+
+        return dialog;
+    }
+
+    // 显示警告对话框
+    showWarningDialog(message) {
+        const dialog = document.createElement('div');
+        dialog.className = 'merge-warning-dialog';
+        dialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            min-width: 250px;
+        `;
+
+        dialog.innerHTML = `
+            <h3>Merge Not Allowed</h3>
+            <p>${message}</p>
+            <div style="margin-top: 15px; text-align: right;">
+                <button id="warning-ok" style="padding: 8px 16px; border: none; border-radius: 4px; background: #007cba; color: white;">OK</button>
+            </div>
+        `;
+
+        dialog.querySelector('#warning-ok').onclick = () => {
+            document.body.removeChild(dialog);
+        };
+
+        document.body.appendChild(dialog);
+    }
+
+    // 执行合并操作
+    performMerge(sourceNode, targetNode, mergeType) {
+        switch (mergeType.type) {
+            case 'same-level':
+                this.performSameLevelMerge(sourceNode, targetNode);
+                break;
+            case 'high-to-low':
+                this.performHighToLowMerge(sourceNode, targetNode);
+                break;
+            case 'low-to-high':
+                this.performLowToHighMerge(sourceNode, targetNode);
+                break;
+            case 'record-to-intent':
+                this.performRecordToIntentMerge(sourceNode, targetNode);
+                break;
+        }
+    }
+
+    // 同级合并
+    performSameLevelMerge(sourceNode, targetNode) {
+        // 获取源节点的所有子节点
+        const sourceChildren = this.getNodeChildren(sourceNode.id);
+        
+        // 将源节点的子节点连接到目标节点
+        sourceChildren.forEach(childId => {
+            this.edges.add({
+                id: `${targetNode.id}-${childId}`,
+                from: targetNode.id,
+                to: childId
+            });
+        });
+
+        // 删除源节点的边
+        this.removeNodeEdges(sourceNode.id);
+        
+        // 删除源节点
+        this.nodes.remove(sourceNode.id);
+        
+        // 更新存储
+        this.updateStorageAfterMerge();
+    }
+
+    // 高级意图到低级意图合并
+    performHighToLowMerge(sourceNode, targetNode) {
+        // 获取源节点的记录子节点
+        const sourceRecords = this.getNodeChildren(sourceNode.id)
+            .filter(childId => {
+                const child = this.nodes.get(childId);
+                return child && child.type === this.networkManager.constructor.NodeTypes.RECORD;
+            });
+        
+        // 将记录节点移动到目标低级意图节点下
+        sourceRecords.forEach(recordId => {
+            this.edges.add({
+                id: `${targetNode.id}-${recordId}`,
+                from: targetNode.id,
+                to: recordId
+            });
+        });
+
+        // 删除源节点及其连接
+        this.removeNodeEdges(sourceNode.id);
+        this.nodes.remove(sourceNode.id);
+        
+        this.updateStorageAfterMerge();
+    }
+
+    // 低级意图到高级意图合并
+    performLowToHighMerge(sourceNode, targetNode) {
+        // 将源低级意图节点及其所有子节点连接到目标高级意图节点
+        this.edges.add({
+            id: `${targetNode.id}-${sourceNode.id}`,
+            from: targetNode.id,
+            to: sourceNode.id
+        });
+
+        // 移除源节点的父级连接
+        const sourceParentEdges = this.edges.get().filter(edge => edge.to === sourceNode.id);
+        sourceParentEdges.forEach(edge => {
+            if (edge.from !== targetNode.id) {
+                this.edges.remove(edge.id);
+            }
+        });
+        
+        this.updateStorageAfterMerge();
+    }
+
+    // 记录到意图节点合并
+    performRecordToIntentMerge(sourceNode, targetNode) {
+        // 将记录节点连接到意图节点
+        this.edges.add({
+            id: `${targetNode.id}-${sourceNode.id}`,
+            from: targetNode.id,
+            to: sourceNode.id
+        });
+
+        // 移除记录节点的原始父级连接
+        const sourceParentEdges = this.edges.get().filter(edge => edge.to === sourceNode.id);
+        sourceParentEdges.forEach(edge => {
+            if (edge.from !== targetNode.id) {
+                this.edges.remove(edge.id);
+            }
+        });
+        
+        this.updateStorageAfterMerge();
+    }
+
+    // 获取节点的子节点ID列表
+    getNodeChildren(nodeId) {
+        return this.edges.get()
+            .filter(edge => edge.from === nodeId)
+            .map(edge => edge.to);
+    }
+
+    // 移除节点的所有边连接
+    removeNodeEdges(nodeId) {
+        const relatedEdges = this.edges.get().filter(edge => 
+            edge.from === nodeId || edge.to === nodeId
+        );
+        
+        relatedEdges.forEach(edge => {
+            this.edges.remove(edge.id);
+        });
+    }
+
+    // 更新存储 - 与现有存储系统兼容
+    async updateStorageAfterMerge() {
+        try {
+            // 触发网络重新渲染
+            if (this.networkManager.network) {
+                this.networkManager.network.redraw();
+            }
+
+            // 如果存在意图树数据，保存更新后的结构
+            if (this.networkManager.intentTree && typeof saveIntentTree === 'function') {
+                await saveIntentTree(this.networkManager.intentTree);
+                console.log('Intent tree updated and saved after merge operation');
+            }
+            
+            // 记录合并操作日志
+            if (window.Logger && window.LogCategory) {
+                window.Logger.log(window.LogCategory.UI, 'node_merge_completed', {
+                    timestamp: new Date().toISOString(),
+                    network_nodes_count: this.nodes.length,
+                    network_edges_count: this.edges.length
+                });
+            }
+        } catch (error) {
+            console.error('Error updating storage after merge:', error);
+        }
+    }
+
+    // 重置拖动状态
+    resetDragState() {
+        this.isDragging = false;
+        this.draggedNode = null;
+        this.potentialTarget = null;
+    }
+
+    // 拖动过程中的碰撞检测（可选的视觉反馈）
+    checkCollisionDuringDrag(draggedNodeId) {
+        const targetNode = this.findCollisionTarget(draggedNodeId);
+        
+        if (targetNode !== this.potentialTarget) {
+            // 移除之前的高亮
+            if (this.potentialTarget) {
+                this.removeNodeHighlight(this.potentialTarget);
+            }
+            
+            // 添加新的高亮
+            if (targetNode) {
+                this.addNodeHighlight(targetNode);
+            }
+            
+            this.potentialTarget = targetNode;
+        }
+    }
+
+    // 添加节点高亮效果
+    addNodeHighlight(nodeId) {
+        const node = this.nodes.get(nodeId);
+        if (node) {
+            this.nodes.update({
+                id: nodeId,
+                borderWidth: 3,
+                borderColor: '#ff6b6b'
+            });
+        }
+    }
+
+    // 移除节点高亮效果
+    removeNodeHighlight(nodeId) {
+        const node = this.nodes.get(nodeId);
+        if (node) {
+            this.nodes.update({
+                id: nodeId,
+                borderWidth: 1,
+                borderColor: node.originalBorderColor || '#cccccc'
+            });
+        }
     }
 }
