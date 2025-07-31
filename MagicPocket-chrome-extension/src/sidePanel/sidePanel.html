@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Magic Pocket Side Panel</title>
+    <link rel="stylesheet" href="sidePanel.css">
+    <link rel="stylesheet" href="../../lib/vis-network.css">
+    <link rel="stylesheet" href="../../styles/styles.css">
+</head>
+<body>
+    <div class="side-panel-container">
+        <div class="task-area">
+            <div class="task-description-container">
+                <div id="currentTaskDescription"></div>
+                <button id="taskEditButton" class="task-edit-button" title="Edit task description">
+                    ✏️
+                </button>
+            </div>
+        </div>
+
+        <div class="records-area">
+            <div id="recordsScrollArea"></div>
+            <div id="networkVisualizationContainer" class="network-container"></div>
+            <div class="button-container">
+                <div class="button-area"></div>
+                <div class="button-area-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../lib/vis-network.js"></script>
+    <script src="../utils/storage.js"></script>
+    <script src="../utils/imageStorage.js"></script>
+    <script src="../content/intentVisualization.js"></script>
+    <script src="../content/networkVisualization.js"></script>
+    <script src="../utils/logger.js"></script>
+    <script src="sidePanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+langchain_openai
+langchain_community
+langchain_huggingface
+sentence-transformers

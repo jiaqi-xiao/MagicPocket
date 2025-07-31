@@ -1,0 +1,78 @@
+{
+  "manifest_version": 3,
+  "name": "Magic Pocket",
+  "version": "1.0",
+  "description": "Record text and screenshots from web pages",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "desktopCapture",
+    "unlimitedStorage",
+    "sidePanel",
+    "tabs",
+    "downloads"
+  ],
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "lib/html2canvas.min.js",
+        "lib/vis-network.js",
+        "src/utils/storage.js",
+        "src/utils/imageStorage.js",
+        "src/utils/logger.js",
+        "src/content/contextMenu.js",
+        "src/content/floatingWindow.js",
+        "src/content/screenshot.js",
+        "src/content/intentVisualization.js",
+        "src/content/networkVisualization.js",
+        "src/content/intentCreationPanel.js",
+        "src/content/networkVisualizationV2.js",
+        "src/content/content.js",
+        "src/content/tooltipManager.js",
+        "src/content/textHighlight.js",
+        "src/content/highlightStats.js"
+      ],
+      "css": [
+        "styles/styles.css",
+        "lib/vis-network.css"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "records.html", 
+        "records.js", 
+        "src/pages/new_task/new_task.html",
+        "src/pages/new_task/new_task.js",
+        "src/utils/imageStorage.js",
+        "start_generation.html",
+        "lib/vis-network.js",
+        "lib/vis-network.css",
+        "lib/*.js",
+        "lib/*.css",
+        "src/sidePanel/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "options_ui": {
+    "page": "src/options/options.html"
+  },
+  "side_panel": {
+    "default_path": "src/sidePanel/sidePanel.html"
+  },
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ]
+}

@@ -1,3 +1,7 @@
+.env
+
+__pycache__/
+
 # Logs
 logs
 *.log
@@ -71,3 +75,9 @@ Temporary Items
 *.icloud
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
+
+### Chrome Extension Output ###
+*.zip
+
+CLAUDE.md
+.claude/
