@@ -23,10 +23,43 @@ body {
     flex-shrink: 0;
 }
 
+/* 任务描述容器样式 */
+.task-description-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
 #currentTaskDescription {
     font-size: 14px;
     color: #4a5568;
     line-height: 1.5;
+    flex: 1;
+}
+
+/* 任务编辑按钮样式 */
+.task-edit-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #718096;
+    transition: all 0.2s ease;
+    display: none;
+    flex-shrink: 0;
+}
+
+.task-edit-button:hover {
+    background-color: #f7fafc;
+    color: #4a5568;
+    transform: scale(1.1);
+}
+
+.task-edit-button:active {
+    transform: scale(0.95);
 }
 
 /* 记录区域样式 */

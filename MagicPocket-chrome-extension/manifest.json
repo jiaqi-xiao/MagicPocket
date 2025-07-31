@@ -23,6 +23,7 @@
       ],
       "js": [
         "lib/html2canvas.min.js",
+        "lib/vis-network.js",
         "src/utils/storage.js",
         "src/utils/imageStorage.js",
         "src/utils/logger.js",
@@ -31,8 +32,9 @@
         "src/content/screenshot.js",
         "src/content/intentVisualization.js",
         "src/content/networkVisualization.js",
+        "src/content/intentCreationPanel.js",
+        "src/content/networkVisualizationV2.js",
         "src/content/content.js",
-        "lib/vis-network.js",
         "src/content/tooltipManager.js",
         "src/content/textHighlight.js",
         "src/content/highlightStats.js"

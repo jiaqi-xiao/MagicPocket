@@ -1,7 +1,5 @@
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-import os
-from pydantic import BaseModel
+from langchain_core.output_parsers import JsonOutputParser, PydanticOutputParser
 
 from utils import *
 
@@ -159,13 +157,13 @@ class ExtractModelCluster:
 
 class Chain4Grouping:
     def __init__(self, model):
-        self.instruction = Prompts.GROUP
+        self.instruction = Prompts.GROUP_INDEX
 
         self.model = model
-        # self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
-        self.parser = JsonOutputParser(pydantic_object=NodeGroups)
+        self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
+        # self.parser = PydanticOutputParser(pydantic_object=RecordGroups)
         self.prompt_template = PromptTemplate(
-            input_variables=["list", "scenario"],
+            input_variables=["highlight", "scenario","familiarity", "specificity"],
             template=self.instruction,
             partial_variables={
                 "format_instructions": self.parser.get_format_instructions()
@@ -174,8 +172,8 @@ class Chain4Grouping:
 
         self.chain = self.prompt_template | self.model | self.parser
 
-    async def invoke(self, nodeList, scenario):
-        return self.chain.invoke({"list": nodeList, "scenario": scenario})
+    async def invoke(self, content, scenario, familiarity, specificity):
+        return self.chain.invoke({"highlight": content, "scenario": scenario,"familiarity": familiarity,"specificity": specificity})
 
 
 class Chain4Construct:
@@ -200,3 +198,77 @@ class Chain4Construct:
         return self.chain.invoke(
             {"scenario": scenario, "groups": groups, "intentsList": intentsList}
         )
+
+class Chain4InferringGranularity:
+    def __init__(self, model):
+        self.instruction = Prompts.GRANULARITY
+
+        self.model = model
+        self.parser = PydanticOutputParser(pydantic_object=GranularityOutput)
+        self.prompt_template = PromptTemplate(
+            input_variables=["scenario", "comments"],
+            template=self.instruction,
+            partial_variables={
+                "format_instructions": self.parser.get_format_instructions()
+            },
+        )
+        self.chain = self.prompt_template | self.model | self.parser
+
+    async def invoke(self, scenario, comments):
+        return self.chain.invoke(
+            {"scenario": scenario, "comments": comments}
+        )
+
+class Chain4ExtractIntent:
+    def __init__(self, model):
+        self.instruction = Prompts.EXTRACT_INTENT
+
+        self.model = model
+        self.parser = PydanticOutputParser(pydantic_object=ExtractResult)
+        # self.parser = JsonOutputParser()
+        self.prompt_template = PromptTemplate(
+            input_variables=["familiarity", "specificity", "scenario","groupsOfNodes"],
+            template=self.instruction)
+        self.chain = self.prompt_template | self.model | self.parser
+
+    async def invoke(self, familiarity, specificity, scenario, groupsOfNodes):
+        try:
+            result = self.chain.invoke(
+                {"familiarity": familiarity, "specificity": specificity, "scenario": scenario, "groupsOfNodes": groupsOfNodes}
+            )
+            return result
+        except Exception as e:
+            # If parsing fails, try to extract JSON from the error message
+            error_msg = str(e)
+            if "Invalid json output:" in error_msg:
+                # Extract the JSON-like content from the error message
+                import re
+                import json
+                
+                # Try to find JSON content in the error message
+                json_match = re.search(r'```json\s*\n(.*?)\n```', error_msg, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group(1)
+                    try:
+                        # Try to parse as Python dict and convert to proper JSON
+                        import ast
+                        python_dict = ast.literal_eval(json_content)
+                        # Convert to proper JSON format
+                        return [python_dict] if isinstance(python_dict, dict) else python_dict
+                    except:
+                        pass
+                
+                # Try to find array-like content
+                array_match = re.search(r'\[(.*?)\]', error_msg, re.DOTALL)
+                if array_match:
+                    array_content = array_match.group(0)
+                    try:
+                        # Try to parse as Python list and convert to proper JSON
+                        import ast
+                        python_list = ast.literal_eval(array_content)
+                        return python_list
+                    except:
+                        pass
+            
+            # If all else fails, re-raise the original error
+            raise e

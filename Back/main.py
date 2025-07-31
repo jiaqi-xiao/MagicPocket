@@ -8,7 +8,6 @@
     comment: XXXXX,
     content: XXXXX,
     context: XXXXXXXXXXXX.
-    vector: [[]],
 }
 
 层次聚类的树结构
@@ -25,7 +24,6 @@
                 id: 1,
                 comment: XXXXX,
                 context: XXXXXXXXXXXX,
-                vector: [[]],
             ],
         },
         {
@@ -37,6 +35,7 @@
     ]
 }
 """
+import time
 from typing import Annotated
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +46,21 @@ import json
 import traceback
 from fastapi import HTTPException
 from pydantic import ValidationError
+
+from dotenv import load_dotenv
+load_dotenv()
+import logging
+
+# 设置 logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),  # 输出到文件
+        logging.StreamHandler()          # 同时输出到控制台
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -68,7 +82,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 async def root():
     return "Hello World!"
@@ -77,232 +90,425 @@ async def root():
 import embedModule
 
 # 初始化嵌入模型
-embedModel = embedModule.EmbedModel()
+# embedModel = embedModule.EmbedModel()
+
+# @app.post("/embed_single/", response_model=RecordwithVector)
+# async def embed_single_record(record: Record):
+#     # 对记录数据生成嵌入，并获取生成的嵌入向量
+#     vector = embedModel.embedding(
+#         record.model_dump(),
+#         ["context", "content", "comment"],
+#         vector_operation_mode="add",
+#     )
+
+#     # 返回带有向量的记录列表
+#     return RecordwithVector(
+#         id=record.id,
+#         comment=record.comment,
+#         content=record.content,
+#         context=record.context,
+#         vector=vector,
+#     )
+
+# @app.post("/embed_all/", response_model=RecordsListWithVector)
+# async def embed_all_records(recordsList: NodesList):
+#     recordsListWithVector = RecordsListWithVector(data=[])
+#     for record in recordsList.data:
+#         # 对记录数据生成嵌入，并获取生成的嵌入向量
+#         vector = embedModel.embedding(
+#             record.model_dump(),
+#             ["context", "content", "comment"],
+#             vector_operation_mode="add",
+#         )
+#         recordWithVector = RecordwithVector(
+#             id=record.id,
+#             comment=record.comment,
+#             context=record.context,
+#             content=record.content,
+#             vector=vector,
+#         )
+#         recordsListWithVector.data.append(recordWithVector)
+
+#     # 返回带有向量的记录列表
+#     return recordsListWithVector
 
 
-@app.post("/embed_single/", response_model=RecordwithVector)
-async def embed_single_record(record: Record):
-    # 对记录数据生成嵌入，并获取生成的嵌入向量
-    vector = embedModel.embedding(
-        record.model_dump(),
-        ["context", "content", "comment"],
-        vector_operation_mode="add",
-    )
-
-    # 返回带有向量的记录列表
-    return RecordwithVector(
-        id=record.id,
-        comment=record.comment,
-        content=record.content,
-        context=record.context,
-        vector=vector,
-    )
-
-
-@app.post("/embed_all/", response_model=RecordsListWithVector)
-async def embed_all_records(recordsList: NodesList):
-    recordsListWithVector = RecordsListWithVector(data=[])
-    for record in recordsList.data:
-        # 对记录数据生成嵌入，并获取生成的嵌入向量
-        vector = embedModel.embedding(
-            record.model_dump(),
-            ["context", "content", "comment"],
-            vector_operation_mode="add",
-        )
-        recordWithVector = RecordwithVector(
-            id=record.id,
-            comment=record.comment,
-            context=record.context,
-            content=record.content,
-            vector=vector,
-        )
-        recordsListWithVector.data.append(recordWithVector)
-
-    # 返回带有向量的记录列表
-    return recordsListWithVector
-
-
-import clusterGenerator
+# import clusterGenerator
 import extractModule
 
-extractModelCluster = extractModule.ExtractModelCluster(model)
+# extractModelCluster = extractModule.ExtractModelCluster(model)
+
+# @app.post("/extract/cluster/")
+# async def hierarcy_cluster(
+#     recordsList: RecordsListWithVector,
+#     distance_threshold: float = 0.5,
+#     level: int = Query(ge=1),
+#     intent_num: int = Query(ge=1),
+# ):
+#     root = [record.model_dump() for record in recordsList.data]
+#     count = len(root)
+
+#     newRoot = []
+#     if count < 2:
+#         recordsCluster = "[**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}]".format(
+#             root[0]["content"], root[0]["context"], root[0]["comment"]
+#         )
+#         intent = await extractModelCluster.invoke(recordsCluster)
+#         return [
+#             {
+#                 "id": 0,
+#                 "intent": intent,
+#                 "priority": 5,
+#                 "child_num": len(c),
+#                 "child": [
+#                     {key: root[index][key] for key in root[index] if key != "vector"}
+#                     for index in c
+#                 ],
+#             }
+#         ]
+#     hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
+#     for key, c in hc_tree.items():
+#         recordsCluster = [
+#             "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+#                 index + 1,
+#                 root[index]["comment"],
+#                 root[index]["content"],
+#                 root[index]["context"],
+#             )
+#             for index in c
+#         ]
+#         intent = await extractModelCluster.invoke(recordsCluster)
+#         intent_v = model.embedding(intent, ["intent"])
+#         newRoot.append(
+#             {
+#                 "id": count + int(key),
+#                 "intent": intent["intent"],
+#                 "vector": intent_v,
+#                 "priority": 5,
+#                 "child_num": len(c),
+#                 "child": [
+#                     {key: root[index][key] for key in root[index] if key != "vector"}
+#                     for index in c
+#                 ],
+#             }
+#         )
+#     root = [*newRoot]
+#     count += len(root)
+
+#     i = 0
+#     while i < level:
+#         i += 1
+#         if len(root) <= intent_num:
+#             return [
+#                 {key: node[key] for key in node if key != "vector"} for node in root
+#             ]
+#         newRoot = []
+#         hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
+#         for key, c in hc_tree.items():
+#             if len(c) == 1:
+#                 newRoot.append(root[c[0]])
+#             else:
+#                 intentsCluster = [root[index]["intent"] for index in c]
+#                 intent = await extractModelCluster.invoke(intentsCluster)
+#                 intent_v = model.embedding(intent, ["intent"])
+#                 newRoot.append(
+#                     {
+#                         "id": count + int(key),
+#                         "intent": intent["intent"],
+#                         "vector": intent_v,
+#                         "priority": 1,
+#                         "child_num": len(c),
+#                         "child": [
+#                             {
+#                                 key: root[index][key]
+#                                 for key in root[index]
+#                                 if key != "vector"
+#                             }
+#                             for index in c
+#                         ],
+#                     }
+#                 )
+#         root = [*newRoot]
+#         count += len(root)
+
+#     return [{key: node[key] for key in node if key != "vector"} for node in root]
 
 
-@app.post("/extract/cluster/")
-async def hierarcy_cluster(
-    recordsList: RecordsListWithVector,
-    distance_threshold: float = 0.5,
-    level: int = Query(ge=1),
-    intent_num: int = Query(ge=1),
-):
-    root = [record.model_dump() for record in recordsList.data]
-    count = len(root)
+# extractModelDirect = extractModule.ExtractModelDirect(model)
 
-    newRoot = []
-    if count < 2:
-        recordsCluster = "[**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}]".format(
-            root[0]["content"], root[0]["context"], root[0]["comment"]
-        )
-        intent = await extractModelCluster.invoke(recordsCluster)
-        return [
-            {
-                "id": 0,
-                "intent": intent,
-                "priority": 5,
-                "child_num": len(c),
-                "child": [
-                    {key: root[index][key] for key in root[index] if key != "vector"}
-                    for index in c
-                ],
-            }
-        ]
-    hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
-    for key, c in hc_tree.items():
-        recordsCluster = [
-            "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
-                index + 1,
-                root[index]["comment"],
-                root[index]["content"],
-                root[index]["context"],
-            )
-            for index in c
-        ]
-        intent = await extractModelCluster.invoke(recordsCluster)
-        intent_v = model.embedding(intent, ["intent"])
-        newRoot.append(
-            {
-                "id": count + int(key),
-                "intent": intent["intent"],
-                "vector": intent_v,
-                "priority": 5,
-                "child_num": len(c),
-                "child": [
-                    {key: root[index][key] for key in root[index] if key != "vector"}
-                    for index in c
-                ],
-            }
-        )
-    root = [*newRoot]
-    count += len(root)
+# @app.post("/extract/direct/")
+# async def direct_extract_intent(
+#     scenario: str,
+#     recordsList: NodesList,
+# ):
+#     root = [record.model_dump() for record in recordsList.data]
 
-    i = 0
-    while i < level:
-        i += 1
-        if len(root) <= intent_num:
-            return [
-                {key: node[key] for key in node if key != "vector"} for node in root
-            ]
-        newRoot = []
-        hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
-        for key, c in hc_tree.items():
-            if len(c) == 1:
-                newRoot.append(root[c[0]])
-            else:
-                intentsCluster = [root[index]["intent"] for index in c]
-                intent = await extractModelCluster.invoke(intentsCluster)
-                intent_v = model.embedding(intent, ["intent"])
-                newRoot.append(
-                    {
-                        "id": count + int(key),
-                        "intent": intent["intent"],
-                        "vector": intent_v,
-                        "priority": 1,
-                        "child_num": len(c),
-                        "child": [
-                            {
-                                key: root[index][key]
-                                for key in root[index]
-                                if key != "vector"
-                            }
-                            for index in c
-                        ],
-                    }
-                )
-        root = [*newRoot]
-        count += len(root)
+#     if isinstance(recordsList.data[0], Record):
+#         recordsCluster = "\n\n".join(
+#             [
+#                 "id: {}\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+#                     index + 1,
+#                     root[index]["content"],
+#                     root[index]["context"],
+#                     root[index]["comment"],
+#                 )
+#                 for index in range(len(root))
+#             ]
+#         )
+#     else:
+#         recordsCluster = "\n\n".join(
+#             [
+#                 "id: {}\n- intent: {}".format(root[index]["id"], root[index]["text"])
+#                 for index in range(len(root))
+#             ]
+#         )
+#     output = await extractModelDirect.invoke(scenario, recordsCluster)
+#     return output
 
-    return [{key: node[key] for key in node if key != "vector"} for node in root]
+chain4Granularity = extractModule.Chain4InferringGranularity(model)
 
+@app.post("/granularity/")
+async def infer_granularity(scenario: str, nodesList:NodesList):
+    try:
+    # 转换输入数据
+        root = [node.model_dump() for node in nodesList.data]
 
-extractModelDirect = extractModule.ExtractModelDirect(model)
-
-
-@app.post("/extract/direct/")
-async def direct_extract_intent(
-    scenario: str,
-    recordsList: NodesList,
-):
-    root = [record.model_dump() for record in recordsList.data]
-
-    if isinstance(recordsList.data[0], Record):
-        recordsCluster = "\n\n".join(
-            [
-                "id: {}\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
-                    index + 1,
-                    root[index]["content"],
-                    root[index]["context"],
-                    root[index]["comment"],
-                )
-                for index in range(len(root))
-            ]
-        )
-    else:
-        recordsCluster = "\n\n".join(
-            [
-                "id: {}\n- intent: {}".format(root[index]["id"], root[index]["text"])
-                for index in range(len(root))
-            ]
-        )
-    output = await extractModelDirect.invoke(scenario, recordsCluster)
-    return output
+        # Unpack the payload
+        contents = [{"id": idx, "content": item["content"]} for idx, item in enumerate(root)]
+        comments = [i["comment"] for i in root]
+        contexts = [i["context"] for i in root]
+        assert len(contents) == len(comments) == len(contexts), "Contents, comments, and contexts must have the same length."
+        
+        # Step 1, Infer the Granularity
+        start_time = time.time()
+        granularity_result = await chain4Granularity.invoke(scenario=scenario, comments=comments)
+        print(f"Finished inferring granularity, spent {time.time() - start_time:.2f} seconds.")
+        return granularity_result
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error processing granularity: {str(e)}")
 
 
 chain4Grouping = extractModule.Chain4Grouping(model)
 
-
 @app.post("/group/")
-async def group_nodes(nodesList: NodesList, scenario: str="learn prompt engineering techniques"):
+async def group_nodes(nodesList: NodesList, scenario: str):
     """对nodes进行分组"""
     try:
         # 转换输入数据
         root = [node.model_dump() for node in nodesList.data]
-        
-        # 根据节点类型生成文本描述
-        if isinstance(nodesList.data[0], Record):
-            nodesTxt = [
-                f"id: {i+1}\n- 选中文本: {node['content']}\n- 上下文: {node['context']}\n- 注释: {node['comment']}"
-                for i, node in enumerate(root)
-            ]
-        else:
-            nodesTxt = [
-                f"id: {node['id']}\n- intent: {node['intent']}"
-                for node in root
-            ]
 
-        # 调用分组模型
-        groupsOfNodesIndex = await chain4Grouping.invoke(nodesTxt, scenario)
+        # Unpack the payload
+        contents = [{"id": idx, "content": item["content"]} for idx, item in enumerate(root)]
+        comments = [i["comment"] for i in root]
+        contexts = [i["context"] for i in root]
+        assert len(contents) == len(comments) == len(contexts), "Contents, comments, and contexts must have the same length."
         
-        # 转换输出格式
-        groupsOfNodes = {
-            # "item": [
-            #     {group_name: [root[i-1] for i in indices]}
-            #     for group in groupsOfNodesIndex["item"]
-            #     for group_name, indices in group.items()
-            # ]
-            "item": [
-                {group_name: nodesList}
-                for group in groupsOfNodesIndex["item"]
-                for group_name, nodesList in group.items()
-            ]
-        }
+        # Step 1, Infer the Granularity
+        start_time = time.time()
+        granularity_result = await chain4Granularity.invoke(scenario=scenario, comments=comments)
+        print("granularity_result", granularity_result)
+        print(f"Finished inferring granularity, spent {time.time() - start_time:.2f} seconds.")
+        
+        # Step 2, infer groups
+        start_time = time.time()
 
-        # print("groupsOfNodesIndex", groupsOfNodesIndex)
+        # 2.1 Group once
+        grouped = await chain4Grouping.invoke(scenario=scenario, content=contents, familiarity=granularity_result.familiarity, specificity=granularity_result.specificity)
+        print("grouped", grouped)
+        # 将grouped中每个列表中的index替换成root对应的真实数据
+        grouped_with_data = {}
+        for group_key, indices in grouped['groups'].items():
+            grouped_with_data[group_key] = [root[idx] for idx in indices]
+        grouped['groups'] = grouped_with_data
+
+        first_level_groups = list(grouped['groups'].values())
+        second_level_groups = {}
+        # 2.2 Group again
+        for index, group in enumerate(first_level_groups):
+            if len(group) > 1:
+                contents = [{"id": idx, "content": item["content"]} for idx, item in enumerate(group)]
+                second_level_groups[index] = await chain4Grouping.invoke(scenario=scenario, content=contents, familiarity=granularity_result.familiarity, specificity=granularity_result.specificity)
+                grouped_with_data = {}
+                print("second_level_groups", second_level_groups)
+                for group_key, indices in second_level_groups[index]['groups'].items():
+                    grouped_with_data[group_key] = [group[idx] for idx in indices]
+                second_level_groups[index]['groups'] = grouped_with_data
+
         
-        return groupsOfNodes
+        groupsOfNodes = []
+        for index, group in enumerate(first_level_groups):
+            groupsOfNodes.append({
+                "records": group,
+                "intent_id": index + 1,
+                "intent_name": "____",
+                "intent_description": "____",
+                "level": "1",
+                "parent": None
+            })
+
+        for index, keys in enumerate(second_level_groups.keys()):
+            group = list(second_level_groups[keys]['groups'].values())
+            
+            groupsOfNodes.append({
+                "records": group,
+                "intent_id": len(first_level_groups) + index + 1,
+                "intent_name": "____",
+                "intent_description": "____",
+                "level": "2",
+                "parent": keys + 1  # keys are 0-indexes
+            })
+
+        
+        print(f"Finished grouping and constructing tree, spent {time.time() - start_time:.2f} seconds.")
+
+        return {"groupsOfNodes": groupsOfNodes, "granularity": granularity_result}
+
 
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error processing nodes: {str(e)}")
 
+chain4ExtractIntent = extractModule.Chain4ExtractIntent(model)
+
+@app.post("/extract/")
+async def extract_intent(request: dict):
+    try:
+        start_time = time.time()
+
+        scenario = request.get("scenario")
+        groupsOfNodes = request.get("groupsOfNodes")
+        familiarity = request.get("familiarity")
+        specificity = request.get("specificity")
+
+        try:
+            result = await chain4ExtractIntent.invoke(scenario=scenario, groupsOfNodes=groupsOfNodes, familiarity=familiarity, specificity=specificity)
+            # 兼容 Pydantic RootModel、list、tuple 等多种返回类型，并确保 result_list 可 item assignment
+            if hasattr(result, 'root'):
+                # Pydantic RootModel
+                result_list = result.root
+            elif isinstance(result, dict) and "root" in result:
+                result_list = result["root"]
+            elif isinstance(result, (list, tuple)):
+                result_list = list(result)
+            else:
+                raise TypeError(f"Unexpected result type: {type(result)}")
+        except Exception as e:
+            print(f"Error in Chain4ExtractIntent: {str(e)}")
+            # Fallback: create basic intent structure from groupsOfNodes
+            result_list = []
+            for i, group in enumerate(groupsOfNodes):
+                result_list.append({
+                    "intent_id": group.get("intent_id", i + 1),
+                    "intent_name": f"Intent {i + 1}",
+                    "intent_description": f"Basic intent for group {i + 1}",
+                    "level": group.get("level", "1"),
+                    "parent": group.get("parent")
+                })
+            print(f"Using fallback result_list: {result_list}")
+
+        # 确保 result_list 是 list of dicts
+        result_list = [item.model_dump() if hasattr(item, 'model_dump') else dict(item) if not isinstance(item, dict) else item for item in result_list]
+
+        for i, item in enumerate(result_list):
+            if i < len(groupsOfNodes):
+                item["records"] = groupsOfNodes[i]["records"]
+        
+        # 转换为嵌套的 intentTree 格式
+        intentTree = {
+            "scenario": scenario,
+            "item": {}
+        }
+        
+        # 首先创建所有节点的映射
+        nodes_map = {}
+        for item in result_list:
+            intent_name = item.get("intent_name", f"Intent_{item.get('intent_id', 'unknown')}")
+            # 处理嵌套的记录数组
+            def flatten_records(records):
+                flattened = []
+                for record in records:
+                    if isinstance(record, list):
+                        flattened.extend(flatten_records(record))
+                    else:
+                        flattened.append(record)
+                return flattened
+            
+            nodes_map[item.get("intent_id")] = {
+                "name": intent_name,
+                "id": item.get("intent_id"),
+                "intent": item.get("intent_name", ""),
+                "description": item.get("intent_description", ""),
+                "priority": 5,  # 默认优先级
+                "child_num": 0,
+                "group": flatten_records(item.get("records", [])),
+                "level": item.get("level", "1"),
+                "parent": item.get("parent"),
+                "immutable": False,  # 默认不是不可变的
+                "child": []  # 初始化子节点列表
+            }
+        
+        # 构建嵌套结构
+        root_nodes = []
+        for item in result_list:
+            intent_id = item.get("intent_id")
+            parent_id = item.get("parent")
+            
+            if parent_id is None:
+                # 这是根节点
+                root_nodes.append(intent_id)
+            else:
+                # 这是子节点，添加到父节点的child中
+                if parent_id in nodes_map:
+                    nodes_map[parent_id]["child"].append(intent_id)
+        
+        # 将根节点添加到intentTree中
+        for root_id in root_nodes:
+            node_data = nodes_map[root_id]
+            intentTree["item"][node_data["name"]] = {
+                "id": node_data["id"],
+                "intent": node_data["intent"],
+                "description": node_data["description"],
+                "priority": node_data["priority"],
+                "child_num": node_data["child_num"],
+                "group": node_data["group"],
+                "level": node_data["level"],
+                "parent": node_data["parent"],
+                "immutable": node_data["immutable"],
+                "child": []  # 初始化子节点列表
+            }
+            
+            # 递归添加子节点
+            def add_children(parent_node, child_ids):
+                for child_id in child_ids:
+                    if child_id in nodes_map:
+                        child_data = nodes_map[child_id]
+                        child_node = {
+                            "id": child_data["id"],
+                            "intent": child_data["intent"],
+                            "description": child_data["description"],
+                            "priority": child_data["priority"],
+                            "child_num": child_data["child_num"],
+                            "group": child_data["group"],
+                            "level": child_data["level"],
+                            "parent": child_data["parent"],
+                            "immutable": child_data["immutable"],
+                            "child": []
+                        }
+                        parent_node["child"].append(child_node)
+                        parent_node["child_num"] += 1
+                        parent_node["group"] = []  # 父节点有子节点时，清空group
+                        
+                        # 递归添加子节点的子节点
+                        if child_data["child"]:
+                            add_children(child_node, child_data["child"])
+            
+            # 添加子节点到根节点
+            add_children(intentTree["item"][node_data["name"]], nodes_map[root_id]["child"])
+        
+        print(f"Finished extracting intents, spent {time.time() - start_time:.2f} seconds.")
+        return intentTree
+
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error processing extract intent: {str(e)}")
 
 chain4Construct = extractModule.Chain4Construct(model)
 @app.post("/construct/")
@@ -674,7 +880,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             detail=f"Error RAG: {str(e)}"
         )
 
-@app.post("/cluster/")
+# @app.post("/cluster/")
 # async def direct_extract_intent(
 #     recordsList: RecordsListWithVector,
 #     distance_threshold: float = 0.5,
@@ -698,96 +904,96 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 #     return groupedIntents["groupedIntents"]
 
 
-async def hierarcy_cluster(
-    recordsList: RecordsListWithVector,
-    distance_threshold: float = 0.5,
-    level: int = Query(ge=1),
-    intent_num: int = Query(ge=1),
-):
-    root = [record.model_dump() for record in recordsList.data]
-    count = len(root)
+# async def hierarcy_cluster(
+#     recordsList: RecordsListWithVector,
+#     distance_threshold: float = 0.5,
+#     level: int = Query(ge=1),
+#     intent_num: int = Query(ge=1),
+# ):
+    # root = [record.model_dump() for record in recordsList.data]
+    # count = len(root)
 
-    newRoot = []
-    if count < 2:
-        recordsCluster = "[**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}]".format(
-            root[0]["content"], root[0]["context"], root[0]["comment"]
-        )
-        intent = await extractModelCluster.invoke(recordsCluster)
-        return [
-            {
-                "id": 0,
-                "intent": intent,
-                "priority": 5,
-                "child_num": len(c),
-                "child": [
-                    {key: root[index][key] for key in root[index] if key != "vector"}
-                    for index in c
-                ],
-            }
-        ]
-    hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
-    for key, c in hc_tree.items():
-        recordsCluster = [
-            "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
-                index + 1,
-                root[index]["comment"],
-                root[index]["content"],
-                root[index]["context"],
-            )
-            for index in c
-        ]
-        intent = await extractModelCluster.invoke(recordsCluster)
-        intent_v = model.embedding(intent, ["intent"])
-        newRoot.append(
-            {
-                "id": count + int(key),
-                "intent": intent["intent"],
-                "vector": intent_v,
-                "priority": 5,
-                "child_num": len(c),
-                "child": [
-                    {key: root[index][key] for key in root[index] if key != "vector"}
-                    for index in c
-                ],
-            }
-        )
-    root = [*newRoot]
-    count += len(root)
+    # newRoot = []
+    # if count < 2:
+    #     recordsCluster = "[**记录1**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}]".format(
+    #         root[0]["content"], root[0]["context"], root[0]["comment"]
+    #     )
+    #     intent = await extractModelCluster.invoke(recordsCluster)
+    #     return [
+    #         {
+    #             "id": 0,
+    #             "intent": intent,
+    #             "priority": 5,
+    #             "child_num": len(c),
+    #             "child": [
+    #                 {key: root[index][key] for key in root[index] if key != "vector"}
+    #                 for index in c
+    #             ],
+    #         }
+    #     ]
+    # hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
+    # for key, c in hc_tree.items():
+    #     recordsCluster = [
+    #         "**记录{}**\n- 选中文本: {}\n- 上下文: {}\n- 注释: {}".format(
+    #             index + 1,
+    #             root[index]["comment"],
+    #             root[index]["content"],
+    #             root[index]["context"],
+    #         )
+    #         for index in c
+    #     ]
+    #     intent = await extractModelCluster.invoke(recordsCluster)
+    #     intent_v = model.embedding(intent, ["intent"])
+    #     newRoot.append(
+    #         {
+    #             "id": count + int(key),
+    #             "intent": intent["intent"],
+    #             "vector": intent_v,
+    #             "priority": 5,
+    #             "child_num": len(c),
+    #             "child": [
+    #                 {key: root[index][key] for key in root[index] if key != "vector"}
+    #                 for index in c
+    #             ],
+    #         }
+    #     )
+    # root = [*newRoot]
+    # count += len(root)
 
-    i = 0
-    while i < level:
-        i += 1
-        if len(root) <= intent_num:
-            return [
-                {key: node[key] for key in node if key != "vector"} for node in root
-            ]
-        newRoot = []
-        hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
-        for key, c in hc_tree.items():
-            if len(c) == 1:
-                newRoot.append(root[c[0]])
-            else:
-                intentsCluster = [root[index]["intent"] for index in c]
-                intent = await extractModelCluster.invoke(intentsCluster)
-                intent_v = model.embedding(intent, ["intent"])
-                newRoot.append(
-                    {
-                        "id": count + int(key),
-                        "intent": intent["intent"],
-                        "vector": intent_v,
-                        "priority": 1,
-                        "child_num": len(c),
-                        "child": [
-                            {
-                                key: root[index][key]
-                                for key in root[index]
-                                if key != "vector"
-                            }
-                            for index in c
-                        ],
-                    }
-                )
-        root = [*newRoot]
-        count += len(root)
+    # i = 0
+    # while i < level:
+    #     i += 1
+    #     if len(root) <= intent_num:
+    #         return [
+    #             {key: node[key] for key in node if key != "vector"} for node in root
+    #         ]
+    #     newRoot = []
+    #     hc_tree = clusterGenerator.hierarcy_clustering(root, distance_threshold)
+    #     for key, c in hc_tree.items():
+    #         if len(c) == 1:
+    #             newRoot.append(root[c[0]])
+    #         else:
+    #             intentsCluster = [root[index]["intent"] for index in c]
+    #             intent = await extractModelCluster.invoke(intentsCluster)
+    #             intent_v = model.embedding(intent, ["intent"])
+    #             newRoot.append(
+    #                 {
+    #                     "id": count + int(key),
+    #                     "intent": intent["intent"],
+    #                     "vector": intent_v,
+    #                     "priority": 1,
+    #                     "child_num": len(c),
+    #                     "child": [
+    #                         {
+    #                             key: root[index][key]
+    #                             for key in root[index]
+    #                             if key != "vector"
+    #                         }
+    #                         for index in c
+    #                     ],
+    #                 }
+    #             )
+    #     root = [*newRoot]
+    #     count += len(root)
 
-    return [{key: node[key] for key in node if key != "vector"} for node in root]
+    # return [{key: node[key] for key in node if key != "vector"} for node in root]

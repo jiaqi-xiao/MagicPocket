@@ -415,3 +415,24 @@
 .mp-popup-btn.clear-logs:hover {
     background-color: #da190b;
 }
+
+/* V2 Multi-Level Development Button */
+.mp-popup-btn.dev-mode {
+    background: linear-gradient(135deg, #ff7675, #e84393);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.mp-popup-btn.dev-mode:hover {
+    background: linear-gradient(135deg, #fd79a8, #e84393);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(255, 118, 117, 0.3);
+}
+
+.mp-popup-btn.dev-mode:before {
+    content: "\1F680";
+    margin-right: 6px;
+    font-size: 14px;
+}

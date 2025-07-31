@@ -1,3 +1,5 @@
+.env
+
 __pycache__/
 
 # Logs
@@ -76,3 +78,6 @@ Temporary Items
 
 ### Chrome Extension Output ###
 *.zip
+
+CLAUDE.md
+.claude/
