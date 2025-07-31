@@ -25,11 +25,22 @@ class NetworkManager {
         this.nodeMergeManager = null; // 节点合并管理器
 
         // 从初始意图树中收集 immutable 意图 - 支持多级意图结构
-        if (intentTree && intentTree.item) {
+        this.collectImmutableIntents(intentTree);
+    }
+
+    // 收集已确认的意图状态 - 支持两种数据结构
+    collectImmutableIntents(intentTree) {
+        if (!intentTree) return;
+
+        console.log('Collecting immutable intents from intentTree:', intentTree);
+
+        // 处理 {item: {...}} 结构（原始格式）
+        if (intentTree.item) {
             Object.entries(intentTree.item).forEach(([intentName, intentData]) => {
                 // 检查高级意图的确认状态
                 if (intentData && intentData.confirmed) {
                     NetworkManager.immutableIntents.add(intentName);
+                    console.log(`Added high-level confirmed intent: ${intentName}`);
                 }
                 
                 // 检查低级意图的确认状态
@@ -37,11 +48,39 @@ class NetworkManager {
                     intentData.child.forEach(childIntent => {
                         if (childIntent.intent && childIntent.confirmed) {
                             NetworkManager.immutableIntents.add(childIntent.intent);
+                            console.log(`Added low-level confirmed intent: ${childIntent.intent}`);
                         }
                     });
                 }
             });
         }
+        
+        // 处理 {child: [...]} 结构（getIntentTreeWithStates 格式）
+        else if (intentTree.child && Array.isArray(intentTree.child)) {
+            this.collectImmutableFromChildren(intentTree.child);
+        }
+        
+        console.log('Final immutable intents set:', Array.from(NetworkManager.immutableIntents));
+    }
+
+    // 递归处理子节点数组，收集已确认的意图
+    collectImmutableFromChildren(children) {
+        children.forEach(childNode => {
+            if (childNode.intent || childNode.description) {
+                const intentName = childNode.intent || childNode.description;
+                
+                // 检查当前节点是否已确认
+                if (childNode.immutable || childNode.confirmed) {
+                    NetworkManager.immutableIntents.add(intentName);
+                    console.log(`Added confirmed intent from child format: ${intentName}`);
+                }
+                
+                // 递归处理子节点
+                if (childNode.child && Array.isArray(childNode.child)) {
+                    this.collectImmutableFromChildren(childNode.child);
+                }
+            }
+        });
     }
 
     // 初始化网络容器
@@ -377,7 +416,7 @@ class NetworkManager {
         }
         
         // For record nodes, limit to max 2 lines and add ellipsis if needed
-        if (nodeType !== 'intent' && lines.length > 2) {
+        if (nodeType == 'record' && lines.length > 2) {
             lines.length = 2;
             lines[1] = lines[1].substring(0, maxLength - 3) + '...';
         }
@@ -2346,10 +2385,10 @@ class NetworkManager {
         
         // 全局间距配置 - 统一控制所有层级的间距
         const globalSpacing = {
-            horizontal: Math.max(120, containerWidth * 0.08),  // 水平间距，最小120px
-            vertical: Math.max(80, containerHeight * 0.15),    // 垂直层间距，最小80px
-            subTree: Math.max(60, containerWidth * 0.04),      // 子树内间距，最小60px
-            record: Math.max(80, containerWidth * 0.06)        // 记录节点间距，最小80px
+            horizontal: Math.max(120, containerWidth * 0.08),  // 水平间距
+            vertical: Math.max(120, containerHeight * 0.15),    // 垂直层间距
+            subTree: Math.max(60, containerWidth * 0.04),      // 子树内间距
+            record: Math.max(120, containerWidth * 0.06)        // 记录节点间距
         };
         
         // 三层结构的Y坐标
@@ -2484,20 +2523,21 @@ class NetworkManager {
             });
         }
         
-        // 4. 根据连接关系排列记录节点
+        // 4. 根据连接关系排列记录节点 - 支持高级和低级意图作为父节点
         if (recordNodes.length > 0) {
             const recordGroups = new Map();
+            const allIntentNodes = [...highIntentNodes, ...lowIntentNodes];
             
-            // 初始化每个低级意图的子记录组
-            lowIntentNodes.forEach(lowNode => {
-                recordGroups.set(lowNode.id, []);
+            // 初始化所有意图节点的子记录组
+            allIntentNodes.forEach(intentNode => {
+                recordGroups.set(intentNode.id, []);
             });
             
             // 根据边的连接关系分组记录节点
             recordNodes.forEach(recordNode => {
                 const parentEdge = allEdges.find(edge => 
                     edge.to === recordNode.id && 
-                    lowIntentNodes.some(l => l.id === edge.from)
+                    allIntentNodes.some(n => n.id === edge.from)
                 );
                 
                 if (parentEdge) {
@@ -2506,9 +2546,10 @@ class NetworkManager {
                         recordGroups.get(parentId).push(recordNode);
                     }
                 } else {
-                    const firstLowIntent = lowIntentNodes[0];
-                    if (firstLowIntent && recordGroups.has(firstLowIntent.id)) {
-                        recordGroups.get(firstLowIntent.id).push(recordNode);
+                    // 如果没有找到父节点，放在第一个意图节点下
+                    const firstIntent = allIntentNodes[0];
+                    if (firstIntent && recordGroups.has(firstIntent.id)) {
+                        recordGroups.get(firstIntent.id).push(recordNode);
                     }
                 }
             });
@@ -2528,11 +2569,27 @@ class NetworkManager {
                 const totalRecordWidth = (recordNodesList.length - 1) * maxRecordWidth;
                 const startRecordX = parentX - totalRecordWidth / 2;
                 
+                // 计算Y坐标错开参数
+                const yOffsetRange = Math.min(30, globalSpacing.vertical * 0.15); // Y轴错开范围
+                const baseRecordY = recordY; // 基础Y坐标
+                
                 recordNodesList.forEach((recordNode, index) => {
+                    // 计算错开的Y坐标：根据索引位置交替上下错开
+                    let yOffset = 0;
+                    if (recordNodesList.length > 1) {
+                        if (index % 2 === 0) {
+                            // 偶数索引：向上错开
+                            yOffset = -yOffsetRange * (index / 2 + 1);
+                        } else {
+                            // 奇数索引：向下错开
+                            yOffset = yOffsetRange * Math.ceil(index / 2);
+                        }
+                    }
+                    
                     updates.push({
                         id: recordNode.id,
                         x: startRecordX + index * maxRecordWidth,
-                        y: recordY,
+                        y: baseRecordY + yOffset,
                         fixed: { x: false, y: false }
                     });
                 });
@@ -2680,22 +2737,21 @@ class NetworkManager {
             });
         }
         
-        // 3. 根据连接关系排列记录节点
+        // 3. 根据连接关系排列记录节点 - 支持高级和低级意图作为父节点
         if (recordNodes.length > 0) {
-            // 为每个低级意图找到其记录节点
             const recordGroups = new Map();
+            const allIntentNodes = [...highIntentNodes, ...lowIntentNodes];
             
-            // 初始化每个低级意图的子记录组
-            lowIntentNodes.forEach(lowNode => {
-                recordGroups.set(lowNode.id, []);
+            // 初始化所有意图节点的子记录组
+            allIntentNodes.forEach(intentNode => {
+                recordGroups.set(intentNode.id, []);
             });
             
             // 根据边的连接关系分组记录节点
             recordNodes.forEach(recordNode => {
-                // 找到这个记录节点的父低级意图
                 const parentEdge = allEdges.find(edge => 
                     edge.to === recordNode.id && 
-                    lowIntentNodes.some(l => l.id === edge.from)
+                    allIntentNodes.some(n => n.id === edge.from)
                 );
                 
                 if (parentEdge) {
@@ -2704,10 +2760,10 @@ class NetworkManager {
                         recordGroups.get(parentId).push(recordNode);
                     }
                 } else {
-                    // 如果没有找到父节点，放在第一个组
-                    const firstLowIntent = lowIntentNodes[0];
-                    if (firstLowIntent && recordGroups.has(firstLowIntent.id)) {
-                        recordGroups.get(firstLowIntent.id).push(recordNode);
+                    // 如果没有找到父节点，放在第一个意图节点下
+                    const firstIntent = allIntentNodes[0];
+                    if (firstIntent && recordGroups.has(firstIntent.id)) {
+                        recordGroups.get(firstIntent.id).push(recordNode);
                     }
                 }
             });
@@ -2885,6 +2941,8 @@ class NodeMergeManager {
         this.isDragging = false;
         this.draggedNode = null;
         this.potentialTarget = null;
+        this.dragStartPosition = null;
+        this.minimumDragDistance = 30; // 最小拖动距离阈值
         
         console.log('Network object:', this.network);
         console.log('Nodes dataset:', this.nodes);
@@ -2908,7 +2966,9 @@ class NodeMergeManager {
             if (params.nodes.length > 0) {
                 this.isDragging = true;
                 this.draggedNode = params.nodes[0];
-                console.log('Dragging node:', this.draggedNode);
+                // 记录拖动开始位置
+                this.dragStartPosition = this.network.getPositions([this.draggedNode])[this.draggedNode];
+                console.log('Dragging node:', this.draggedNode, 'start position:', this.dragStartPosition);
                 
                 // 更新光标样式
                 if (this.networkManager.container) {
@@ -2946,6 +3006,13 @@ class NodeMergeManager {
     // 处理拖动结束事件
     handleDragEnd(draggedNodeId) {
         console.log('Handling drag end for node:', draggedNodeId);
+        
+        // 检查是否拖动了足够的距离
+        if (!this.hasMovedSufficientDistance(draggedNodeId)) {
+            console.log('Node has not moved sufficient distance, skipping collision detection');
+            return;
+        }
+        
         const targetNode = this.findCollisionTarget(draggedNodeId);
         console.log('Collision target found:', targetNode);
         
@@ -2961,6 +3028,7 @@ class NodeMergeManager {
     findCollisionTarget(draggedNodeId) {
         console.log('Finding collision target for:', draggedNodeId);
         const draggedPosition = this.network.getPositions([draggedNodeId])[draggedNodeId];
+        const draggedNode = this.nodes.get(draggedNodeId);
         console.log('Dragged node position:', draggedPosition);
         
         const allNodes = this.nodes.get();
@@ -2974,10 +3042,14 @@ class NodeMergeManager {
             
             console.log(`Distance to node ${node.id}:`, distance);
             
-            // 碰撞检测阈值
-            const collisionThreshold = 100;
+            // 动态碰撞检测阈值 - 基于节点大小
+            const draggedSize = draggedNode.size || 15;
+            const targetSize = node.size || 15;
+            // 碰撞阈值 = 两个节点半径之和 + 小的缓冲区
+            const collisionThreshold = draggedSize + targetSize + 15;
+            
             if (distance < collisionThreshold) {
-                console.log('Collision detected with node:', node.id, 'distance:', distance);
+                console.log('Collision detected with node:', node.id, 'distance:', distance, 'threshold:', collisionThreshold);
                 return node.id;
             }
         }
@@ -3285,11 +3357,25 @@ class NodeMergeManager {
         }
     }
 
+    // 检查节点是否移动了足够的距离
+    hasMovedSufficientDistance(draggedNodeId) {
+        if (!this.dragStartPosition) {
+            return false;
+        }
+        
+        const currentPosition = this.network.getPositions([draggedNodeId])[draggedNodeId];
+        const dragDistance = this.calculateDistance(this.dragStartPosition, currentPosition);
+        
+        console.log('Drag distance:', dragDistance, 'minimum required:', this.minimumDragDistance);
+        return dragDistance >= this.minimumDragDistance;
+    }
+
     // 重置拖动状态
     resetDragState() {
         this.isDragging = false;
         this.draggedNode = null;
         this.potentialTarget = null;
+        this.dragStartPosition = null;
     }
 
     // 拖动过程中的碰撞检测（可选的视觉反馈）
