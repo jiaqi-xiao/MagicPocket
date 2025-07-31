@@ -378,9 +378,36 @@ async def extract_intent(request: dict):
         groupsOfNodes = request.get("groupsOfNodes")
         familiarity = request.get("familiarity")
         specificity = request.get("specificity")
+        intentTree = request.get("intentTree")
+
+        # 过滤出用户确认的节点
+        # 根据 intentTree 的结构递归提取所有 immutable 或 confirmed 的节点，构建 confirmedIntents
+        confirmedIntents = []
+
+        def extract_confirmed_intents(children, parent_level="1", parent_id=None):
+            for child in children:
+                # 只处理有 intent 字段的节点（非叶子节点）
+                if "intent" in child and (child.get("immutable") or child.get("confirmed")):
+                    confirmedIntents.append({
+                        "intent_id": child.get("id"),
+                        "intent_name": child.get("intent"),
+                        "intent_description": child.get("description", ""),
+                        "level": child.get("level", parent_level),
+                        "parent": child.get("parent", parent_id)
+                    })
+                # 递归处理子节点
+                if "child" in child and isinstance(child["child"], list) and child["child"]:
+                    # 传递当前节点的 level+1 作为子节点的 level，parent 传当前节点 id
+                    next_level = str(int(child.get("level", parent_level)) + 1) if child.get("level", parent_level).isdigit() else parent_level
+                    extract_confirmed_intents(child["child"], parent_level=next_level, parent_id=child.get("id"))
+
+        if intentTree and intentTree.get("child"):
+            extract_confirmed_intents(intentTree["child"])
+
+        print("Confirmed intents:", confirmedIntents)
 
         try:
-            result = await chain4ExtractIntent.invoke(scenario=scenario, groupsOfNodes=groupsOfNodes, familiarity=familiarity, specificity=specificity)
+            result = await chain4ExtractIntent.invoke(scenario=scenario, groupsOfNodes=groupsOfNodes, familiarity=familiarity, specificity=specificity, confirmedIntents=confirmedIntents)
             # 兼容 Pydantic RootModel、list、tuple 等多种返回类型，并确保 result_list 可 item assignment
             if hasattr(result, 'root'):
                 # Pydantic RootModel
@@ -678,7 +705,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     :return: 每个意图对应的 top-k 和 bottom-k 最相关句子的结果。
     """
     try:
-        chunk_num=3
+        chunk_num=1
         # 先验证并转换请求数据为RAGRequest对象
         try:
             ragRequest = RAGRequest(**request_dict)
@@ -731,11 +758,14 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
             print("call LLM")
             
+            # 将chunk转换为字典格式
+            chunk_dict = [{"id": idx, "content": sentence} for idx, sentence in enumerate(chunk)]
+            
             # 调用LLM
             response = await model4RAG.invoke(
                     scenario,
                     intentsDict=intentsDict,
-                    sentenceList=chunk
+                    sentenceList=chunk_dict
                 )
             # 重构响应，替换索引
             print("response", response)
@@ -744,10 +774,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                     intent_to_top_k_sentences[intent] = []
                 if intent not in intent_to_bottom_k_sentences:
                     intent_to_bottom_k_sentences[intent] = []
-                # intent_to_top_k_sentences[intent].extend([chunk[i] for i in response["top_all"][intent]])
-                # intent_to_bottom_k_sentences[intent].extend([chunk[i] for i in response["bottom_all"][intent]])
-                intent_to_top_k_sentences[intent].extend(response["top_all"][intent])
-                intent_to_bottom_k_sentences[intent].extend(response["bottom_all"][intent])
+                # 从chunk_dict中根据id获取对应的content
+                intent_to_top_k_sentences[intent].extend([chunk_dict[i]["content"] for i in response["top_all"][intent]])
+                intent_to_bottom_k_sentences[intent].extend([chunk_dict[i]["content"] for i in response["bottom_all"][intent]])
             # for item in response["data"]:
             #     intent = item["intent"]
             #     intent_to_top_k_sentences[intent] = [chunk[i] for i in item["topKIndices"]]

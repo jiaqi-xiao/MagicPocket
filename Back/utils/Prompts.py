@@ -150,35 +150,55 @@ class Prompts:
     )
 
     RAG_INDEX = (
-        # """  
-        # # System
-        #     你将作为协助用户围绕调研场景Scenario进行信息调研的助手，筛选出与每个意图Intent和对应描述Description足够相关的所有句子，如果没有足够相关的句子符合条件，可能返回0个，并按照相似度从高到低的顺序返回这些句子在SentenceList中的索引位置。
+        """  
+        # System  
+        You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict.
 
-        # ## Steps
-        # 1. **理解输入结构**：
-        #    - **Scenario**: 调研场景。
-        #    - **SentenceList**: 一个包含多个句子的列表。
-        #    - **IntentsDict**: 结构为{{intent: description}}
+        ## Steps  
+        1. **Understand Input Structure:**  
+            - **Scenario**:  Describes the research context, providing high-level guidance..  
+            - **SentenceList**: A list of sentences.
+            - **IntentsDict**: A dictionary structured as `{{"intent": "description"}}`
+                - Each key represents an intent, and the value (description) summarizes the theme and relevant sub-themes of the intent. 
 
-        # 2. **筛选并匹配**：
-        #    - 针对IntentsDict中的每一对Intent和Description，分析其内容以确定其主题。
-        #    - 分析SentenceList中的句子，理解其内容，判断是否属于当前Intent和Description的主题。
-        #    - 筛选出属于主题的所有句子，但如果没有句子满足条件，可以返回0个。
-        
-        # 3. **收集结果**：
-        #    - 将筛选出的句子在SentenceList中的索引位置作为结果返回，按照相似度从高到低的顺序排列。
-        #    - 如果没有筛选出符合条件的句子，则topKIndices返回空列表
+        2. **Filter and Match Sentences:**  
+            For each `Intent` and its corresponding `Description` in IntentsDict:  
+            - **Description Understanding**:
+                - Understand the reason why user has the `Intent` and the collected sub-themes of `Intent` in `Description`.
+                - If `Description` is empty, analyze the reason of the `Intent` based on the `Scenario`.
+            - **Sentence Evaluation**: For each sentence in `SentenceList`:
+                - If `Description` or the `Existing sub-themes` in `Description` is empty, skip the step `Align with Intent Reason and Sub-Themes`.
+                - Align with Intent Reason and Sub-Themes:
+                    - If the sentence aligns with both the reason in `Description` and collected sub-themes of the intent, add it to top_all[Intent].
+                - Align with Intent Reason Only:
+                    - If the sentence aligns only with the reason in `Description` and not with sub-themes, add it to bottom_all[Intent].
 
-        # # Output Format
-        #     结果以Json形式输出，其中每个元素是一个字典，字典包含两个键：
-        #     - {format_instructions}
+                
 
-        # # User:
-        #     Scenario: {scenario}
-        #     IntentsDict: {intentsDict}
-        #     SentenceList: {sentenceList}
-        #     top_threshold: {top_threshold}
-        # """
+
+        3. **Relevance Check**:
+            - Avoid including sentences in the output unless the sentences genuinely align with the intent's theme or sub-themes.
+            - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable. If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
+
+        ## Output Format  
+        - The output should be a dictionary with two main keys: `top_all` and `bottom_all`.
+            - {format_instructions}
+            - `bottom_all`: Maps each Intent to a list of indices corresponding to sentences aligned only with the reason.
+            - `top_all`: Maps each Intent to a list of indices corresponding to sentences aligned with both the intent's theme and sub-themes.  
+
+
+        ## Notes  
+            - Relevance Over Quantity: Only include sentences that fully meet the alignment criteria. Avoid adding sentences simply to increase the count.
+            - Empty Description Handling: If the Description of Intent is empty, skip the step `Align with Intent Reason and Sub-Themes`.
+            - Top_all vs. Bottom_all: Maintain a clear distinction between sentences qualifying for top_all (aligned with both the theme and sub-themes) and bottom_all (aligned only with the theme).
+            - Exhaustive Intent Coverage: Ensure every intent in IntentsDict is represented in the output, even if no sentences align with it.
+            - Avoid Duplication: Prevent any sentence from appearing multiple times across or within top_all and bottom_all lists.
+
+        # User:
+            Scenario: {scenario}
+            IntentsDict: {intentsDict}
+            SentenceList: {sentenceList}
+        """
     )
 
     RAG_TOP_BOTTOM_K = (
@@ -309,20 +329,28 @@ class Prompts:
     EXTRACT_INTENT = (
         """
         You are a reasoning assistant tasked with extracting and describing the user's intents for each group of the records based on the user's desire, the highlighted text, and the user's comments.
-        According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone want to achieve when forging information, and intents are different intermediate steps to approach the desire.
+        According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone wants to achieve when foraging information, and intents are different intermediate steps to approach the desire.
 
         # Instructions
-        - A structure of the intent tree is provided in the json file below. Given the user's desire, please extract a intent for each groups of records by filling the missing intent name and intent description in the place holders: ___ . Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
-        - Please only fill in the blank, do not change the structure of the json file, and only return the json file except the 'records' attribute.
+        - A structure of the intent tree is provided in the JSON file below. For each group of records, fill in the missing intent name and intent description in the placeholders: ____.
+        - When filling in the placeholders, you should FIRST consider the previously confirmed intents provided below. For each placeholder, if there is a suitable intent_name and intent_description in confirmedIntents that matches the group (based on content, parent, or semantic similarity), use that confirmed intent to fill the placeholder. 
+        - IMPORTANT: When selecting a confirmed intent from confirmedIntents, you must ensure that the intent's level matches the group's level. For example, a level 1 intent can only be filled using a level 1 confirmed intent; do not use a confirmed intent of a different level.
+        - Only create a new intent if no suitable confirmed intent with the correct level exists.
+        - Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
+        - Do NOT change the structure of the JSON file, and only return the JSON file except the 'records' attribute.
         - The intent names should be phrases starting with a verb's -ing form. The specificity and granularity should be consistent with the information provided below.
         - IMPORTANT: You must return ONLY valid JSON format. Do not use Python dictionary syntax (single quotes, no quotes for keys). Use proper JSON syntax with double quotes for all strings and keys.
 
-        # Please also take the following in to account:
-        1. The user's familiarity level: users who are unfamiliar with the scenario will have more general/coarse intents, while user familiar with the scenario will have more specific/fine intents.
+        # Please also take the following into account:
+        1. The user's familiarity level: users who are unfamiliar with the scenario will have more general/coarse intents, while users familiar with the scenario will have more specific/fine intents.
         User's familiarity level with the scenario: {familiarity}
         Recommended specificity of the intent: {specificity}
 
         2. The structure of the intent tree: intents with parent should be at the same level of granularity, and should be more specific than the parent intent.
+
+        3. Previously confirmed intents: The user has already confirmed some intents that should be preserved and not changed. These confirmed intents are provided in the following format:
+        {confirmedIntents}
+        When filling in the intent_name and intent_description, always prioritize using the most appropriate confirmed intent from this list for each group, and ensure that the confirmed intent's level matches the group's level.
 
         Desire: {scenario}
         Json file: {groupsOfNodes}

@@ -227,14 +227,18 @@ class Chain4ExtractIntent:
         self.parser = PydanticOutputParser(pydantic_object=ExtractResult)
         # self.parser = JsonOutputParser()
         self.prompt_template = PromptTemplate(
-            input_variables=["familiarity", "specificity", "scenario","groupsOfNodes"],
+            input_variables=["familiarity", "specificity", "scenario","groupsOfNodes", "confirmedIntents"],
             template=self.instruction)
         self.chain = self.prompt_template | self.model | self.parser
 
-    async def invoke(self, familiarity, specificity, scenario, groupsOfNodes):
+    async def invoke(self, familiarity, specificity, scenario, groupsOfNodes, confirmedIntents=None):
         try:
+            # 如果没有confirmedIntents，设置为空列表
+            if confirmedIntents is None:
+                confirmedIntents = []
+                
             result = self.chain.invoke(
-                {"familiarity": familiarity, "specificity": specificity, "scenario": scenario, "groupsOfNodes": groupsOfNodes}
+                {"familiarity": familiarity, "specificity": specificity, "scenario": scenario, "groupsOfNodes": groupsOfNodes, "confirmedIntents": confirmedIntents}
             )
             return result
         except Exception as e:

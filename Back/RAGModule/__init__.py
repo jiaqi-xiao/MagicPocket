@@ -6,11 +6,11 @@ from utils import *
 class Chain4RAG:
     def __init__(self, model):
         ## 你将作为协助用户围绕调研场景Scenario进行信息调研的助手。请从SentenceList中为IntentsDict中的每一对Intent和Description各自筛选最多k个最相关的句子，并返回这些句子在SentenceList中的相应索性作为top-k。
-        self.instruction = Prompts.RAG
+        self.instruction = Prompts.RAG_INDEX
 
         self.model = model
-        # self.parser = JsonOutputParser(pydantic_object=sentenceGroupsIndex)
-        self.parser = JsonOutputParser(pydantic_object=sentenceGroups)
+        self.parser = JsonOutputParser(pydantic_object=sentenceGroupsIndex)
+        # self.parser = JsonOutputParser(pydantic_object=sentenceGroups)
         self.prompt_template = PromptTemplate(
             # input_variables=["scenario", "intentList", "recordList", "sentenceList", "k", "description"],
             input_variables=["scenario", "intentsDict", "sentenceList"],
