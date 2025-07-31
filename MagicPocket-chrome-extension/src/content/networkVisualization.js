@@ -24,11 +24,21 @@ class NetworkManager {
         this.visContainer = null;
         this.nodeMergeManager = null; // 节点合并管理器
 
-        // 从初始意图树中收集 immutable 意图
-        if (intentTree && intentTree.child) {
-            intentTree.child.forEach(node => {
-                if (node.immutable && node.intent) {
-                    NetworkManager.immutableIntents.add(node.intent);
+        // 从初始意图树中收集 immutable 意图 - 支持多级意图结构
+        if (intentTree && intentTree.item) {
+            Object.entries(intentTree.item).forEach(([intentName, intentData]) => {
+                // 检查高级意图的确认状态
+                if (intentData && intentData.confirmed) {
+                    NetworkManager.immutableIntents.add(intentName);
+                }
+                
+                // 检查低级意图的确认状态
+                if (intentData && intentData.child && Array.isArray(intentData.child)) {
+                    intentData.child.forEach(childIntent => {
+                        if (childIntent.intent && childIntent.confirmed) {
+                            NetworkManager.immutableIntents.add(childIntent.intent);
+                        }
+                    });
                 }
             });
         }
@@ -169,7 +179,23 @@ class NetworkManager {
         // 递归处理意图节点的函数 - 支持两级意图层级
         const processIntentNode = (parentId, nodeData, nodeName, level, nodeType = NetworkManager.NodeTypes.HIGH_INTENT) => {
             const currentNodeId = `${nodeType}_${nodeId++}`;
-            const isImmutable = NetworkManager.immutableIntents.has(nodeName);
+            // 修复节点状态判断逻辑 - 优先检查nodeStates，其次检查immutableIntents
+            let isImmutable = false;
+            
+            // 先检查是否已存在节点状态记录
+            const existingNodeId = Array.from(this.nodeStates.entries())
+                .find(([id, state]) => {
+                    const existingNode = this.nodes.get(id);
+                    return existingNode && existingNode.originalLabel === nodeName;
+                });
+            
+            if (existingNodeId && existingNodeId[1] !== undefined) {
+                isImmutable = existingNodeId[1];
+            } else {
+                // 检查是否在immutable集合中或者intentData中有confirmed标记
+                isImmutable = NetworkManager.immutableIntents.has(nodeName) || 
+                             (nodeData && nodeData.confirmed === true);
+            }
             
             // 添加当前意图节点
             nodes.push({
@@ -519,12 +545,30 @@ class NetworkManager {
 
     // 更新节点状态
     updateNodeState(nodeId, confirmed) {
+        console.log(`updateNodeState called: nodeId=${nodeId}, confirmed=${confirmed}`);
         this.nodeStates.set(nodeId, confirmed);
         
-        // 如果是意图节点且被确认，添加到 immutable 集合中
+        // 如果是意图节点且被确认，添加到 immutable 集合中并保存状态到存储
         const node = this.nodes.get(nodeId);
-        if (node && node.type === 'intent' && confirmed) {
-            NetworkManager.immutableIntents.add(node.originalLabel || node.label);
+        console.log(`Node details: type=${node?.type}, originalLabel=${node?.originalLabel}, label=${node?.label}`);
+        
+        if (node && (node.type === 'intent' || 
+                    node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+                    node.type === NetworkManager.NodeTypes.LOW_INTENT)) {
+            const intentName = node.originalLabel || node.label;
+            console.log(`Processing intent node: ${intentName}, confirmed=${confirmed}`);
+            
+            if (confirmed) {
+                NetworkManager.immutableIntents.add(intentName);
+                // 保存确认状态到意图树数据
+                this.saveNodeConfirmationState(intentName, true);
+            } else {
+                NetworkManager.immutableIntents.delete(intentName);
+                // 保存确认状态到意图树数据
+                this.saveNodeConfirmationState(intentName, false);
+            }
+        } else {
+            console.log(`Node is not an intent node or node not found`);
         }
         
         this.nodes.update({
@@ -533,6 +577,59 @@ class NetworkManager {
         });
 
         this.updateEdgesForNode(nodeId);
+    }
+
+    // 保存节点确认状态到意图树数据
+    async saveNodeConfirmationState(intentName, confirmed) {
+        try {
+            console.log(`saveNodeConfirmationState called: ${intentName} = ${confirmed}`);
+            
+            if (!this.intentTree || !this.intentTree.item) {
+                console.log(`Intent tree not available`);
+                return;
+            }
+            
+            let intentLocation = null;
+            
+            // 首先检查是否是高级意图（在 intentTree.item 的顶层）
+            if (this.intentTree.item[intentName]) {
+                intentLocation = { type: 'high-level', ref: this.intentTree.item[intentName] };
+                console.log(`Found as high-level intent: ${intentName}`);
+            } else {
+                // 在高级意图的子节点中查找低级意图
+                for (const [parentIntentName, parentIntentData] of Object.entries(this.intentTree.item)) {
+                    if (parentIntentData.child && Array.isArray(parentIntentData.child)) {
+                        const childIntent = parentIntentData.child.find(child => 
+                            child.intent === intentName
+                        );
+                        if (childIntent) {
+                            intentLocation = { type: 'low-level', ref: childIntent, parent: parentIntentName };
+                            console.log(`Found as low-level intent under ${parentIntentName}: ${intentName}`);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (intentLocation) {
+                // 设置确认状态
+                intentLocation.ref.confirmed = confirmed;
+                console.log(`Intent tree updated for ${intentName} (${intentLocation.type})`);
+                
+                // 持久化到存储
+                if (typeof saveIntentTree === 'function') {
+                    await saveIntentTree(this.intentTree);
+                    console.log(`Node confirmation state saved: ${intentName} = ${confirmed}`);
+                } else {
+                    console.log(`saveIntentTree function not available`);
+                }
+            } else {
+                console.log(`Intent not found in tree: ${intentName}`);
+                console.log(`Available high-level intents:`, Object.keys(this.intentTree.item || {}));
+            }
+        } catch (error) {
+            console.error('Error saving node confirmation state:', error);
+        }
     }
 
     // 更新节点相关的边
@@ -1372,10 +1469,10 @@ class NetworkManager {
         
         // 根据节点的确认状态重置透明度
         allNodes.forEach(node => {
-            const isConfirmed = this.nodeStates.get(node.id);
+            const isImmutable = this.nodeStates.get(node.id);
             this.nodes.update({
                 id: node.id,
-                opacity: isConfirmed ? 1.0 : 0.3
+                opacity: isImmutable ? 1.0 : 0.3
             });
         });
 
