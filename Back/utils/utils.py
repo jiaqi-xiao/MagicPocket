@@ -136,59 +136,105 @@ def merge_dicts(data):
     return merged_dict
 
 
-def getIntentsByLevel(intentTreeItem, level_control="all"):
+def getIntentsByLevel(intentTree, level_control="all"):
     """
-    根据层级控制参数提取意图树中的意图
+    根据参数控制返回intentTree中不同层级的意图
     
-    :param intentTreeItem: 意图树项目
-    :param level_control: 层级控制参数
-        - "all": 返回所有意图
-        - "first": 返回第一层意图
-        - "second_priority": 优先返回第二层意图（如果第一层意图有第二层子意图）
-    :return: 意图列表
+    :param intentTree: 意图树结构
+    :param level_control: 控制返回的层级类型
+        - "all": 返回所有意图（所有层级）
+        - "first": 只返回第一层意图
+        - "prefer_second": 优先返回第二层意图，如果第一层意图没有子节点则返回第一层
+    :return: 包含意图的列表，每个元素为 {intent: description} 格式
     """
     result = []
     
-    if level_control == "all":
-        # 返回所有意图
-        def collect_all_intents(node):
-            if isinstance(node, dict):
-                if "intent" in node:
-                    result.append({node["intent"]: node.get("description", "")})
-                if "child" in node and isinstance(node["child"], list):
-                    for child in node["child"]:
-                        collect_all_intents(child)
-        
-        for key, value in intentTreeItem.items():
-            collect_all_intents(value)
+    def collect_all_intents(node, level=0):
+        """递归收集所有层级的意图"""
+        # 处理根节点的item字段
+        if level == 0 and isinstance(node, dict) and "item" in node:
+            for key, value in node["item"].items():
+                collect_all_intents(value, level + 1)
+        else:
+            # 检查当前节点是否是意图节点
+            if isinstance(node, dict) and node.get("isLeafNode") != True:
+                intent = node.get("intent")
+                description = node.get("description")
+                if intent and description:
+                    result.append({intent: description})
             
+            # 递归处理子节点
+            if isinstance(node, dict) and "child" in node and isinstance(node["child"], list):
+                for child in node.get("child", []):
+                    if child.get("isLeafNode") != True:  # 只处理非叶节点
+                        collect_all_intents(child, level + 1)
+    
+    def collect_first_level_intents(node, level=0):
+        """只收集第一层意图"""
+        if level == 0 and isinstance(node, dict) and "item" in node:
+            # 处理根节点的item字段
+            for key, value in node["item"].items():
+                if isinstance(value, dict) and value.get("isLeafNode") != True:
+                    intent = value.get("intent")
+                    description = value.get("description")
+                    if intent and description:
+                        result.append({intent: description})
+        elif level == 0:
+            # 如果直接是意图节点
+            if isinstance(node, dict) and node.get("isLeafNode") != True:
+                intent = node.get("intent")
+                description = node.get("description")
+                if intent and description:
+                    result.append({intent: description})
+    
+    def collect_prefer_second_intents(node, level=0):
+        """优先收集第二层意图，如果没有子节点则收集第一层"""
+        if level == 0 and isinstance(node, dict) and "item" in node:
+            # 处理根节点的item字段
+            for key, value in node["item"].items():
+                if isinstance(value, dict) and value.get("isLeafNode") != True:
+                    # 检查是否有子节点
+                    has_children = (value.get("child") and 
+                                  isinstance(value["child"], list) and 
+                                  len(value["child"]) > 0)
+                    
+                    if has_children:
+                        # 有子节点，收集第二层意图
+                        for child in value["child"]:
+                            if isinstance(child, dict) and child.get("isLeafNode") != True:
+                                intent = child.get("intent")
+                                description = child.get("description")
+                                if intent and description:
+                                    result.append({intent: description})
+                    else:
+                        # 没有子节点，收集第一层意图
+                        intent = value.get("intent")
+                        description = value.get("description")
+                        if intent and description:
+                            result.append({intent: description})
+        elif level == 0:
+            # 如果直接是意图节点
+            if isinstance(node, dict) and node.get("isLeafNode") != True:
+                intent = node.get("intent")
+                description = node.get("description")
+                if intent and description:
+                    result.append({intent: description})
+    
+    # 根据level_control参数选择相应的收集函数
+    if level_control == "all":
+        collect_all_intents(intentTree)
     elif level_control == "first":
-        # 返回第一层意图
-        for key, value in intentTreeItem.items():
-            if isinstance(value, dict) and "intent" in value:
-                result.append({value["intent"]: value.get("description", "")})
-                
-    elif level_control == "second_priority":
-        # 优先返回第二层意图，如果第一层意图没有第二层子意图则返回第一层
-        for key, value in intentTreeItem.items():
-            if isinstance(value, dict) and "intent" in value:
-                # 检查是否有第二层子意图
-                has_second_level = False
-                if "child" in value and isinstance(value["child"], list):
-                    for child in value["child"]:
-                        if isinstance(child, dict) and "intent" in child:
-                            result.append({child["intent"]: child.get("description", "")})
-                            has_second_level = True
-                
-                # 如果没有第二层子意图，则添加第一层意图
-                if not has_second_level:
-                    result.append({value["intent"]: value.get("description", "")})
+        collect_first_level_intents(intentTree)
+    elif level_control == "prefer_second":
+        collect_prefer_second_intents(intentTree)
+    else:
+        raise ValueError("level_control must be one of: 'all', 'first', 'prefer_second'")
     
     return result
 
 
 if __name__ == "__main__":
-    intentTree1 = {
+    intentTree = {
         "scenario": "learn prompt engineering",
         "item": {
             "Understanding prompt engineering": {
@@ -279,7 +325,7 @@ if __name__ == "__main__":
                             {
                                 "id": 1753966609987,
                                 "comment": "role prompting",
-                                "content": 'Role prompting is a technique that involves assigning a role or persona to an [AI model](https://learnprompting.org/docs/basics/generative_ai), such as "food critic" or "mathematician," to control the style[1](https://learnprompting.org/docs/basics/roles#footnote-label)Shanahan, M., McDonell, K., & Reynolds, L. (2023). Role-Play with Large Language Models.\n [2](https://learnprompting.org/docs/basics/roles#footnote-label)Li, G., Hammoud, H. A. A. K., Itani, H., Khizbullin, D., & Ghanem, B. (2023). CAMEL: Communicative Agents for “Mind” Exploration of Large Scale Language Model Society.\n [3](https://learnprompting.org/docs/basics/roles#footnote-label)Santu, S. K. K., & Feng, D. (2023). TELeR: A General Taxonomy of LLM Prompts for Benchmarking Complex Tasks.\n  or accuracy of its responses.',
+                                "content": 'Role prompting is a technique that involves assigning a role or persona to an [AI model](https://learnprompting.org/docs/basics/generative_ai), such as "food critic" or "mathematician," to control the style[1](https://learnprompting.org/docs/basics/roles#footnote-label)Shanahan, M., McDonell, K., & Reynolds, L. (2023). Role-Play with Large Language Models.\n [2](https://learnprompting.org/docs/basics/roles#footnote-label)Li, G., Hammoud, H. A. A. K., Itani, H., Khizbullin, D., & Ghanem, B. (2023). CAMEL: Communicative Agents for "Mind" Exploration of Large Scale Language Model Society.\n [3](https://learnprompting.org/docs/basics/roles#footnote-label)Santu, S. K. K., & Feng, D. (2023). TELeR: A General Taxonomy of LLM Prompts for Benchmarking Complex Tasks.\n  or accuracy of its responses.',
                                 "context": "Role prompting",
                                 "isLeafNode": True,
                             },
@@ -300,111 +346,42 @@ if __name__ == "__main__":
             },
         },
     }
-    intentTree2 = {
-        "scenario": "learn prompt engineering",
-        "item": {
-            "Understanding basics of prompt engineering": {
-                "id": 1,
-                "intent": "Understanding basics of prompt engineering",
-                "description": "Learn the fundamental concepts and definitions related to prompt engineering, including the purpose and process of crafting prompts, as well as understanding the concept of prompts as inputs in AI models.",
-                "priority": 5,
-                "child_num": 1,
-                "group": [],
-                "level": "1",
-                "parent": None,
-                "immutable": False,
-                "child": [
-                    {
-                        "id": 3,
-                        "intent": "Exploring techniques in prompt engineering",
-                        "description": "Investigate various approaches and techniques used in prompt engineering, including role prompting and in-context learning, to effectively guide AI models in generating accurate and relevant outputs.",
-                        "priority": 5,
-                        "child_num": 0,
-                        "group": [
-                            {
-                                "id": 1753966535397,
-                                "comment": "definition",
-                                "content": "Prompt engineering is the process of crafting and refining prompts to improve the performance of [generative AI](https://learnprompting.org/docs/basics/generative_ai) models. It involves providing specific inputs to tools like ChatGPT, [Midjourney](https://learnprompting.org/docs/image_prompting/midjourney), or Gemini, guiding the AI to deliver more accurate and contextually relevant outputs.",
-                                "context": "Prompt engineering is the process of crafting and refining prompts to improve the performance of generative AI models. It involves providing specific inputs to tools like ChatGPT, Midjourney, or Gemini, guiding the AI to deliver more accurate and contextually relevant outputs.",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966568081,
-                                "comment": "definition",
-                                "content": "A prompt is the input or [instruction](https://learnprompting.org/docs/basics/instructions) given to an AI model to generate a response. Prompts can be simple (a question) or complex (detailed instructions with context, tone, style, and format specifications). The quality of the AI's response depends directly on how clear, detailed, and structured the prompt is.",
-                                "context": "A prompt is the input or instruction given to an AI model to generate a response. Prompts can be simple (a question) or complex (detailed instructions with context, tone, style, and format specifications). The quality of the AI's response depends directly on how clear, detailed, and structured the prompt is.",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966609987,
-                                "comment": "role prompting",
-                                "content": 'Role prompting is a technique that involves assigning a role or persona to an [AI model](https://learnprompting.org/docs/basics/generative_ai), such as "food critic" or "mathematician," to control the style[1](https://learnprompting.org/docs/basics/roles#footnote-label)Shanahan, M., McDonell, K., & Reynolds, L. (2023). Role-Play with Large Language Models.\n [2](https://learnprompting.org/docs/basics/roles#footnote-label)Li, G., Hammoud, H. A. A. K., Itani, H., Khizbullin, D., & Ghanem, B. (2023). CAMEL: Communicative Agents for “Mind” Exploration of Large Scale Language Model Society.\n [3](https://learnprompting.org/docs/basics/roles#footnote-label)Santu, S. K. K., & Feng, D. (2023). TELeR: A General Taxonomy of LLM Prompts for Benchmarking Complex Tasks.\n  or accuracy of its responses.',
-                                "context": "Role prompting",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966624337,
-                                "comment": "in-context learning",
-                                "content": "Few-shot prompting is a direct application of ICL, where multiple examples (or \"shots\") are provided to guide the model's output. The more examples (or shots) we give, the better the model typically performs, as it can learn from these examples and generalize them to new, similar tasks.\nHere's a breakdown of the common shot-based methods:\n\n[Zero-Shot Prompting](https://learnprompting.org/docs/basics/few_shot#what-is-zero-shot-prompting): No examples are provided, and the model must rely entirely on its pre-trained knowledge.\n[One-Shot Prompting](https://learnprompting.org/docs/basics/few_shot#what-is-one-shot-prompting): A single example is given to clarify the task for the model.\n[Few-Shot Prompting](https://learnprompting.org/docs/basics/few_shot#what-is-few-shot-prompting): Two or more examples are included, allowing the model to recognize patterns and deliver more accurate responses.",
-                                "context": "Few-shot prompting",
-                                "isLeafNode": True,
-                            },
-                        ],
-                        "level": "2",
-                        "parent": 1,
-                        "immutable": False,
-                        "child": [],
-                    }
-                ],
-            },
-            "Recognizing importance and challenges of prompt engineering": {
-                "id": 2,
-                "intent": "Recognizing importance and challenges of prompt engineering",
-                "description": "Identify and understand the key importance of prompt engineering, such as improving AI task performance, alongside recognizing limitations and challenges that arise during its application.",
-                "priority": 5,
-                "child_num": 1,
-                "group": [],
-                "level": "1",
-                "parent": None,
-                "immutable": False,
-                "child": [
-                    {
-                        "id": 4,
-                        "intent": "Assessing benefits and drawbacks",
-                        "description": "Evaluate the overall benefits of incorporating prompt engineering in AI workflows while taking into account the potential drawbacks and limitations, such as hallucinations and lack of reasoning in AI responses.",
-                        "priority": 5,
-                        "child_num": 0,
-                        "group": [
-                            {
-                                "id": 1753966549298,
-                                "comment": "importance",
-                                "content": "Prompt engineering is important because:\n\nIt bridges the gap between vague, general queries and specific, actionable results.\nIt helps mitigate errors, such as generating irrelevant content or incorrect responses.\nIt ensures that the AI can handle tasks like creative writing, image generation, or even code development with minimal post-processing needed.",
-                                "context": "It ensures that the AI can handle tasks like creative writing, image generation, or even code development with minimal post-processing needed.",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966585610,
-                                "comment": "limitations",
-                                "content": "1. Hallucinations (Making Up Information)\nOne weird thing about LLMs is that when they don't know the answer, they often won't admit it. Instead, they'll confidently make up something that sounds believable. This is called a \"hallucination.\" For example, if you ask for a fact about a historical event that wasn't in the data it was trained on, the LLM might invent details or events that never happened.\n2. Limited Reasoning Skills\nEven though LLMs can seem very smart, they often struggle with basic math. This is because they weren't really designed to solve math problems. While LLMs are good at understanding and generating sentences, they're not great at solving complex problems. For example, if you ask an LLM to solve a multi-step math problem or a puzzle, it might get confused and make mistakes along the way.\n3. Limited Long-Term Memory\nEach time you use an LLM, it starts with a blank slate—it doesn't remember your previous conversations unless you remind it in the current session. This can be frustrating if you're trying to have an ongoing discussion or work on a project over time.\n4. Limited Knowledge\nLLMs are trained on data from the past. It means that if LLMs don't have access to the internet or any way to look up information in real time, they don't know anything that happened after their training data was collected. If you ask about recent events, they won't be able to provide accurate answers.\n5. Bias\nLLMs learn from the text they're trained on, and that text comes from the internet, a place that can contain biased, harmful, or prejudiced content. As a result, LLMs can sometimes reflect the same biases in their responses. For example, they might produce content that is sexist, racist, or otherwise problematic.\n6. Prompt Hacking\nLLMs can be tricked or \"hacked\" by clever users who know how to manipulate prompts. This is called [prompt hacking](https://learnprompting.org/docs/category/-prompt-hacking). For example, someone might be able to word a prompt in such a way that it gets the LLM to generate inappropriate or harmful content, even if the system is supposed to block such responses.\nHow to handle it: When using LLMs in public or for others to interact with, make sure there are filters and safety measures in place to prevent inappropriate use.",
-                                "context": "1. Hallucinations (Making Up Information)",
-                                "isLeafNode": True,
-                            },
-                        ],
-                        "level": "2",
-                        "parent": 2,
-                        "immutable": False,
-                        "child": [],
-                    }
-                ],
-            },
-        },
-    }
 
-    allIntents = getIntentsByLevel(intentTree2['item'], "all")
-    print('allIntents', allIntents)
-
-    firstIntents = getIntentsByLevel(intentTree2['item'], "first")
-    print('firstIntents', firstIntents)
-
-    secondIntents = getIntentsByLevel(intentTree2['item'], "second_priority")
-    print('secondIntents', secondIntents)
+    # 测试新函数
+    print("=== 测试 getIntentsByLevel 函数 ===")
+    
+    # 调试信息
+    print(f"intentTree keys: {list(intentTree.keys())}")
+    if "item" in intentTree:
+        print(f"item keys: {list(intentTree['item'].keys())}")
+        # 检查第一个节点的结构
+        first_key = list(intentTree['item'].keys())[0]
+        first_node = intentTree['item'][first_key]
+        print(f"第一个节点结构: {list(first_node.keys())}")
+        print(f"isLeafNode: {first_node.get('isLeafNode')}")
+        print(f"intent: {first_node.get('intent')}")
+        print(f"description: {first_node.get('description')}")
+    
+    # 测试返回所有意图
+    print("\n1. 返回所有意图:")
+    all_intents = getIntentsByLevel(intentTree, "all")
+    print(f"找到 {len(all_intents)} 个意图")
+    for intent in all_intents:
+        for key, value in intent.items():
+            print(f"  - {key}: {value}")
+    
+    # 测试返回第一层意图
+    print("\n2. 返回第一层意图:")
+    first_intents = getIntentsByLevel(intentTree, "first")
+    print(f"找到 {len(first_intents)} 个第一层意图")
+    for intent in first_intents:
+        for key, value in intent.items():
+            print(f"  - {key}: {value}")
+    
+    # 测试优先返回第二层意图
+    print("\n3. 优先返回第二层意图:")
+    prefer_second_intents = getIntentsByLevel(intentTree, "prefer_second")
+    print(f"找到 {len(prefer_second_intents)} 个优先第二层意图")
+    for intent in prefer_second_intents:
+        for key, value in intent.items():
+            print(f"  - {key}: {value}")
