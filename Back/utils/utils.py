@@ -25,7 +25,7 @@ def filterNodes(
         and not tree.get("isLeafNode", True)
     ):
         intent = tree.get("intent")
-        result.append({intent: tree.get("description")})
+        result.append({intent: tree.get('description')})
 
     if current_level == target_level:
         return result
@@ -41,7 +41,7 @@ def filterNodes(
 
 def is_sentence_valid(s, min_length=3):
     # 检查是否包含中文字符
-    chinese_chars = re.findall(r"[\u4e00-\u9fff]", s)
+    chinese_chars = re.findall(r'[\u4e00-\u9fff]', s)
     if chinese_chars:  # 如果包含中文
         return len(chinese_chars) >= min_length
     else:  # 如果不包含中文，使用原来的英文单词判断逻辑
@@ -53,11 +53,7 @@ def split2Sentences(content):
     sentence_endings = re.compile(r"(?<=[。！？!?.\n])")
     sentences = sentence_endings.split(content)
     # 去除空白句子
-    sentences = [
-        s.strip()
-        for s in sentences
-        if s.strip() and not all(c in "。！？!?.\n" for c in s)
-    ]
+    sentences = [s.strip() for s in sentences if s.strip() and not all(c in "。！？!?.\n" for c in s)]
     # 去除过短的句子
     sentences = [s for s in sentences if is_sentence_valid(s)]
     return sentences
@@ -114,7 +110,6 @@ def get_intent_records(intentTree, intent):
     # 从根节点开始递归遍历
     return traverse_and_match(intentTree)
 
-
 def merge_dicts(data):
     merged_dict = {"top_k": {}, "bottom_k": {}}
 
@@ -135,253 +130,56 @@ def merge_dicts(data):
 
     return merged_dict
 
-
-def getIntentsByLevel(intentTree, level_control="all"):
-    """
-    根据参数控制返回intentTree中不同层级的意图
-    
-    :param intentTree: 意图树结构
-    :param level_control: 控制返回的层级类型
-        - "all": 返回所有意图（所有层级）
-        - "first": 只返回第一层意图
-        - "prefer_second": 优先返回第二层意图，如果第一层意图没有子节点则返回第一层
-    :return: 包含意图的列表，每个元素为 {intent: description} 格式
-    """
-    result = []
-    
-    def collect_all_intents(node, level=0):
-        """递归收集所有层级的意图"""
-        # 处理根节点的item字段
-        if level == 0 and isinstance(node, dict) and "item" in node:
-            for key, value in node["item"].items():
-                collect_all_intents(value, level + 1)
-        else:
-            # 检查当前节点是否是意图节点
-            if isinstance(node, dict) and node.get("isLeafNode") != True:
-                intent = node.get("intent")
-                description = node.get("description")
-                if intent and description:
-                    result.append({intent: description})
-            
-            # 递归处理子节点
-            if isinstance(node, dict) and "child" in node and isinstance(node["child"], list):
-                for child in node.get("child", []):
-                    if child.get("isLeafNode") != True:  # 只处理非叶节点
-                        collect_all_intents(child, level + 1)
-    
-    def collect_first_level_intents(node, level=0):
-        """只收集第一层意图"""
-        if level == 0 and isinstance(node, dict) and "item" in node:
-            # 处理根节点的item字段
-            for key, value in node["item"].items():
-                if isinstance(value, dict) and value.get("isLeafNode") != True:
-                    intent = value.get("intent")
-                    description = value.get("description")
-                    if intent and description:
-                        result.append({intent: description})
-        elif level == 0:
-            # 如果直接是意图节点
-            if isinstance(node, dict) and node.get("isLeafNode") != True:
-                intent = node.get("intent")
-                description = node.get("description")
-                if intent and description:
-                    result.append({intent: description})
-    
-    def collect_prefer_second_intents(node, level=0):
-        """优先收集第二层意图，如果没有子节点则收集第一层"""
-        if level == 0 and isinstance(node, dict) and "item" in node:
-            # 处理根节点的item字段
-            for key, value in node["item"].items():
-                if isinstance(value, dict) and value.get("isLeafNode") != True:
-                    # 检查是否有子节点
-                    has_children = (value.get("child") and 
-                                  isinstance(value["child"], list) and 
-                                  len(value["child"]) > 0)
-                    
-                    if has_children:
-                        # 有子节点，收集第二层意图
-                        for child in value["child"]:
-                            if isinstance(child, dict) and child.get("isLeafNode") != True:
-                                intent = child.get("intent")
-                                description = child.get("description")
-                                if intent and description:
-                                    result.append({intent: description})
-                    else:
-                        # 没有子节点，收集第一层意图
-                        intent = value.get("intent")
-                        description = value.get("description")
-                        if intent and description:
-                            result.append({intent: description})
-        elif level == 0:
-            # 如果直接是意图节点
-            if isinstance(node, dict) and node.get("isLeafNode") != True:
-                intent = node.get("intent")
-                description = node.get("description")
-                if intent and description:
-                    result.append({intent: description})
-    
-    # 根据level_control参数选择相应的收集函数
-    if level_control == "all":
-        collect_all_intents(intentTree)
-    elif level_control == "first":
-        collect_first_level_intents(intentTree)
-    elif level_control == "prefer_second":
-        collect_prefer_second_intents(intentTree)
-    else:
-        raise ValueError("level_control must be one of: 'all', 'first', 'prefer_second'")
-    
-    return result
-
-
 if __name__ == "__main__":
     intentTree = {
-        "scenario": "learn prompt engineering",
-        "item": {
-            "Understanding prompt engineering": {
+        "scenario": "travel",
+        "child": [
+            {
+                "id": 0,
+                "intent": "探索巴塞罗那建筑风格",
+                "child_num": 2,
+                "priority": 1,
+                "child": [
+                    {
+                        "id": 0,
+                        "comment": "挑一个天气好的傍晚取圣家堂",
+                        "content": "巴塞罗那三件套：圣家堂、米拉之家、巴特略之家尽量不要一天去，不然出片都是一样的，而且时间也会紧张 ⭐️圣家堂日落前两小时的光最好",
+                        "context": "小tips:⭐️巴塞罗那三件套：圣家堂、米拉之家、巴特略之家尽量不要一天去，不然出片都是一样的，而且时间也会紧张 ⭐️圣家堂日落前两小时的光最好 ⭐️买90欧72h的3日联票🎫最划算p18，它包含了10个景点门票和公交地铁，可以直接去景点换票，官网：visit Barcelona tickets,（具体情况可以在小📕搜，有好多相关攻略） 以下标注🟢的表示用了这个联票 ⭐️小偷很多，注意钱包",
+                        "isLeafNode": True
+                    },
+                    {
+                        "id": 1,
+                        "comment": "很奇幻的建筑风格，想去亲眼看看",
+                        "content": "巴特罗之家外立面的波浪形曲线和五彩斑斓的瓷砖装饰，象征着大海的波涛和色彩斑斓的鳞片。其阳台和窗户的造型被认为像是动物的骨骼，尤其是龙的形象，反映了高迪从自然界中汲取的灵感。屋顶的龙脊设计和圣乔治屠龙的传说也有关联。",
+                        "context": "巴特罗之家（Casa Batlló）是位于西班牙巴塞罗那的一座标志性建筑，由著名建筑师安东尼·高迪（Antoni Gaudí）于1904年设计改造。它是加泰罗尼亚现代主义的杰出代表，以其独特的外观和富有想象力的设计而闻名。 巴特罗之家外立面的波浪形曲线和五彩斑斓的瓷砖装饰，象征着大海的波涛和色彩斑斓的鳞片。其阳台和窗户的造型被认为像是动物的骨骼，尤其是龙的形象，反映了高迪从自然界中汲取的灵感。屋顶的龙脊设计和圣乔治屠龙的传说也有关联。 内部空间也充满创意和细节，每个房间都采用独特的设计理念，光线的运用和空气流通的考量令人称奇。如今，巴特罗之家是世界文化遗产之一，向公众开放，是巴塞罗那不可错过的文化与建筑地标。",
+                        "isLeafNode": True
+                    }
+                ]
+            },
+            {
                 "id": 1,
-                "intent": "Understanding prompt engineering",
-                "description": "Gaining a fundamental understanding of what prompt engineering is and its significance in the performance of generative AI models.",
-                "priority": 5,
+                "intent": "品尝当地特色美食",
                 "child_num": 1,
-                "group": [],
-                "level": "1",
-                "parent": None,
-                "immutable": False,
+                "priority": 1,
                 "child": [
                     {
-                        "id": 4,
-                        "intent": "Learning about concepts of prompt engineering",
-                        "description": "Delving into the basic concepts and importance of prompt engineering, understanding the structure and components that make effective prompts.",
-                        "priority": 5,
-                        "child_num": 0,
-                        "group": [
-                            {
-                                "id": 1753966535397,
-                                "comment": "definition",
-                                "content": "Prompt engineering is the process of crafting and refining prompts to improve the performance of [generative AI](https://learnprompting.org/docs/basics/generative_ai) models. It involves providing specific inputs to tools like ChatGPT, [Midjourney](https://learnprompting.org/docs/image_prompting/midjourney), or Gemini, guiding the AI to deliver more accurate and contextually relevant outputs.",
-                                "context": "Prompt engineering is the process of crafting and refining prompts to improve the performance of generative AI models. It involves providing specific inputs to tools like ChatGPT, Midjourney, or Gemini, guiding the AI to deliver more accurate and contextually relevant outputs.",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966549298,
-                                "comment": "importance",
-                                "content": "Prompt engineering is important because:\n\nIt bridges the gap between vague, general queries and specific, actionable results.\nIt helps mitigate errors, such as generating irrelevant content or incorrect responses.\nIt ensures that the AI can handle tasks like creative writing, image generation, or even code development with minimal post-processing needed.",
-                                "context": "It ensures that the AI can handle tasks like creative writing, image generation, or even code development with minimal post-processing needed.",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966568081,
-                                "comment": "definition",
-                                "content": "A prompt is the input or [instruction](https://learnprompting.org/docs/basics/instructions) given to an AI model to generate a response. Prompts can be simple (a question) or complex (detailed instructions with context, tone, style, and format specifications). The quality of the AI's response depends directly on how clear, detailed, and structured the prompt is.",
-                                "context": "A prompt is the input or instruction given to an AI model to generate a response. Prompts can be simple (a question) or complex (detailed instructions with context, tone, style, and format specifications). The quality of the AI's response depends directly on how clear, detailed, and structured the prompt is.",
-                                "isLeafNode": True,
-                            },
-                        ],
-                        "level": "2",
-                        "parent": 1,
-                        "immutable": False,
-                        "child": [],
+                        "id": 2,
+                        "comment": "想尝试一些当地特色美食",
+                        "content": "西班牙朋友的强推 tapas和海鲜饭是我吃下来综合实力第一名的！！ 不是网红店 非常低调的当地小店",
+                        "context": "📝《综合实力第一名》🥇 Can Ramonet 图2-3 💰：40欧 📍：老城区里 西班牙朋友的强推 tapas和海鲜饭是我吃下来综合实力第一名的！！ 不是网红店 非常低调的当地小店 📝《海鲜 前两名》🦞🐟🦀🦑🐙 Puertecillo Born 图4-5 💰：30欧 📍：老城区 餐厅里有海鲜摊 买好现场加工 非常新鲜 价格便宜种类多 可以每种点一些 吃到好多种 Colom 图6-7 💰：30镑 📍：有两家 连锁店 海鲜拼盘种类很多很大量！海鲜饭也很好吃！ 两人点一个拼盘一个海鲜饭刚刚好 ps：波盖利亚市场 逛一下就行 很贵而且不好吃 梅西光顾的海鲜店 人均100欧 味道是不错 但性价比不高 📝《tapas 不分伯仲的前两名》🍖🍖 Vinitus 图8-9 （有两家） Cerveseria Catalana 图10 💰：30欧 📍：都在感恩大道（购物街）和巴特略之家附近 老网红了 我这五次 每次都会去吃的tapas店 ！ 哪家排队人少去哪家！都很好吃 时间有限选一家就可以，不用都去～ 《海鲜饭争霸赛》 都是💰40欧左右 我心里的前3名 🥇La fonda 图11 连锁店 很多家 我觉得海鲜饭里最好吃的一家 景点附近都有！量很大！ 🥈Taverna el glop 图12 天气好可以坐在室外吃 超级舒服！ 🥉El Glop Braseria 图13 当地人很喜欢的一家店！不是传统的味道 蕃茄味很浓郁",
+                        "isLeafNode": True
                     }
-                ],
+                ]
             },
-            "Identifying limitations of LLMs": {
+            {
                 "id": 2,
-                "intent": "Identifying limitations of LLMs",
-                "description": "Learning about the challenges and limitations faced by large language models (LLMs), such as hallucinations, limited reasoning skills, and bias.",
-                "priority": 5,
-                "child_num": 0,
-                "group": [
-                    {
-                        "id": 1753966585610,
-                        "comment": "limitations",
-                        "content": "1. Hallucinations (Making Up Information)\nOne weird thing about LLMs is that when they don't know the answer, they often won't admit it. Instead, they'll confidently make up something that sounds believable. This is called a \"hallucination.\" For example, if you ask for a fact about a historical event that wasn't in the data it was trained on, the LLM might invent details or events that never happened.\n2. Limited Reasoning Skills\nEven though LLMs can seem very smart, they often struggle with basic math. This is because they weren't really designed to solve math problems. While LLMs are good at understanding and generating sentences, they're not great at solving complex problems. For example, if you ask an LLM to solve a multi-step math problem or a puzzle, it might get confused and make mistakes along the way.\n3. Limited Long-Term Memory\nEach time you use an LLM, it starts with a blank slate—it doesn't remember your previous conversations unless you remind it in the current session. This can be frustrating if you're trying to have an ongoing discussion or work on a project over time.\n4. Limited Knowledge\nLLMs are trained on data from the past. It means that if LLMs don't have access to the internet or any way to look up information in real time, they don't know anything that happened after their training data was collected. If you ask about recent events, they won't be able to provide accurate answers.\n5. Bias\nLLMs learn from the text they're trained on, and that text comes from the internet, a place that can contain biased, harmful, or prejudiced content. As a result, LLMs can sometimes reflect the same biases in their responses. For example, they might produce content that is sexist, racist, or otherwise problematic.\n6. Prompt Hacking\nLLMs can be tricked or \"hacked\" by clever users who know how to manipulate prompts. This is called [prompt hacking](https://learnprompting.org/docs/category/-prompt-hacking). For example, someone might be able to word a prompt in such a way that it gets the LLM to generate inappropriate or harmful content, even if the system is supposed to block such responses.\nHow to handle it: When using LLMs in public or for others to interact with, make sure there are filters and safety measures in place to prevent inappropriate use.",
-                        "context": "1. Hallucinations (Making Up Information)",
-                        "isLeafNode": True,
-                    }
-                ],
-                "level": "1",
-                "parent": None,
-                "immutable": False,
+                "intent": "在地中海晒日光浴",
                 "child": [],
-            },
-            "Exploring different prompting techniques": {
-                "id": 3,
-                "intent": "Exploring different prompting techniques",
-                "description": "Exploring various techniques used in prompt engineering to improve AI responses, such as role prompting and few-shot prompting.",
-                "priority": 5,
-                "child_num": 1,
-                "group": [],
-                "level": "1",
-                "parent": None,
-                "immutable": False,
-                "child": [
-                    {
-                        "id": 5,
-                        "intent": "Understanding applications of prompting techniques",
-                        "description": "Gaining knowledge about specific techniques in prompting, such as role prompting and few-shot prompting, and their applications.",
-                        "priority": 5,
-                        "child_num": 0,
-                        "group": [
-                            {
-                                "id": 1753966609987,
-                                "comment": "role prompting",
-                                "content": 'Role prompting is a technique that involves assigning a role or persona to an [AI model](https://learnprompting.org/docs/basics/generative_ai), such as "food critic" or "mathematician," to control the style[1](https://learnprompting.org/docs/basics/roles#footnote-label)Shanahan, M., McDonell, K., & Reynolds, L. (2023). Role-Play with Large Language Models.\n [2](https://learnprompting.org/docs/basics/roles#footnote-label)Li, G., Hammoud, H. A. A. K., Itani, H., Khizbullin, D., & Ghanem, B. (2023). CAMEL: Communicative Agents for "Mind" Exploration of Large Scale Language Model Society.\n [3](https://learnprompting.org/docs/basics/roles#footnote-label)Santu, S. K. K., & Feng, D. (2023). TELeR: A General Taxonomy of LLM Prompts for Benchmarking Complex Tasks.\n  or accuracy of its responses.',
-                                "context": "Role prompting",
-                                "isLeafNode": True,
-                            },
-                            {
-                                "id": 1753966624337,
-                                "comment": "in-context learning",
-                                "content": "Few-shot prompting is a direct application of ICL, where multiple examples (or \"shots\") are provided to guide the model's output. The more examples (or shots) we give, the better the model typically performs, as it can learn from these examples and generalize them to new, similar tasks.\nHere's a breakdown of the common shot-based methods:\n\n[Zero-Shot Prompting](https://learnprompting.org/docs/basics/few_shot#what-is-zero-shot-prompting): No examples are provided, and the model must rely entirely on its pre-trained knowledge.\n[One-Shot Prompting](https://learnprompting.org/docs/basics/few_shot#what-is-one-shot-prompting): A single example is given to clarify the task for the model.\n[Few-Shot Prompting](https://learnprompting.org/docs/basics/few_shot#what-is-few-shot-prompting): Two or more examples are included, allowing the model to recognize patterns and deliver more accurate responses.",
-                                "context": "Few-shot prompting",
-                                "isLeafNode": True,
-                            },
-                        ],
-                        "level": "2",
-                        "parent": 3,
-                        "immutable": False,
-                        "child": [],
-                    }
-                ],
-            },
-        },
-    }
+                "child_num": 0,
+                "priority": 1
 
-    # 测试新函数
-    print("=== 测试 getIntentsByLevel 函数 ===")
-    
-    # 调试信息
-    print(f"intentTree keys: {list(intentTree.keys())}")
-    if "item" in intentTree:
-        print(f"item keys: {list(intentTree['item'].keys())}")
-        # 检查第一个节点的结构
-        first_key = list(intentTree['item'].keys())[0]
-        first_node = intentTree['item'][first_key]
-        print(f"第一个节点结构: {list(first_node.keys())}")
-        print(f"isLeafNode: {first_node.get('isLeafNode')}")
-        print(f"intent: {first_node.get('intent')}")
-        print(f"description: {first_node.get('description')}")
-    
-    # 测试返回所有意图
-    print("\n1. 返回所有意图:")
-    all_intents = getIntentsByLevel(intentTree, "all")
-    print(f"找到 {len(all_intents)} 个意图")
-    for intent in all_intents:
-        for key, value in intent.items():
-            print(f"  - {key}: {value}")
-    
-    # 测试返回第一层意图
-    print("\n2. 返回第一层意图:")
-    first_intents = getIntentsByLevel(intentTree, "first")
-    print(f"找到 {len(first_intents)} 个第一层意图")
-    for intent in first_intents:
-        for key, value in intent.items():
-            print(f"  - {key}: {value}")
-    
-    # 测试优先返回第二层意图
-    print("\n3. 优先返回第二层意图:")
-    prefer_second_intents = getIntentsByLevel(intentTree, "prefer_second")
-    print(f"找到 {len(prefer_second_intents)} 个优先第二层意图")
-    for intent in prefer_second_intents:
-        for key, value in intent.items():
-            print(f"  - {key}: {value}")
+            }
+        ]
+    }
+    # print(filterNodes(intentTree, target_level=1))
+    print(get_intent_records(intentTree, '在地中海晒日光浴'))

@@ -746,9 +746,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             # sentences_embeddings = await embedModel.embeddingList(chunk)
 
             # Step 3: 筛选意图并向量化它们
-            intentsDict = getIntentsByLevel(
+            intentsDict = filterNodes(
                 intentTree,  # 转换 IntentTree 为字典
-                'prefer_second'
+                target_level=1
             )
             # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
