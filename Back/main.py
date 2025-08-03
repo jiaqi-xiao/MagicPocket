@@ -747,7 +747,7 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
             # Step 3: 筛选意图并向量化它们
             intentsDict = getIntentsByLevel(
-                intentTree,  # 转换 IntentTree 为字典
+                intentTree['item'],  # 转换 IntentTree 为字典
                 'prefer_second'
             )
             # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
