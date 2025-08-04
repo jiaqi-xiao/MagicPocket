@@ -25,7 +25,7 @@ def filterNodes(
         and not tree.get("isLeafNode", True)
     ):
         intent = tree.get("intent")
-        result.append({intent: tree.get("description")})
+        result.append({intent: tree.get('description')})
 
     if current_level == target_level:
         return result
@@ -41,7 +41,7 @@ def filterNodes(
 
 def is_sentence_valid(s, min_length=3):
     # 检查是否包含中文字符
-    chinese_chars = re.findall(r"[\u4e00-\u9fff]", s)
+    chinese_chars = re.findall(r'[\u4e00-\u9fff]', s)
     if chinese_chars:  # 如果包含中文
         return len(chinese_chars) >= min_length
     else:  # 如果不包含中文，使用原来的英文单词判断逻辑
@@ -53,11 +53,7 @@ def split2Sentences(content):
     sentence_endings = re.compile(r"(?<=[。！？!?.\n])")
     sentences = sentence_endings.split(content)
     # 去除空白句子
-    sentences = [
-        s.strip()
-        for s in sentences
-        if s.strip() and not all(c in "。！？!?.\n" for c in s)
-    ]
+    sentences = [s.strip() for s in sentences if s.strip() and not all(c in "。！？!?.\n" for c in s)]
     # 去除过短的句子
     sentences = [s for s in sentences if is_sentence_valid(s)]
     return sentences
@@ -113,7 +109,6 @@ def get_intent_records(intentTree, intent):
 
     # 从根节点开始递归遍历
     return traverse_and_match(intentTree)
-
 
 def merge_dicts(data):
     merged_dict = {"top_k": {}, "bottom_k": {}}
