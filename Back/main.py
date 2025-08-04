@@ -707,28 +707,31 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     try:
         chunk_num=1
         # 先验证并转换请求数据为RAGRequest对象
-        try:
-            ragRequest = RAGRequest(**request_dict)
-        except ValidationError as e:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid request format: {str(e)}"
-            )
+        # try:
+        #     ragRequest = RAGRequest(**request_dict)
+
+        # except ValidationError as e:
+        #     raise HTTPException(
+        #         status_code=422,
+        #         detail=f"Invalid request format: {str(e)}"
+        #     )
+
+        ragRequest = request_dict
 
         # 以下是原有逻辑
-        intentTree = ragRequest.intentTree
-        webContent = ragRequest.webContent
+        intentTree = ragRequest['intentTree']
+
+        webContent = ragRequest['webContent']
         # k = ragRequest.k
         # top_threshold = ragRequest.top_threshold
         # bottom_threshold = ragRequest.bottom_threshold
-        scenario = ragRequest.scenario
+        scenario = ragRequest['scenario']
 
-        intentTree = IntentTree(
-                scenario = scenario,
-                child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
-            ).model_dump()
+        # intentTree = IntentTree(
+        #         scenario = scenario,
+        #         child=[Intent(**intent) for intent in intentTree.get("item", [])] if intentTree else []
+        #     ).model_dump()
         
-        print("intentTree", intentTree)
 
         # Step 1: 将 webContent 分句
         # sentences = await model4Split.invoke(scenario, webContent)
@@ -746,10 +749,12 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             # sentences_embeddings = await embedModel.embeddingList(chunk)
 
             # Step 3: 筛选意图并向量化它们
-            intentsDict = filterNodes(
-                intentTree,  # 转换 IntentTree 为字典
-                target_level=1
+            intentsDict = getIntentsByLevel(
+                intentTree['item'],  # 转换 IntentTree 为字典
+                level_control="second"
             )
+
+            print("intentsDict", intentsDict)
             # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
             # Step 4: 计算每个意图的 top-k 相关句子
