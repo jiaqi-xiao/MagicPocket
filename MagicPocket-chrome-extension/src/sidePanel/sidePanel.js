@@ -2,6 +2,7 @@ let intentNetwork = null;
 let networkGraph = null;
 let networkManager = null;
 let lastIntentTree = null; // 添加一个变量来保存最后的 intentTree 状态
+let lastAnalysisRecordsHash = null; // 记录上次分析时的数据哈希值
 
 // 测试环境控制变量
 const USE_MOCK_DATA = false;
@@ -57,6 +58,68 @@ function mergeConfirmationStates(newIntentTree, lastIntentTree) {
     });
     
     console.log('Confirmation states merged successfully');
+}
+
+// Record change detection functions
+function generateRecordsHash(records) {
+    if (!records || !Array.isArray(records)) {
+        return null;
+    }
+    
+    // Create a simplified representation of records for hashing
+    const recordsData = records.map(record => ({
+        id: record.id,
+        content: record.content,
+        comment: record.comment,
+        timestamp: record.timestamp,
+        type: record.type,
+        url: record.url
+    }));
+    
+    // Simple hash function using JSON string
+    const jsonString = JSON.stringify(recordsData);
+    let hash = 0;
+    for (let i = 0; i < jsonString.length; i++) {
+        const char = jsonString.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return hash.toString();
+}
+
+async function checkRecordsChanged() {
+    const records = await getRecords();
+    const currentHash = generateRecordsHash(records);
+    
+    // Get stored hash from previous analysis
+    const result = await new Promise((resolve) => {
+        chrome.storage.local.get(['lastAnalysisRecordsHash'], resolve);
+    });
+    
+    const storedHash = result.lastAnalysisRecordsHash;
+    const hasChanged = currentHash !== storedHash;
+    
+    console.log('Records change check:', {
+        currentHash,
+        storedHash,
+        hasChanged,
+        recordsCount: records.length
+    });
+    
+    return hasChanged;
+}
+
+async function updateAnalysisRecordsHash() {
+    const records = await getRecords();
+    const currentHash = generateRecordsHash(records);
+    
+    await new Promise((resolve) => {
+        chrome.storage.local.set({ lastAnalysisRecordsHash: currentHash }, resolve);
+    });
+    
+    lastAnalysisRecordsHash = currentHash;
+    console.log('Updated analysis records hash:', currentHash);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -368,12 +431,36 @@ function initializeRecordsArea() {
 
     analyzeBtn.addEventListener('click', async () => {
         window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_btn_clicked', {});
-        // 如果网络可视化已经显示，则隐藏它
-        if (networkManager) {
-            hideNetworkVisualization();
-            analyzeBtn.textContent = "Analyze";
-            window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_cancelled', {});
-            return;
+        
+        // Get current analysis mode
+        const modeResult = await new Promise((resolve) => {
+            chrome.storage.local.get(['analysisMode'], resolve);
+        });
+        const analysisMode = modeResult.analysisMode || 'normal';
+        const isAblationMode = analysisMode === 'ablation';
+        
+        console.log('Analysis mode:', analysisMode);
+        
+        // Handle different behaviors based on mode and current state
+        if (isAblationMode) {
+            // Ablation mode: check if disabled (Analysis Done state)
+            if (analyzeBtn.classList.contains('mp-analyze-btn-disabled')) {
+                console.log('Analyze button is disabled in ablation mode');
+                return;
+            }
+            // If it's "Reanalyze", ensure button is in normal state before proceeding
+            if (analyzeBtn.textContent === 'Reanalyze') {
+                resetAnalyzeButtonToNormal(analyzeBtn);
+                console.log('Reanalyze button clicked, reset to normal state');
+            }
+        } else {
+            // Normal mode: if network is shown, hide it
+            if (networkManager) {
+                hideNetworkVisualization();
+                analyzeBtn.textContent = "Analyze";
+                window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_cancelled', {});
+                return;
+            }
         }
 
         try {
@@ -394,7 +481,7 @@ function initializeRecordsArea() {
             }
 
             // 显示加载状态
-            showLoadingState();
+            showAnalyzeLoadingState(analyzeBtn);
 
             // 调用后端 group_nodes API
             const startTime = performance.now();
@@ -594,35 +681,54 @@ function initializeRecordsArea() {
                 raw_response: JSON.stringify(intentTree)
             });
 
-            // 显示网络视化容器
-            showNetworkContainer();
-            window.Logger.log(window.LogCategory.UI, 'side_panel_network_visualization_shown', {});
-            
-            // 初始化或更新网络可视化
-            if (!networkManager) {
-                networkManager = await window.showNetworkVisualization(
-                    intentTree, 
-                    document.getElementById('networkVisualizationContainer'),
-                    'sidepanel',
-                    'hierarchical'
-                );
+            if (isAblationMode) {
+                // Ablation mode: don't show network, set button to Analysis Done
+                console.log('Ablation mode: Analysis completed, network hidden');
+                
+                // Update records hash after successful analysis
+                await updateAnalysisRecordsHash();
+                
+                // In ablation mode, analysis is complete - set to "Analysis Done" and disable
+                analyzeBtn.textContent = "Analysis Done";
+                analyzeBtn.classList.add('mp-analyze-btn-disabled');
+                
+                // Clear the original text so hideAnalyzeLoadingState won't override our setting
+                delete analyzeBtn.dataset.originalText;
+                
+                window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_completed_ablation', {});
             } else {
-                networkManager.updateData(intentTree);
-            }
+                // Update records hash after successful analysis
+                await updateAnalysisRecordsHash();
+                // Normal mode: show network visualization
+                showNetworkContainer();
+                window.Logger.log(window.LogCategory.UI, 'side_panel_network_visualization_shown', {});
+                
+                // 初始化或更新网络可视化
+                if (!networkManager) {
+                    networkManager = await window.showNetworkVisualization(
+                        intentTree, 
+                        document.getElementById('networkVisualizationContainer'),
+                        'sidepanel',
+                        'hierarchical'
+                    );
+                } else {
+                    networkManager.updateData(intentTree);
+                }
 
-            // 更新按钮文本
-            analyzeBtn.textContent = "Hide Intent Tree";
-            window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_completed', {});
+                // 更新按钮文本
+                analyzeBtn.textContent = "Hide Intent Tree";
+                window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_completed', {});
+            }
             
         } catch (error) {
             console.error('Error:', error);
             alert('An error occurred during analysis: ' + error.message);
-            hideLoadingState();
+            hideAnalyzeLoadingState(analyzeBtn);
             window.Logger.log(window.LogCategory.UI, 'side_panel_analyze_failed', {
                 error: error.message
             });
         } finally {
-            hideLoadingState();
+            hideAnalyzeLoadingState(analyzeBtn);
         }
     });
 
@@ -643,9 +749,25 @@ function initializeRecordsArea() {
     updateRecordsList();
 
     // 监听记录更新
-    chrome.storage.onChanged.addListener((changes, namespace) => {
+    chrome.storage.onChanged.addListener(async (changes, namespace) => {
         if (namespace === 'local' && changes.records) {
             updateRecordsList();
+            
+            // Update analyze button state in ablation mode when records change
+            const modeResult = await new Promise((resolve) => {
+                chrome.storage.local.get(['analysisMode'], resolve);
+            });
+            const analysisMode = modeResult.analysisMode || 'normal';
+            
+            if (analysisMode === 'ablation') {
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                if (analyzeBtn && analyzeBtn.textContent === 'Analysis Done') {
+                    // Records changed, enable reanalyze with full reset
+                    analyzeBtn.textContent = 'Reanalyze';
+                    resetAnalyzeButtonToNormal(analyzeBtn);
+                    console.log('Records changed in ablation mode, button updated to Reanalyze');
+                }
+            }
         }
     });
 }
@@ -878,6 +1000,44 @@ function hideLoadingState() {
     if (loadingEl) {
         loadingEl.remove();
     }
+}
+
+// New loading state functions for analyze button
+function showAnalyzeLoadingState(button) {
+    // Store original text
+    if (!button.dataset.originalText) {
+        button.dataset.originalText = button.textContent;
+    }
+    
+    // Add loading ring and text
+    button.innerHTML = '<span class="mp-loading-ring"></span>Generating...';
+    button.disabled = true;
+    button.style.opacity = '0.8';
+}
+
+function hideAnalyzeLoadingState(button) {
+    // Restore original state if not overridden by special state
+    if (button.dataset.originalText) {
+        button.textContent = button.dataset.originalText;
+        delete button.dataset.originalText;
+    }
+    
+    // Only reset button state if it doesn't have the special disabled class
+    if (!button.classList.contains('mp-analyze-btn-disabled')) {
+        button.disabled = false;
+        button.style.opacity = '1';
+    } else {
+        // Keep the button disabled but reset opacity for visual consistency
+        button.disabled = true;
+        button.style.opacity = '0.6';
+    }
+}
+
+// Reset button to normal enabled state
+function resetAnalyzeButtonToNormal(button) {
+    button.disabled = false;
+    button.style.opacity = '1';
+    button.classList.remove('mp-analyze-btn-disabled');
 }
 
 // 监听标签页更新

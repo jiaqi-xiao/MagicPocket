@@ -54,6 +54,9 @@ function deleteRecord(index) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Initialize mode toggle
+    initializeModeToggle();
+    
     document.getElementById("mp-popup-new-task-btn").addEventListener("click", () => {
         window.Logger.log(window.LogCategory.UI, 'popup_new_task_btn_clicked', {});
         if (confirm("Are you sure you want to start a new task? This will clear all current records.")) {
@@ -152,3 +155,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 //     });
 //     window.close();
 // });
+
+// Mode Toggle Functions
+function initializeModeToggle() {
+    const normalRadio = document.getElementById('mp-mode-normal');
+    const ablationRadio = document.getElementById('mp-mode-ablation');
+    
+    // Load current mode from storage
+    chrome.storage.local.get(['analysisMode'], (result) => {
+        const currentMode = result.analysisMode || 'normal';
+        
+        if (currentMode === 'normal') {
+            normalRadio.checked = true;
+        } else {
+            ablationRadio.checked = true;
+        }
+        
+        window.Logger.log(window.LogCategory.UI, 'popup_mode_toggle_initialized', {
+            current_mode: currentMode
+        });
+    });
+    
+    // Add event listeners for both radio buttons
+    normalRadio.addEventListener('change', handleModeToggle);
+    ablationRadio.addEventListener('change', handleModeToggle);
+}
+
+function handleModeToggle(event) {
+    if (!event.target.checked) {
+        // Only handle the checked radio button
+        return;
+    }
+    
+    const newMode = event.target.value;
+    
+    // Save new mode to storage
+    chrome.storage.local.set({ analysisMode: newMode }, () => {
+        window.Logger.log(window.LogCategory.UI, 'popup_mode_toggle_changed', {
+            new_mode: newMode,
+            is_ablation: newMode === 'ablation'
+        });
+        
+        console.log(`Analysis mode changed to: ${newMode}`);
+    });
+}
