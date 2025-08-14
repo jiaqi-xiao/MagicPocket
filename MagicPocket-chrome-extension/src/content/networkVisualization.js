@@ -231,9 +231,10 @@ class NetworkManager {
             if (existingNodeId && existingNodeId[1] !== undefined) {
                 isImmutable = existingNodeId[1];
             } else {
-                // 检查是否在immutable集合中或者intentData中有confirmed标记
+                // 检查是否在immutable集合中或者intentData中有confirmed标记，默认为confirmed状态
                 isImmutable = NetworkManager.immutableIntents.has(nodeName) || 
-                             (nodeData && nodeData.confirmed === true);
+                             (nodeData && nodeData.confirmed === true) ||
+                             true; // 默认所有节点为confirmed状态
             }
             
             // 添加当前意图节点
@@ -293,6 +294,8 @@ class NetworkManager {
         this.processRecordNodes = (records, parentId, level, isImmutable) => {
             records.forEach(record => {
                 const recordId = `record_${nodeId++}`;
+                // 默认记录节点为confirmed状态
+                const recordConfirmed = isImmutable || true;
                 const recordNode = {
                     id: recordId,
                     label: this.wrapLabel(this.truncateText(record.content || record.text || record.description || 'No content', 30), 12, NetworkManager.NodeTypes.RECORD),
@@ -300,7 +303,7 @@ class NetworkManager {
                     color: this.getNodeColor(NetworkManager.NodeTypes.RECORD),
                     size: this.getNodeSize(NetworkManager.NodeTypes.RECORD),
                     level: this.layout === 'hierarchical' ? level : undefined,
-                    opacity: isImmutable ? 1 : 0.3,
+                    opacity: recordConfirmed ? 1 : 0.3,
                     title: this.formatRecordTooltip({
                         content: record.content || record.text || record.description || 'No content',
                         context: record.context || '',
@@ -308,13 +311,13 @@ class NetworkManager {
                     })
                 };
                 nodes.push(recordNode);
-                this.nodeStates.set(recordId, isImmutable);
+                this.nodeStates.set(recordId, recordConfirmed);
 
                 edges.push({
                     from: parentId,
                     to: recordId,
                     arrows: 'to',
-                    dashes: !isImmutable
+                    dashes: !recordConfirmed
                 });
             });
         };
