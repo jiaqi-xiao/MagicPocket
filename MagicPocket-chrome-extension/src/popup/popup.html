@@ -24,6 +24,21 @@
 
 <body>
     <div class="mp-popup-button-container">
+        <div class="mp-mode-toggle-container">
+            <span class="mp-mode-label">Mode:</span>
+            <div class="mp-radio-group">
+                <label class="mp-radio-option">
+                    <input type="radio" name="analysisMode" value="normal" id="mp-mode-normal" class="mp-radio-input" checked>
+                    <span class="mp-radio-button"></span>
+                    <span class="mp-radio-text">Normal</span>
+                </label>
+                <label class="mp-radio-option">
+                    <input type="radio" name="analysisMode" value="ablation" id="mp-mode-ablation" class="mp-radio-input">
+                    <span class="mp-radio-button"></span>
+                    <span class="mp-radio-text">Ablation</span>
+                </label>
+            </div>
+        </div>
         <button id="mp-popup-new-task-btn" class="mp-popup-btn">New Task</button>
         <!-- <button id="mp-popup-screenshot-btn" class="mp-popup-btn">Screenshot</button> -->
         <button id="mp-popup-side-panel-btn" class="mp-popup-btn">Side Panel</button>
