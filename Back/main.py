@@ -371,17 +371,6 @@ chain4ExtractIntent = extractModule.Chain4ExtractIntent(model)
 
 chain4RecommendIntent = extractModule.Chain4RecommendIntent(model)
 
-@app.post("/recommend/")
-async def recommend_intent(request: dict):
-    '''
-    根据意图树和用户输入的Desire，推荐意图。
-    '''
-    try:
-        result = await chain4RecommendIntent.invoke(user_input=request)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Error processing recommend intent: {str(e)}")
-
 @app.post("/extract/")
 async def extract_intent(request: dict):
     try:
@@ -482,7 +471,7 @@ async def extract_intent(request: dict):
                 "group": flatten_records(item.get("records", [])),
                 "level": item.get("level", "1"),
                 "parent": item.get("parent"),
-                "immutable": False,  # 默认不是不可变的
+                "immutable": True,  # 默认是不可变的
                 "child": []  # 初始化子节点列表
             }
         
@@ -549,6 +538,17 @@ async def extract_intent(request: dict):
 
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error processing extract intent: {str(e)}")
+
+@app.post("/recommend/")
+async def recommend_intent(request: dict):
+    '''
+    根据意图树和用户输入的Desire，推荐意图。
+    '''
+    try:
+        result = await chain4RecommendIntent.invoke(user_input=request)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error processing recommend intent: {str(e)}")
 
 # chain4Construct = extractModule.Chain4Construct(model)
 # @app.post("/construct/")

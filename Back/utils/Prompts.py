@@ -349,7 +349,7 @@ Follow these rules:
    - group (empty array or containing leaf node info)  
    - level (hierarchy level)  
    - parent (parent id, null for Level 1)  
-   - immutable (boolean)  
+   - immutable (boolean, default is False)  
    - child (array, initially empty)  
 
 Input example:
