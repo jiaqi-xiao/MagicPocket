@@ -150,3 +150,19 @@ class IntentNode(BaseModel):
 
 class ExtractResult(RootModel[list[IntentNode]]):
     pass
+
+class UpdatedIntentNode(BaseModel):
+    id: int
+    intent: str
+    description: str
+    priority: int
+    child_num: int
+    group: list[Union[RecordRef, Record]] = []
+    level: Literal['1', '2']
+    parent: int | None
+    immutable: bool
+    child: list["UpdatedIntentNode"] = []
+
+class UpdatedIntentTree(BaseModel):
+    scenario: str
+    item: dict[str, UpdatedIntentNode]

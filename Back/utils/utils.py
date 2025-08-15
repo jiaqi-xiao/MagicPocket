@@ -130,56 +130,52 @@ def merge_dicts(data):
 
     return merged_dict
 
+
+def getIntentsByLevel(intentTreeItem, level_control="all"):
+    intentsDict = []
+    if level_control == "first":
+        for k, v in intentTreeItem.items():
+            intentsDict.append({"intent": k, "description": v["description"]})
+    elif level_control == "second":
+        for k, v in intentTreeItem.items():
+            if len(v["child"]) > 0:
+                for second_intent in v["child"]:
+                    intentsDict.append({"intent": second_intent["intent"], "description": second_intent["description"]})
+            else:
+                intentsDict.append({"intent": k, "description": v["description"]})
+    else:
+        for k, v in intentTreeItem.items():
+            intentsDict.append({"intent": k, "description": v["description"]})
+            if len(v["child"]) > 0:
+                for second_intent in v["child"]:
+                    intentsDict.append({"intent": second_intent["intent"], "description": second_intent["description"]})
+    return intentsDict
+
 if __name__ == "__main__":
     intentTree = {
-        "scenario": "travel",
+        "scenario": "learn prompt engineering",
         "child": [
             {
-                "id": 0,
-                "intent": "探索巴塞罗那建筑风格",
-                "child_num": 2,
-                "priority": 1,
-                "child": [
-                    {
-                        "id": 0,
-                        "comment": "挑一个天气好的傍晚取圣家堂",
-                        "content": "巴塞罗那三件套：圣家堂、米拉之家、巴特略之家尽量不要一天去，不然出片都是一样的，而且时间也会紧张 ⭐️圣家堂日落前两小时的光最好",
-                        "context": "小tips:⭐️巴塞罗那三件套：圣家堂、米拉之家、巴特略之家尽量不要一天去，不然出片都是一样的，而且时间也会紧张 ⭐️圣家堂日落前两小时的光最好 ⭐️买90欧72h的3日联票🎫最划算p18，它包含了10个景点门票和公交地铁，可以直接去景点换票，官网：visit Barcelona tickets,（具体情况可以在小📕搜，有好多相关攻略） 以下标注🟢的表示用了这个联票 ⭐️小偷很多，注意钱包",
-                        "isLeafNode": True
-                    },
-                    {
-                        "id": 1,
-                        "comment": "很奇幻的建筑风格，想去亲眼看看",
-                        "content": "巴特罗之家外立面的波浪形曲线和五彩斑斓的瓷砖装饰，象征着大海的波涛和色彩斑斓的鳞片。其阳台和窗户的造型被认为像是动物的骨骼，尤其是龙的形象，反映了高迪从自然界中汲取的灵感。屋顶的龙脊设计和圣乔治屠龙的传说也有关联。",
-                        "context": "巴特罗之家（Casa Batlló）是位于西班牙巴塞罗那的一座标志性建筑，由著名建筑师安东尼·高迪（Antoni Gaudí）于1904年设计改造。它是加泰罗尼亚现代主义的杰出代表，以其独特的外观和富有想象力的设计而闻名。 巴特罗之家外立面的波浪形曲线和五彩斑斓的瓷砖装饰，象征着大海的波涛和色彩斑斓的鳞片。其阳台和窗户的造型被认为像是动物的骨骼，尤其是龙的形象，反映了高迪从自然界中汲取的灵感。屋顶的龙脊设计和圣乔治屠龙的传说也有关联。 内部空间也充满创意和细节，每个房间都采用独特的设计理念，光线的运用和空气流通的考量令人称奇。如今，巴特罗之家是世界文化遗产之一，向公众开放，是巴塞罗那不可错过的文化与建筑地标。",
-                        "isLeafNode": True
-                    }
-                ]
-            },
-            {
-                "id": 1,
-                "intent": "品尝当地特色美食",
-                "child_num": 1,
-                "priority": 1,
-                "child": [
-                    {
-                        "id": 2,
-                        "comment": "想尝试一些当地特色美食",
-                        "content": "西班牙朋友的强推 tapas和海鲜饭是我吃下来综合实力第一名的！！ 不是网红店 非常低调的当地小店",
-                        "context": "📝《综合实力第一名》🥇 Can Ramonet 图2-3 💰：40欧 📍：老城区里 西班牙朋友的强推 tapas和海鲜饭是我吃下来综合实力第一名的！！ 不是网红店 非常低调的当地小店 📝《海鲜 前两名》🦞🐟🦀🦑🐙 Puertecillo Born 图4-5 💰：30欧 📍：老城区 餐厅里有海鲜摊 买好现场加工 非常新鲜 价格便宜种类多 可以每种点一些 吃到好多种 Colom 图6-7 💰：30镑 📍：有两家 连锁店 海鲜拼盘种类很多很大量！海鲜饭也很好吃！ 两人点一个拼盘一个海鲜饭刚刚好 ps：波盖利亚市场 逛一下就行 很贵而且不好吃 梅西光顾的海鲜店 人均100欧 味道是不错 但性价比不高 📝《tapas 不分伯仲的前两名》🍖🍖 Vinitus 图8-9 （有两家） Cerveseria Catalana 图10 💰：30欧 📍：都在感恩大道（购物街）和巴特略之家附近 老网红了 我这五次 每次都会去吃的tapas店 ！ 哪家排队人少去哪家！都很好吃 时间有限选一家就可以，不用都去～ 《海鲜饭争霸赛》 都是💰40欧左右 我心里的前3名 🥇La fonda 图11 连锁店 很多家 我觉得海鲜饭里最好吃的一家 景点附近都有！量很大！ 🥈Taverna el glop 图12 天气好可以坐在室外吃 超级舒服！ 🥉El Glop Braseria 图13 当地人很喜欢的一家店！不是传统的味道 蕃茄味很浓郁",
-                        "isLeafNode": True
-                    }
-                ]
-            },
-            {
-                "id": 2,
-                "intent": "在地中海晒日光浴",
+                "id": 505867,
+                "isLeafNode": False,
+                "immutable": False,
                 "child": [],
                 "child_num": 0,
-                "priority": 1
-
-            }
-        ]
+                "priority": 5,
+                "intent": "Learning Techniques in Prompt Engineering",
+                "description": "Exploring different techniques and strategies used in prompt engineering to enhance AI model outputs.",
+            },
+            {
+                "id": 853398,
+                "isLeafNode": False,
+                "immutable": False,
+                "child": [],
+                "child_num": 0,
+                "priority": 5,
+                "intent": "Understanding Prompt Engineering",
+                "description": "Gaining foundational knowledge about what prompt engineering is and its significance in AI model interactions.",
+            },
+        ],
     }
     # print(filterNodes(intentTree, target_level=1))
-    print(get_intent_records(intentTree, '在地中海晒日光浴'))
+    print(get_intent_records(intentTree, "在地中海晒日光浴"))

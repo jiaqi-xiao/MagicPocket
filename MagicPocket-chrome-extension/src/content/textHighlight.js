@@ -189,12 +189,12 @@ async function processPageContent() {
         k: 3,
         top_threshold: 0.5,
         bottom_threshold: 0.5,
-        intentTree: formattedIntentTree,
+        intentTree: intentTree,
         webContent: textContent
     };
 
     try {
-        validateRAGRequest(ragRequest);
+        // validateRAGRequest(ragRequest);
         const response = await chrome.runtime.sendMessage({
             action: "fetchRAG",
             data: ragRequest

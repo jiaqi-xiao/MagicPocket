@@ -539,6 +539,14 @@ function initializeRecordsArea() {
                     json: async () => (mockExtractData)
                 };
             } else {
+                // 获取当前的intentTree（包含用户确认状态）
+                let currentIntentTree = null;
+                if (networkManager) {
+                    currentIntentTree = networkManager.getIntentTreeWithStates();
+                } else if (lastIntentTree) {
+                    currentIntentTree = lastIntentTree;
+                }
+
                 constructResponse = await fetch(`${host}extract/`, {
                     method: 'POST',
                     headers: {
@@ -548,7 +556,8 @@ function initializeRecordsArea() {
                         scenario: taskDescription,
                         groupsOfNodes: groupsOfNodes.groupsOfNodes,
                         familiarity: groupsOfNodes.granularity.familiarity,
-                        specificity: groupsOfNodes.granularity.specificity
+                        specificity: groupsOfNodes.granularity.specificity,
+                        intentTree: currentIntentTree
                     })
                 });
             }

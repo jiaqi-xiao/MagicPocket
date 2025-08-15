@@ -1,0 +1,125 @@
+{
+    "item": {
+      "Exploring Prompting Techniques": {
+        "child": [
+          {
+            "child": [],
+            "child_num": 0,
+            "description": "Learning about various prompting techniques including instruction prompting and role prompting to control model outputs.",
+            "group": [
+              {
+                "comment": "tech 1",
+                "content": "Instruction prompting[1](https://learnprompting.org/docs/basics/instructions#footnote-label)Efrat, A., & Levy, O. (2020). The Turking Test: Can Language Models Understand Instructions?\n [2](https://learnprompting.org/docs/basics/instructions#footnote-label)Mishra, S., Khashabi, D., Baral, C., Choi, Y., & Hajishirzi, H. (2022). Reframing Instructional Prompts to GPTk’s Language. Findings of the Association for Computational Linguistics: ACL 2022. [https://doi.org/10.18653/v1/2022.findings-acl.50](https://doi.org/10.18653/v1/2022.findings-acl.50)\n  centers around the ability of [generative AI models](https://learnprompting.org/docs/basics/generative_ai), particularly [large language models (LLMs)](https://learnprompting.org/vocabulary/LLM), to follow natural language instructions. Instruction prompting aims to allow models to work with new, previously unseen tasks by understanding and executing instructions expressed in natural language, without requiring task-specific training data.\nFor example, instead of training a model on multiple examples of extracting the fourth word from a sentence, you can simply instruct it: \"Write the fourth word of the sentence.\"",
+                "context": "Instruction prompting",
+                "id": 1754314225028,
+                "isLeafNode": true
+              },
+              {
+                "comment": "tech 2: role prompting",
+                "content": "Role prompting is a technique that involves assigning a role or persona to an [AI model](https://learnprompting.org/docs/basics/generative_ai), such as \"food critic\" or \"mathematician,\" to control the style[1](https://learnprompting.org/docs/basics/roles#footnote-label)Shanahan, M., McDonell, K., & Reynolds, L. (2023). Role-Play with Large Language Models.\n [2](https://learnprompting.org/docs/basics/roles#footnote-label)Li, G., Hammoud, H. A. A. K., Itani, H., Khizbullin, D., & Ghanem, B. (2023). CAMEL: Communicative Agents for “Mind” Exploration of Large Scale Language Model Society.\n [3](https://learnprompting.org/docs/basics/roles#footnote-label)Santu, S. K. K., & Feng, D. (2023). TELeR: A General Taxonomy of LLM Prompts for Benchmarking Complex Tasks.\n  or accuracy of its responses.\nBy instructing the model to take on a specific role, you can shape how it processes and delivers information. This technique is widely used across many applications, from creative writing to problem-solving.",
+                "context": "Role prompting",
+                "id": 1754314240079,
+                "isLeafNode": true
+              }
+            ],
+            "id": 6,
+            "immutable": false,
+            "intent": "Understanding Prompting Techniques",
+            "level": "2",
+            "parent": 3,
+            "priority": 5
+          }
+        ],
+        "child_num": 1,
+        "description": "Investigating different techniques used in prompt engineering, such as instruction and role prompting.",
+        "group": [],
+        "id": 3,
+        "immutable": false,
+        "intent": "Exploring Prompting Techniques",
+        "level": "1",
+        "parent": null,
+        "priority": 5
+      },
+      "Learning About Prompts": {
+        "child": [
+          {
+            "child": [],
+            "child_num": 0,
+            "description": "Identifying and explaining the essential components that can be used to structure effective prompts.",
+            "group": [
+              {
+                "comment": "definition",
+                "content": "What is a Prompt?\nA prompt is the input or [instruction](https://learnprompting.org/docs/basics/instructions) given to an AI model to generate a response. Prompts can be simple (a question) or complex (detailed instructions with context, tone, style, and format specifications). The quality of the AI's response depends directly on how clear, detailed, and structured the prompt is.\nHere's an example of a simple prompt:",
+                "context": "What is a Prompt?",
+                "id": 1754314211918,
+                "isLeafNode": true
+              },
+              {
+                "comment": "basic structure",
+                "content": "Prompts are made up of several key components that work together to guide the AI. While not every prompt will contain all these elements, understanding how each part functions can help you create more targeted and effective inputs.\nThe key parts of a prompt are:\n\n[The Directive](https://learnprompting.org/docs/basics/prompt_structure#1-the-directive)\n[Examples](https://learnprompting.org/docs/basics/prompt_structure#2-examples)\n[Role (Persona)](https://learnprompting.org/docs/basics/prompt_structure#3-role-persona)\n[Output Formatting](https://learnprompting.org/docs/basics/prompt_structure#4-output-formatting)\n[Additional Information](https://learnprompting.org/docs/basics/prompt_structure#5-additional-information)",
+                "context": "Prompts are made up of several key components that work together to guide the AI. While not every prompt will contain all these elements, understanding how each part functions can help you create more targeted and effective inputs.",
+                "id": 1754314218614,
+                "isLeafNode": true
+              }
+            ],
+            "id": 5,
+            "immutable": false,
+            "intent": "Describing Prompt Structure",
+            "level": "2",
+            "parent": 2,
+            "priority": 5
+          }
+        ],
+        "child_num": 1,
+        "description": "Exploring what prompts are and the basic structure that makes up a prompt for AI models.",
+        "group": [],
+        "id": 2,
+        "immutable": false,
+        "intent": "Learning About Prompts",
+        "level": "1",
+        "parent": null,
+        "priority": 5
+      },
+      "Understanding Prompt Engineering": {
+        "child": [
+          {
+            "child": [],
+            "child_num": 0,
+            "description": "Describing the process and importance of crafting and refining prompts to improve AI model performance.",
+            "group": [
+              {
+                "comment": "definition",
+                "content": "Prompt engineering is the process of crafting and refining prompts to improve the performance of [generative AI](https://learnprompting.org/docs/basics/generative_ai) models. It involves providing specific inputs to tools like ChatGPT, [Midjourney](https://learnprompting.org/docs/image_prompting/midjourney), or Gemini, guiding the AI to deliver more accurate and contextually relevant outputs.\nWhen an AI model doesn't produce the desired response, prompt engineering allows us to iterate and adjust the prompt to optimize the output. This method is particularly useful for overcoming limitations of generative models, such as logical errors or insufficient context in responses.",
+                "context": "Prompt engineering",
+                "id": 1754314200755,
+                "isLeafNode": true
+              },
+              {
+                "comment": "importance",
+                "content": "Why Prompt Engineering is Important?\nGenerative AI models rely heavily on the input (or \"prompt\") provided by users. A well-structured prompt is key to leveraging the model's capabilities and ensuring it provides relevant, precise answers.\nPrompt engineering is important because:\n\nIt bridges the gap between vague, general queries and specific, actionable results.\nIt helps mitigate errors, such as generating irrelevant content or incorrect responses.\nIt ensures that the AI can handle tasks like creative writing, image generation, or even code development with minimal post-processing needed.",
+                "context": "Why Prompt Engineering is Important?",
+                "id": 1754314207346,
+                "isLeafNode": true
+              }
+            ],
+            "id": 4,
+            "immutable": false,
+            "intent": "Defining Prompt Engineering",
+            "level": "2",
+            "parent": 1,
+            "priority": 5
+          }
+        ],
+        "child_num": 1,
+        "description": "Gaining a foundational understanding of what prompt engineering is and its significance in using generative AI models.",
+        "group": [],
+        "id": 1,
+        "immutable": false,
+        "intent": "Understanding Prompt Engineering",
+        "level": "1",
+        "parent": null,
+        "priority": 5
+      }
+    },
+    "scenario": "learn prompt engineering"
+  }

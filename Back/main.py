@@ -369,6 +369,8 @@ async def group_nodes(nodesList: NodesList, scenario: str):
 
 chain4ExtractIntent = extractModule.Chain4ExtractIntent(model)
 
+chain4RecommendIntent = extractModule.Chain4RecommendIntent(model)
+
 @app.post("/extract/")
 async def extract_intent(request: dict):
     try:
@@ -378,9 +380,36 @@ async def extract_intent(request: dict):
         groupsOfNodes = request.get("groupsOfNodes")
         familiarity = request.get("familiarity")
         specificity = request.get("specificity")
+        intentTree = request.get("intentTree")
+
+        # 过滤出用户确认的节点
+        # 根据 intentTree 的结构递归提取所有 immutable 或 confirmed 的节点，构建 confirmedIntents
+        confirmedIntents = []
+
+        def extract_confirmed_intents(children, parent_level="1", parent_id=None):
+            for child in children:
+                # 只处理有 intent 字段的节点（非叶子节点）
+                if "intent" in child and (child.get("immutable") or child.get("confirmed")):
+                    confirmedIntents.append({
+                        "intent_id": child.get("id"),
+                        "intent_name": child.get("intent"),
+                        "intent_description": child.get("description", ""),
+                        "level": child.get("level", parent_level),
+                        "parent": child.get("parent", parent_id)
+                    })
+                # 递归处理子节点
+                if "child" in child and isinstance(child["child"], list) and child["child"]:
+                    # 传递当前节点的 level+1 作为子节点的 level，parent 传当前节点 id
+                    next_level = str(int(child.get("level", parent_level)) + 1) if child.get("level", parent_level).isdigit() else parent_level
+                    extract_confirmed_intents(child["child"], parent_level=next_level, parent_id=child.get("id"))
+
+        if intentTree and intentTree.get("child"):
+            extract_confirmed_intents(intentTree["child"])
+
+        print("Confirmed intents:", confirmedIntents)
 
         try:
-            result = await chain4ExtractIntent.invoke(scenario=scenario, groupsOfNodes=groupsOfNodes, familiarity=familiarity, specificity=specificity)
+            result = await chain4ExtractIntent.invoke(scenario=scenario, groupsOfNodes=groupsOfNodes, familiarity=familiarity, specificity=specificity, confirmedIntents=confirmedIntents)
             # 兼容 Pydantic RootModel、list、tuple 等多种返回类型，并确保 result_list 可 item assignment
             if hasattr(result, 'root'):
                 # Pydantic RootModel
@@ -442,7 +471,7 @@ async def extract_intent(request: dict):
                 "group": flatten_records(item.get("records", [])),
                 "level": item.get("level", "1"),
                 "parent": item.get("parent"),
-                "immutable": False,  # 默认不是不可变的
+                "immutable": True,  # 默认是不可变的
                 "child": []  # 初始化子节点列表
             }
         
@@ -510,158 +539,168 @@ async def extract_intent(request: dict):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error processing extract intent: {str(e)}")
 
-chain4Construct = extractModule.Chain4Construct(model)
-@app.post("/construct/")
-async def incremental_construct_intent(request: dict):
-    """增量构建意图树"""
+@app.post("/recommend/")
+async def recommend_intent(request: dict):
+    '''
+    根据意图树和用户输入的Desire，推荐意图。
+    '''
     try:
-        # 验证输入参数
-        scenario = request.get("scenario")
-        groupsOfNodes = request.get("groupsOfNodes")
-        intentTree = request.get("intentTree")
-        target_level = request.get("target_level", 1)
-        
-        if not all([scenario, groupsOfNodes]):
-            raise HTTPException(status_code=422, detail="Missing required parameters")
-        
-        # 标准化分组数据
-        try:
-            standardized_groups = NodeGroups(
-                item=[{
-                    group_name: [
-                        Record(**node) for node in nodes
-                    ]
-                } for group in groupsOfNodes["item"]
-                for group_name, nodes in group.items()]
-            )
-        except Exception as e:
-            print(f"Error: Failed to standardize groups - {str(e)}")
-            raise HTTPException(
-                status_code=422,
-                detail=f"Error in standardizing groups: {str(e)}"
-            )
-        
-        # 创建或转换意图树
-        try:
-            initial_tree = IntentTree(
-                scenario=scenario,
-                child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
-            )
-        except Exception as e:
-            print(f"Error: Failed to create initial tree - {str(e)}")
-            raise HTTPException(
-                status_code=422,
-                detail=f"Error in creating initial tree: {str(e)}"
-            )
-
-        # 获取不可变意图列表
-        immutableIntents = []
-        if intentTree:
-            try:
-                immutableIntents = filterNodes(
-                    initial_tree.model_dump(), 
-                    target_level,
-                    key="immutable",
-                    value=True
-                )
-            except Exception as e:
-                print(f"Error: Failed to filter immutable intents - {str(e)}")
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Error in filtering immutable intents: {str(e)}"
-                )
-        
-        # 构建新的意图树
-        max_retries = 3
-        retry_count = 0
-        last_error = None
-        last_response = None
-        
-        while retry_count < max_retries:
-            try:
-                newIntentTreeIndex = await chain4Construct.invoke(
-                    scenario,
-                    standardized_groups.model_dump_json(),
-                    str(immutableIntents)
-                )
-                last_response = newIntentTreeIndex  # 保存最后一次响应
-                
-                # 检查返回的是否是 JSON Schema 定义
-                if isinstance(newIntentTreeIndex, dict):
-                    if "properties" in newIntentTreeIndex:
-                        print(f"Info: Attempt {retry_count + 1}/{max_retries} - Received schema instead of data")
-                        retry_count += 1
-                        if retry_count >= max_retries:
-                            raise ValueError("Maximum retries reached, still receiving schema")
-                        continue
-                    
-                    # 尝试规范化响应格式
-                    if "item" not in newIntentTreeIndex:
-                        if all(isinstance(key, str) for key in newIntentTreeIndex.keys()):
-                            newIntentTreeIndex = {"item": newIntentTreeIndex}
-                        else:
-                            raise ValueError("Invalid response format (no item)")
-                    
-                    # 如果成功获取到正确格式的数据，跳出重试循环
-                    break
-                else:
-                    raise ValueError("Response is not a dictionary")
-                    
-            except Exception as e:
-                last_error = e
-                retry_count += 1
-                if retry_count >= max_retries:
-                    if last_response:
-                        print(f"Error: LLM raw response after {max_retries} attempts:")
-                        print(json.dumps(last_response, indent=2))
-                    print(f"Error: All {max_retries} attempts failed")
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Error in constructing new intent tree after {max_retries} attempts: {str(last_error)}"
-                    )
-
-        # 转换输出格式
-        try:
-            newIntentTree = newIntentTreeIndex["item"]
-            for key, indices in newIntentTreeIndex["item"].items():
-                if not isinstance(indices, dict):
-                    continue
-                    
-                if "group" not in indices:
-                    newIntentTree[key]["group"] = []
-                    continue
-                    
-                if indices["group"] == "":
-                    newIntentTree[key]["group"] = []
-                else:
-                    for group in standardized_groups.model_dump()["item"]:
-                        if indices["group"] in group.keys():
-                            newIntentTree[key]["group"] = group[indices["group"]]
-                            break
-                    else:
-                        newIntentTree[key]["group"] = []
-                        
-        except Exception as e:
-            if last_response:
-                print(f"Error: LLM raw response:")
-                print(json.dumps(last_response, indent=2))
-            print(f"Error: Failed to convert output format - {str(e)}")
-            raise HTTPException(
-                status_code=422,
-                detail=f"Error in converting output format: {str(e)}"
-            )
-                    
-        return {"item": newIntentTree}
-
+        result = await chain4RecommendIntent.invoke(user_input=request)
+        return result
     except Exception as e:
-        print(f"Error: Unexpected error in construct API - {str(e)}")
-        raise HTTPException(
-            status_code=422,
-            detail=f"Error constructing intent tree: {str(e)}"
-        )
+        raise HTTPException(status_code=422, detail=f"Error processing recommend intent: {str(e)}")
 
-model4Embed = OpenAIEmbeddings(model="text-embedding-ada-002")
-embedModel = embedModule.EmbedGPTModel(model4Embed)
+# chain4Construct = extractModule.Chain4Construct(model)
+# @app.post("/construct/")
+# async def incremental_construct_intent(request: dict):
+#     """增量构建意图树"""
+#     try:
+#         # 验证输入参数
+#         scenario = request.get("scenario")
+#         groupsOfNodes = request.get("groupsOfNodes")
+#         intentTree = request.get("intentTree")
+#         target_level = request.get("target_level", 1)
+        
+#         if not all([scenario, groupsOfNodes]):
+#             raise HTTPException(status_code=422, detail="Missing required parameters")
+        
+#         # 标准化分组数据
+#         try:
+#             standardized_groups = NodeGroups(
+#                 item=[{
+#                     group_name: [
+#                         Record(**node) for node in nodes
+#                     ]
+#                 } for group in groupsOfNodes["item"]
+#                 for group_name, nodes in group.items()]
+#             )
+#         except Exception as e:
+#             print(f"Error: Failed to standardize groups - {str(e)}")
+#             raise HTTPException(
+#                 status_code=422,
+#                 detail=f"Error in standardizing groups: {str(e)}"
+#             )
+        
+#         # 创建或转换意图树
+#         try:
+#             initial_tree = IntentTree(
+#                 scenario=scenario,
+#                 child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
+#             )
+#         except Exception as e:
+#             print(f"Error: Failed to create initial tree - {str(e)}")
+#             raise HTTPException(
+#                 status_code=422,
+#                 detail=f"Error in creating initial tree: {str(e)}"
+#             )
+
+#         # 获取不可变意图列表
+#         immutableIntents = []
+#         if intentTree:
+#             try:
+#                 immutableIntents = filterNodes(
+#                     initial_tree.model_dump(), 
+#                     target_level,
+#                     key="immutable",
+#                     value=True
+#                 )
+#             except Exception as e:
+#                 print(f"Error: Failed to filter immutable intents - {str(e)}")
+#                 raise HTTPException(
+#                     status_code=422,
+#                     detail=f"Error in filtering immutable intents: {str(e)}"
+#                 )
+        
+#         # 构建新的意图树
+#         max_retries = 3
+#         retry_count = 0
+#         last_error = None
+#         last_response = None
+        
+#         while retry_count < max_retries:
+#             try:
+#                 newIntentTreeIndex = await chain4Construct.invoke(
+#                     scenario,
+#                     standardized_groups.model_dump_json(),
+#                     str(immutableIntents)
+#                 )
+#                 last_response = newIntentTreeIndex  # 保存最后一次响应
+                
+#                 # 检查返回的是否是 JSON Schema 定义
+#                 if isinstance(newIntentTreeIndex, dict):
+#                     if "properties" in newIntentTreeIndex:
+#                         print(f"Info: Attempt {retry_count + 1}/{max_retries} - Received schema instead of data")
+#                         retry_count += 1
+#                         if retry_count >= max_retries:
+#                             raise ValueError("Maximum retries reached, still receiving schema")
+#                         continue
+                    
+#                     # 尝试规范化响应格式
+#                     if "item" not in newIntentTreeIndex:
+#                         if all(isinstance(key, str) for key in newIntentTreeIndex.keys()):
+#                             newIntentTreeIndex = {"item": newIntentTreeIndex}
+#                         else:
+#                             raise ValueError("Invalid response format (no item)")
+                    
+#                     # 如果成功获取到正确格式的数据，跳出重试循环
+#                     break
+#                 else:
+#                     raise ValueError("Response is not a dictionary")
+                    
+#             except Exception as e:
+#                 last_error = e
+#                 retry_count += 1
+#                 if retry_count >= max_retries:
+#                     if last_response:
+#                         print(f"Error: LLM raw response after {max_retries} attempts:")
+#                         print(json.dumps(last_response, indent=2))
+#                     print(f"Error: All {max_retries} attempts failed")
+#                     raise HTTPException(
+#                         status_code=422,
+#                         detail=f"Error in constructing new intent tree after {max_retries} attempts: {str(last_error)}"
+#                     )
+
+#         # 转换输出格式
+#         try:
+#             newIntentTree = newIntentTreeIndex["item"]
+#             for key, indices in newIntentTreeIndex["item"].items():
+#                 if not isinstance(indices, dict):
+#                     continue
+                    
+#                 if "group" not in indices:
+#                     newIntentTree[key]["group"] = []
+#                     continue
+                    
+#                 if indices["group"] == "":
+#                     newIntentTree[key]["group"] = []
+#                 else:
+#                     for group in standardized_groups.model_dump()["item"]:
+#                         if indices["group"] in group.keys():
+#                             newIntentTree[key]["group"] = group[indices["group"]]
+#                             break
+#                     else:
+#                         newIntentTree[key]["group"] = []
+                        
+#         except Exception as e:
+#             if last_response:
+#                 print(f"Error: LLM raw response:")
+#                 print(json.dumps(last_response, indent=2))
+#             print(f"Error: Failed to convert output format - {str(e)}")
+#             raise HTTPException(
+#                 status_code=422,
+#                 detail=f"Error in converting output format: {str(e)}"
+#             )
+                    
+#         return {"item": newIntentTree}
+
+#     except Exception as e:
+#         print(f"Error: Unexpected error in construct API - {str(e)}")
+#         raise HTTPException(
+#             status_code=422,
+#             detail=f"Error constructing intent tree: {str(e)}"
+#         )
+
+
 import RAGModule
 model4RAG = RAGModule.Chain4RAG(model)
 model4Split = RAGModule.Chain4Split(model)
@@ -678,30 +717,33 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
     :return: 每个意图对应的 top-k 和 bottom-k 最相关句子的结果。
     """
     try:
-        chunk_num=3
+        chunk_num=1
         # 先验证并转换请求数据为RAGRequest对象
-        try:
-            ragRequest = RAGRequest(**request_dict)
-        except ValidationError as e:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid request format: {str(e)}"
-            )
+        # try:
+        #     ragRequest = RAGRequest(**request_dict)
+
+        # except ValidationError as e:
+        #     raise HTTPException(
+        #         status_code=422,
+        #         detail=f"Invalid request format: {str(e)}"
+        #     )
+
+        ragRequest = request_dict
 
         # 以下是原有逻辑
-        intentTree = ragRequest.intentTree
-        webContent = ragRequest.webContent
+        intentTree = ragRequest['intentTree']
+
+        webContent = ragRequest['webContent']
         # k = ragRequest.k
         # top_threshold = ragRequest.top_threshold
         # bottom_threshold = ragRequest.bottom_threshold
-        scenario = ragRequest.scenario
+        scenario = ragRequest['scenario']
 
-        intentTree = IntentTree(
-                scenario = scenario,
-                child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
-            ).model_dump()
+        # intentTree = IntentTree(
+        #         scenario = scenario,
+        #         child=[Intent(**intent) for intent in intentTree.get("item", [])] if intentTree else []
+        #     ).model_dump()
         
-        print("intentTree", intentTree)
 
         # Step 1: 将 webContent 分句
         # sentences = await model4Split.invoke(scenario, webContent)
@@ -719,10 +761,12 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
             # sentences_embeddings = await embedModel.embeddingList(chunk)
 
             # Step 3: 筛选意图并向量化它们
-            intentsDict = filterNodes(
-                intentTree,  # 转换 IntentTree 为字典
-                target_level=1
+            intentsDict = getIntentsByLevel(
+                intentTree['item'],  # 转换 IntentTree 为字典
+                level_control="second"
             )
+
+            print("intentsDict", intentsDict)
             # combinedIntents_embeddings = await embedModel.embeddingList(combinedIntents)
 
             # Step 4: 计算每个意图的 top-k 相关句子
@@ -731,11 +775,14 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
 
             print("call LLM")
             
+            # 将chunk转换为字典格式
+            chunk_dict = [{"id": idx, "content": sentence} for idx, sentence in enumerate(chunk)]
+            
             # 调用LLM
             response = await model4RAG.invoke(
                     scenario,
                     intentsDict=intentsDict,
-                    sentenceList=chunk
+                    sentenceList=chunk_dict
                 )
             # 重构响应，替换索引
             print("response", response)
@@ -744,10 +791,9 @@ async def retrieve_top_k_relevant_sentence_based_on_intent(request_dict: dict):
                     intent_to_top_k_sentences[intent] = []
                 if intent not in intent_to_bottom_k_sentences:
                     intent_to_bottom_k_sentences[intent] = []
-                # intent_to_top_k_sentences[intent].extend([chunk[i] for i in response["top_all"][intent]])
-                # intent_to_bottom_k_sentences[intent].extend([chunk[i] for i in response["bottom_all"][intent]])
-                intent_to_top_k_sentences[intent].extend(response["top_all"][intent])
-                intent_to_bottom_k_sentences[intent].extend(response["bottom_all"][intent])
+                # 从chunk_dict中根据id获取对应的content
+                intent_to_top_k_sentences[intent].extend([chunk_dict[i]["content"] for i in response["top_all"][intent]])
+                intent_to_bottom_k_sentences[intent].extend([chunk_dict[i]["content"] for i in response["bottom_all"][intent]])
             # for item in response["data"]:
             #     intent = item["intent"]
             #     intent_to_top_k_sentences[intent] = [chunk[i] for i in item["topKIndices"]]
