@@ -33,22 +33,25 @@ class NetworkManager {
         if (!intentTree) return;
 
         console.log('Collecting immutable intents from intentTree:', intentTree);
+        
+        // 清空之前的集合以确保干净的状态
+        NetworkManager.immutableIntents.clear();
 
         // 处理 {item: {...}} 结构（原始格式）
         if (intentTree.item) {
             Object.entries(intentTree.item).forEach(([intentName, intentData]) => {
-                // 检查高级意图的确认状态
-                if (intentData && intentData.confirmed) {
+                // 检查高级意图的immutable状态
+                if (intentData && intentData.immutable) {
                     NetworkManager.immutableIntents.add(intentName);
-                    console.log(`Added high-level confirmed intent: ${intentName}`);
+                    console.log(`Added high-level immutable intent: ${intentName}`);
                 }
                 
-                // 检查低级意图的确认状态
+                // 检查低级意图的immutable状态
                 if (intentData && intentData.child && Array.isArray(intentData.child)) {
                     intentData.child.forEach(childIntent => {
-                        if (childIntent.intent && childIntent.confirmed) {
+                        if (childIntent.intent && childIntent.immutable) {
                             NetworkManager.immutableIntents.add(childIntent.intent);
-                            console.log(`Added low-level confirmed intent: ${childIntent.intent}`);
+                            console.log(`Added low-level immutable intent: ${childIntent.intent}`);
                         }
                     });
                 }
@@ -69,10 +72,10 @@ class NetworkManager {
             if (childNode.intent || childNode.description) {
                 const intentName = childNode.intent || childNode.description;
                 
-                // 检查当前节点是否已确认
-                if (childNode.immutable || childNode.confirmed) {
+                // 检查当前节点是否immutable
+                if (childNode.immutable) {
                     NetworkManager.immutableIntents.add(intentName);
-                    console.log(`Added confirmed intent from child format: ${intentName}`);
+                    console.log(`Added immutable intent from child format: ${intentName}`);
                 }
                 
                 // 递归处理子节点
@@ -216,8 +219,8 @@ class NetworkManager {
         }
 
         // 递归处理意图节点的函数 - 支持两级意图层级
-        const processIntentNode = (parentId, nodeData, nodeName, level, nodeType = NetworkManager.NodeTypes.HIGH_INTENT) => {
-            const currentNodeId = `${nodeType}_${nodeId++}`;
+        const processIntentNode = (parentId, nodeData, nodeName, level, nodeType = NetworkManager.NodeTypes.HIGH_INTENT, presetNodeId = null) => {
+            const currentNodeId = presetNodeId || `${nodeType}_${nodeId++}`;
             // 修复节点状态判断逻辑 - 优先检查nodeStates，其次检查immutableIntents
             let isImmutable = false;
             
@@ -231,9 +234,9 @@ class NetworkManager {
             if (existingNodeId && existingNodeId[1] !== undefined) {
                 isImmutable = existingNodeId[1];
             } else {
-                // 检查是否在immutable集合中或者intentData中有confirmed标记
+                // 检查是否在immutable集合中或者intentData中有immutable标记
                 isImmutable = NetworkManager.immutableIntents.has(nodeName) || 
-                             (nodeData && nodeData.confirmed === true);
+                             (nodeData && nodeData.immutable === true);
             }
             
             // 添加当前意图节点
@@ -274,7 +277,7 @@ class NetworkManager {
                     // 递归处理子意图节点
                     nodeData.child.forEach(childNode => {
                         if (childNode.intent) {
-                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType);
+                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType, null);
                         }
                     });
                 } else {
@@ -319,15 +322,54 @@ class NetworkManager {
             });
         };
 
-        // 遍历每个意图组 - 直接创建高级意图节点，无根节点
+        // 存储节点ID映射，用于处理父子关系
+        const nodeIdMap = new Map();
+
+        // 第一阶段：处理所有 level 1 (high-intent) 节点
         Object.entries(intentTree.item).forEach(([intentName, intentData]) => {
             // Skip intents that start with 'remaining_intent_'
             if (intentName.startsWith('remaining_intent_')) {
                 return;
             }
 
-            // 处理每个高级意图节点（原来的一级意图现在变为高级意图）
-            processIntentNode(null, intentData, intentName, 0, NetworkManager.NodeTypes.HIGH_INTENT);
+            const level = intentData.level || "1";
+            if (level === "1") {
+                const currentNodeId = `${NetworkManager.NodeTypes.HIGH_INTENT}_${nodeId++}`;
+                nodeIdMap.set(intentData.id || intentName, currentNodeId);
+                processIntentNode(null, intentData, intentName, 0, NetworkManager.NodeTypes.HIGH_INTENT, currentNodeId);
+            }
+        });
+
+        // 第二阶段：处理所有 level 2 (low-intent) 节点
+        Object.entries(intentTree.item).forEach(([intentName, intentData]) => {
+            // Skip intents that start with 'remaining_intent_'
+            if (intentName.startsWith('remaining_intent_')) {
+                return;
+            }
+
+            const level = intentData.level || "1";
+            if (level === "2") {
+                // 查找父节点ID
+                let parentId = null;
+                if (intentData.parent) {
+                    // 尝试通过parent ID查找
+                    parentId = nodeIdMap.get(intentData.parent);
+                    
+                    // 如果没找到，尝试通过名称查找
+                    if (!parentId) {
+                        const parentEntry = Object.entries(intentTree.item).find(([name, data]) => 
+                            data.id === intentData.parent || name === intentData.parent
+                        );
+                        if (parentEntry) {
+                            parentId = nodeIdMap.get(parentEntry[1].id || parentEntry[0]);
+                        }
+                    }
+                }
+                
+                const currentNodeId = `${NetworkManager.NodeTypes.LOW_INTENT}_${nodeId++}`;
+                nodeIdMap.set(intentData.id || intentName, currentNodeId);
+                processIntentNode(parentId, intentData, intentName, 1, NetworkManager.NodeTypes.LOW_INTENT, currentNodeId);
+            }
         });
 
         console.log('Final network structure:', {
@@ -651,8 +693,8 @@ class NetworkManager {
             }
             
             if (intentLocation) {
-                // 设置确认状态
-                intentLocation.ref.confirmed = confirmed;
+                // 设置immutable状态
+                intentLocation.ref.immutable = confirmed;
                 console.log(`Intent tree updated for ${intentName} (${intentLocation.type})`);
                 
                 // 持久化到存储
@@ -1549,7 +1591,7 @@ class NetworkManager {
                 intent: intentName,
                 description: description,
                 isLeafNode: false,
-                immutable: NetworkManager.immutableIntents?.has(intentName) || false,
+                immutable: intentData?.immutable || false, // 直接使用原始数据的immutable字段
                 child: [],
                 child_num: 0,
                 priority: 1
@@ -1602,6 +1644,66 @@ class NetworkManager {
         }
 
         return newIntentTree;
+    }
+
+    // Update network data with new intent tree
+    updateData(newIntentTree) {
+        try {
+            console.log('Updating network data with new intent tree:', newIntentTree);
+            
+            // Update the internal intent tree reference
+            this.intentTree = newIntentTree;
+            
+            // Re-collect immutable intents from the updated tree
+            this.collectImmutableIntents(newIntentTree);
+            
+            // Clear existing data
+            this.nodes.clear();
+            this.edges.clear();
+            this.nodeStates.clear();
+            
+            // Regenerate network data from new intent tree
+            const networkData = this.transformIntentTreeToNetwork(newIntentTree);
+            
+            // Add new nodes and edges
+            this.nodes.add(networkData.nodes);
+            this.edges.add(networkData.edges);
+            
+            // Apply layout if needed
+            if (this.network) {
+                // Trigger layout update
+                this.network.setData({
+                    nodes: this.nodes,
+                    edges: this.edges
+                });
+                
+                // Apply current layout arrangement
+                setTimeout(() => {
+                    // Apply auto-layout based on current direction setting
+                    if (NetworkManager.hierarchicalDirection === 'LR') {
+                        this.arrangeHorizontalLayout();
+                    } else {
+                        this.arrangeVerticalLayout();
+                    }
+                    
+                    // Re-fit the view after layout arrangement
+                    setTimeout(() => {
+                        this.network.fit({
+                            animation: {
+                                duration: 500,
+                                easingFunction: 'easeInOutQuad'
+                            }
+                        });
+                    }, 200);
+                }, 100);
+            }
+            
+            console.log('Network data updated successfully');
+            
+        } catch (error) {
+            console.error('Error updating network data:', error);
+            throw error;
+        }
     }
 
     // Add cleanup method to handle container removal properly
