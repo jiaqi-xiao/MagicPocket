@@ -436,3 +436,121 @@
     margin-right: 6px;
     font-size: 14px;
 }
+
+/* Mode Toggle Styles */
+.mp-mode-toggle-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.mp-mode-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    margin: 0;
+}
+
+.mp-radio-group {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.mp-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mp-radio-option:hover {
+    opacity: 0.8;
+}
+
+.mp-radio-input {
+    display: none;
+}
+
+.mp-radio-button {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    position: relative;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.mp-radio-button:before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    background-color: #5856d6;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.2s ease;
+}
+
+.mp-radio-input:checked + .mp-radio-button {
+    border-color: #5856d6;
+}
+
+.mp-radio-input:checked + .mp-radio-button:before {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.mp-radio-input[value="ablation"]:checked + .mp-radio-button {
+    border-color: #FF3B30;
+}
+
+.mp-radio-input[value="ablation"]:checked + .mp-radio-button:before {
+    background-color: #FF3B30;
+}
+
+.mp-radio-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    user-select: none;
+}
+
+.mp-radio-input:checked ~ .mp-radio-text {
+    color: #333;
+    font-weight: 600;
+}
+
+/* Loading Animation for Analyze Button */
+@keyframes flowing-ring {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.mp-loading-ring {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: flowing-ring 1s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.mp-analyze-btn-disabled {
+    opacity: 0.6;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
