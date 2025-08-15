@@ -369,6 +369,19 @@ async def group_nodes(nodesList: NodesList, scenario: str):
 
 chain4ExtractIntent = extractModule.Chain4ExtractIntent(model)
 
+chain4RecommendIntent = extractModule.Chain4RecommendIntent(model)
+
+@app.post("/recommend/")
+async def recommend_intent(request: dict):
+    '''
+    根据意图树和用户输入的Desire，推荐意图。
+    '''
+    try:
+        result = await chain4RecommendIntent.invoke(user_input=request)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error processing recommend intent: {str(e)}")
+
 @app.post("/extract/")
 async def extract_intent(request: dict):
     try:
@@ -537,158 +550,157 @@ async def extract_intent(request: dict):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error processing extract intent: {str(e)}")
 
-chain4Construct = extractModule.Chain4Construct(model)
-@app.post("/construct/")
-async def incremental_construct_intent(request: dict):
-    """增量构建意图树"""
-    try:
-        # 验证输入参数
-        scenario = request.get("scenario")
-        groupsOfNodes = request.get("groupsOfNodes")
-        intentTree = request.get("intentTree")
-        target_level = request.get("target_level", 1)
+# chain4Construct = extractModule.Chain4Construct(model)
+# @app.post("/construct/")
+# async def incremental_construct_intent(request: dict):
+#     """增量构建意图树"""
+#     try:
+#         # 验证输入参数
+#         scenario = request.get("scenario")
+#         groupsOfNodes = request.get("groupsOfNodes")
+#         intentTree = request.get("intentTree")
+#         target_level = request.get("target_level", 1)
         
-        if not all([scenario, groupsOfNodes]):
-            raise HTTPException(status_code=422, detail="Missing required parameters")
+#         if not all([scenario, groupsOfNodes]):
+#             raise HTTPException(status_code=422, detail="Missing required parameters")
         
-        # 标准化分组数据
-        try:
-            standardized_groups = NodeGroups(
-                item=[{
-                    group_name: [
-                        Record(**node) for node in nodes
-                    ]
-                } for group in groupsOfNodes["item"]
-                for group_name, nodes in group.items()]
-            )
-        except Exception as e:
-            print(f"Error: Failed to standardize groups - {str(e)}")
-            raise HTTPException(
-                status_code=422,
-                detail=f"Error in standardizing groups: {str(e)}"
-            )
+#         # 标准化分组数据
+#         try:
+#             standardized_groups = NodeGroups(
+#                 item=[{
+#                     group_name: [
+#                         Record(**node) for node in nodes
+#                     ]
+#                 } for group in groupsOfNodes["item"]
+#                 for group_name, nodes in group.items()]
+#             )
+#         except Exception as e:
+#             print(f"Error: Failed to standardize groups - {str(e)}")
+#             raise HTTPException(
+#                 status_code=422,
+#                 detail=f"Error in standardizing groups: {str(e)}"
+#             )
         
-        # 创建或转换意图树
-        try:
-            initial_tree = IntentTree(
-                scenario=scenario,
-                child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
-            )
-        except Exception as e:
-            print(f"Error: Failed to create initial tree - {str(e)}")
-            raise HTTPException(
-                status_code=422,
-                detail=f"Error in creating initial tree: {str(e)}"
-            )
+#         # 创建或转换意图树
+#         try:
+#             initial_tree = IntentTree(
+#                 scenario=scenario,
+#                 child=[Intent(**intent) for intent in intentTree.get("child", [])] if intentTree else []
+#             )
+#         except Exception as e:
+#             print(f"Error: Failed to create initial tree - {str(e)}")
+#             raise HTTPException(
+#                 status_code=422,
+#                 detail=f"Error in creating initial tree: {str(e)}"
+#             )
 
-        # 获取不可变意图列表
-        immutableIntents = []
-        if intentTree:
-            try:
-                immutableIntents = filterNodes(
-                    initial_tree.model_dump(), 
-                    target_level,
-                    key="immutable",
-                    value=True
-                )
-            except Exception as e:
-                print(f"Error: Failed to filter immutable intents - {str(e)}")
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Error in filtering immutable intents: {str(e)}"
-                )
+#         # 获取不可变意图列表
+#         immutableIntents = []
+#         if intentTree:
+#             try:
+#                 immutableIntents = filterNodes(
+#                     initial_tree.model_dump(), 
+#                     target_level,
+#                     key="immutable",
+#                     value=True
+#                 )
+#             except Exception as e:
+#                 print(f"Error: Failed to filter immutable intents - {str(e)}")
+#                 raise HTTPException(
+#                     status_code=422,
+#                     detail=f"Error in filtering immutable intents: {str(e)}"
+#                 )
         
-        # 构建新的意图树
-        max_retries = 3
-        retry_count = 0
-        last_error = None
-        last_response = None
+#         # 构建新的意图树
+#         max_retries = 3
+#         retry_count = 0
+#         last_error = None
+#         last_response = None
         
-        while retry_count < max_retries:
-            try:
-                newIntentTreeIndex = await chain4Construct.invoke(
-                    scenario,
-                    standardized_groups.model_dump_json(),
-                    str(immutableIntents)
-                )
-                last_response = newIntentTreeIndex  # 保存最后一次响应
+#         while retry_count < max_retries:
+#             try:
+#                 newIntentTreeIndex = await chain4Construct.invoke(
+#                     scenario,
+#                     standardized_groups.model_dump_json(),
+#                     str(immutableIntents)
+#                 )
+#                 last_response = newIntentTreeIndex  # 保存最后一次响应
                 
-                # 检查返回的是否是 JSON Schema 定义
-                if isinstance(newIntentTreeIndex, dict):
-                    if "properties" in newIntentTreeIndex:
-                        print(f"Info: Attempt {retry_count + 1}/{max_retries} - Received schema instead of data")
-                        retry_count += 1
-                        if retry_count >= max_retries:
-                            raise ValueError("Maximum retries reached, still receiving schema")
-                        continue
+#                 # 检查返回的是否是 JSON Schema 定义
+#                 if isinstance(newIntentTreeIndex, dict):
+#                     if "properties" in newIntentTreeIndex:
+#                         print(f"Info: Attempt {retry_count + 1}/{max_retries} - Received schema instead of data")
+#                         retry_count += 1
+#                         if retry_count >= max_retries:
+#                             raise ValueError("Maximum retries reached, still receiving schema")
+#                         continue
                     
-                    # 尝试规范化响应格式
-                    if "item" not in newIntentTreeIndex:
-                        if all(isinstance(key, str) for key in newIntentTreeIndex.keys()):
-                            newIntentTreeIndex = {"item": newIntentTreeIndex}
-                        else:
-                            raise ValueError("Invalid response format (no item)")
+#                     # 尝试规范化响应格式
+#                     if "item" not in newIntentTreeIndex:
+#                         if all(isinstance(key, str) for key in newIntentTreeIndex.keys()):
+#                             newIntentTreeIndex = {"item": newIntentTreeIndex}
+#                         else:
+#                             raise ValueError("Invalid response format (no item)")
                     
-                    # 如果成功获取到正确格式的数据，跳出重试循环
-                    break
-                else:
-                    raise ValueError("Response is not a dictionary")
+#                     # 如果成功获取到正确格式的数据，跳出重试循环
+#                     break
+#                 else:
+#                     raise ValueError("Response is not a dictionary")
                     
-            except Exception as e:
-                last_error = e
-                retry_count += 1
-                if retry_count >= max_retries:
-                    if last_response:
-                        print(f"Error: LLM raw response after {max_retries} attempts:")
-                        print(json.dumps(last_response, indent=2))
-                    print(f"Error: All {max_retries} attempts failed")
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Error in constructing new intent tree after {max_retries} attempts: {str(last_error)}"
-                    )
+#             except Exception as e:
+#                 last_error = e
+#                 retry_count += 1
+#                 if retry_count >= max_retries:
+#                     if last_response:
+#                         print(f"Error: LLM raw response after {max_retries} attempts:")
+#                         print(json.dumps(last_response, indent=2))
+#                     print(f"Error: All {max_retries} attempts failed")
+#                     raise HTTPException(
+#                         status_code=422,
+#                         detail=f"Error in constructing new intent tree after {max_retries} attempts: {str(last_error)}"
+#                     )
 
-        # 转换输出格式
-        try:
-            newIntentTree = newIntentTreeIndex["item"]
-            for key, indices in newIntentTreeIndex["item"].items():
-                if not isinstance(indices, dict):
-                    continue
+#         # 转换输出格式
+#         try:
+#             newIntentTree = newIntentTreeIndex["item"]
+#             for key, indices in newIntentTreeIndex["item"].items():
+#                 if not isinstance(indices, dict):
+#                     continue
                     
-                if "group" not in indices:
-                    newIntentTree[key]["group"] = []
-                    continue
+#                 if "group" not in indices:
+#                     newIntentTree[key]["group"] = []
+#                     continue
                     
-                if indices["group"] == "":
-                    newIntentTree[key]["group"] = []
-                else:
-                    for group in standardized_groups.model_dump()["item"]:
-                        if indices["group"] in group.keys():
-                            newIntentTree[key]["group"] = group[indices["group"]]
-                            break
-                    else:
-                        newIntentTree[key]["group"] = []
+#                 if indices["group"] == "":
+#                     newIntentTree[key]["group"] = []
+#                 else:
+#                     for group in standardized_groups.model_dump()["item"]:
+#                         if indices["group"] in group.keys():
+#                             newIntentTree[key]["group"] = group[indices["group"]]
+#                             break
+#                     else:
+#                         newIntentTree[key]["group"] = []
                         
-        except Exception as e:
-            if last_response:
-                print(f"Error: LLM raw response:")
-                print(json.dumps(last_response, indent=2))
-            print(f"Error: Failed to convert output format - {str(e)}")
-            raise HTTPException(
-                status_code=422,
-                detail=f"Error in converting output format: {str(e)}"
-            )
+#         except Exception as e:
+#             if last_response:
+#                 print(f"Error: LLM raw response:")
+#                 print(json.dumps(last_response, indent=2))
+#             print(f"Error: Failed to convert output format - {str(e)}")
+#             raise HTTPException(
+#                 status_code=422,
+#                 detail=f"Error in converting output format: {str(e)}"
+#             )
                     
-        return {"item": newIntentTree}
+#         return {"item": newIntentTree}
 
-    except Exception as e:
-        print(f"Error: Unexpected error in construct API - {str(e)}")
-        raise HTTPException(
-            status_code=422,
-            detail=f"Error constructing intent tree: {str(e)}"
-        )
+#     except Exception as e:
+#         print(f"Error: Unexpected error in construct API - {str(e)}")
+#         raise HTTPException(
+#             status_code=422,
+#             detail=f"Error constructing intent tree: {str(e)}"
+#         )
 
-model4Embed = OpenAIEmbeddings(model="text-embedding-ada-002")
-embedModel = embedModule.EmbedGPTModel(model4Embed)
+
 import RAGModule
 model4RAG = RAGModule.Chain4RAG(model)
 model4Split = RAGModule.Chain4Split(model)

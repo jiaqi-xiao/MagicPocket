@@ -1,6 +1,5 @@
 class Prompts:
-    GROUP = (
-        """
+    GROUP = """
         You are a professional information foraging assistant. Based on the given scenario, analyze the user's potential intent and use it as a basis to group the nodes provided in the list. When grouping, ensure that inter-group differences are maximized while intra-group differences are minimized. Return a list of sublists, where each sublist represents a group, and the elements of the sublist are the nodes from the original list.
         
         # Output Format
@@ -10,10 +9,8 @@ class Prompts:
         Scenario: {scenario}
         List: {list}
         """
-    )
 
-    GROUP_INDEX = (
-        """
+    GROUP_INDEX = """
         According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone want to achieve when forging information, and intents are different intermediate steps to approach the belief.
 
         Given the desire of the user, and a list of text the user has highlighted, please group the highlighted text into 1-4 groups based on the connection between these text and the intents of the user highlighting these infomration.
@@ -29,10 +26,8 @@ class Prompts:
         Desire: {scenario}
         List of highlighted text:{highlight}
         """
-    )
-    
-    CONSTRUCT = (
-        """
+
+    CONSTRUCT = """
         You will act as an assistant to help the user conduct research based on the given Scenario. Please extract a research intent for each dictionary element in Groups and return the results in dictionary format. Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
 
         # Steps
@@ -65,7 +60,6 @@ class Prompts:
             Groups: {groups}
             IntentsList: {intentsList}
         """
-    )
 
     CONSTRUCT_INDEX = (
         # """
@@ -74,22 +68,18 @@ class Prompts:
         #     - 如果存在未被匹配的Groups，请参考给定的Scenario提取出适应的Intent。
         #     - 每个Intent的描述必须简短清晰，最多不超过7个词。
         #     - 务必确保生成的intents维持逻辑上的差异性，没有重复或重叠。
-
         # # Steps
         #     1. **初步匹配**: 将IntentsList中的现有intent与Groups列表中的每个group进行匹配，找到最相似的组合。
         #     2. **分析未匹配的Group**: 如果有多余的group，基于Scenario内容提炼出新的intent以确保每个group都有唯一的intent。
         #     3. **重命名与统一**: 确保每个intent保持简洁、统一的描述方式，长度不超过7个词语。
         #     4. **差异化检查**: 确保所有生成的intent之间存在差异性，尽量减少彼此的含义重叠。
         #     5. **构建意图树**: 根据Output Format将group中的内容添加到intent节点的child属性中。
-
         # # Output Format
         #     - The output should be structured in JSON format as following {format_instructions}.
-
         # # Notes
         # - 每个intent的描述不允许超过7个词，并尽量优化语言使表达简洁有力。
         # - 请注意每个生成的intent要有显著区别，避免重复以及同义描述。
         # - 生成的intent节点的immutable属性值为false，原有的intent节点为true
-
         # # User:
         # Scenario: {scenario}
         # Groups: {groups}
@@ -97,8 +87,7 @@ class Prompts:
         # """
     )
 
-    RAG = (
-        """
+    RAG = """
         # System  
         You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict.
 
@@ -147,10 +136,8 @@ class Prompts:
             IntentsDict: {intentsDict}
             SentenceList: {sentenceList}
         """
-    )
 
-    RAG_INDEX = (
-        """  
+    RAG_INDEX = """  
         # System  
         You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict.
 
@@ -199,7 +186,6 @@ class Prompts:
             IntentsDict: {intentsDict}
             SentenceList: {sentenceList}
         """
-    )
 
     RAG_TOP_BOTTOM_K = (
         # """
@@ -220,18 +206,15 @@ class Prompts:
         # #    - 选择最能提供新信息的k个句子。
         # #    - 记录这些句子在SentenceList中的索引，将其标识为bottom_k。
         # #    - 仅当句子与Intent高度相关时才选择，如果没有满足条件的句子则不选择。
-
         # # # Output Format
         # #     - 输出格式为JSON，包含两个字段：
         # #     - {format_instructions}
-
         # # # Notes
         # # - 评选top_k时，首先要考虑是否属于用户需要的信息，如果没有满足条件的句子则不筛选。
         # # - 评选bottom_k时，同样首先要考虑是否属于用户需要的信息，如果没有满足条件的句子则不筛选。
         # # - 如果RecordList不为空列表，正常返回结果。
         # # - 如果RecordList为空列表,将标识为top_k的句子标识为bottom_k返回，并且top_k在此时返回空列表，否则。
         # # - 比较top_k和bottom_k的索引，去除top_k中与bottom_k重复的索引。
-
         # # ## User:
         # #     Scenario: {scenario}
         # #     Intent: {intent}
@@ -244,37 +227,33 @@ class Prompts:
 
     RAG_TOP_BOTTOM_ALL = (
         # """
-        # ## System  
+        # ## System
         # You are tasked with assisting the user in conducting information research based on a specified scenario. Your goal is to filter sentences from a given SentenceList for each Intent provided in the IntentsDict. Ensure all indices in the output start from 0 and are within the bounds of the SentenceList.
-
-        # ### Steps  
-        # 1. **Understand Input Structure:**  
-        #     - **Scenario**:  Describes the research context, providing high-level guidance..  
+        # ### Steps
+        # 1. **Understand Input Structure:**
+        #     - **Scenario**:  Describes the research context, providing high-level guidance..
         #     - **SentenceList**: A list of sentences, indexed starting from 0.
         #         - The total number of sentences is N = len(SentenceList).
         #         - Ensure all indices are within [0, N-1].
         #     - **IntentsDict**: A dictionary structured as `{{"intent": "description"}}`
-        #         - Each key represents an intent, and the value (description) summarizes the theme and relevant sub-themes of the intent. 
-
-        # 2. **Filter and Match Sentences:**  
-        #     For each `Intent` and its corresponding `Description` in IntentsDict:  
-        #     - **Theme Completion**: If `Description` is empty, infer the intent's theme based on the `Scenario` and `Intent`. Fill in the `Description`. 
-        #     - **Sentence Evaluation**: For each sentence in `SentenceList`:  
+        #         - Each key represents an intent, and the value (description) summarizes the theme and relevant sub-themes of the intent.
+        # 2. **Filter and Match Sentences:**
+        #     For each `Intent` and its corresponding `Description` in IntentsDict:
+        #     - **Theme Completion**: If `Description` is empty, infer the intent's theme based on the `Scenario` and `Intent`. Fill in the `Description`.
+        #     - **Sentence Evaluation**: For each sentence in `SentenceList`:
         #         - Align with Intent Theme and Sub-Themes:
         #             - If the sentence aligns with both the theme and specified sub-themes of the intent, add its index to top_all[Intent].
         #         - Align with Intent Theme Only:
         #             -If the sentence aligns only with the theme (and not with sub-themes or no sub-themes are provided), add its index to bottom_all[Intent].
-
         # 3. **Relevance Check**:
         #     - Avoid including indices in the output unless the sentences genuinely align with the intent's theme or sub-themes. Do not merely list indices without context.
-        #     - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable.If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.  
-
-        # ### Output Format  
+        #     - If no sentences match for a specific intent, return an empty list for top_all[Intent] or bottom_all[Intent] as applicable.If no sentences match the criteria, return an empty list for `top_all[Intent]` or `bottom_all[Intent]` as applicable.
+        # ### Output Format
         # - The output should be a dictionary with two main keys: `top_all` and `bottom_all`.
         #   - {format_instructions}
-        #   - `top_all`: Maps each Intent to a list of indices corresponding to sentences aligned with both the intent's theme and sub-themes.  
+        #   - `top_all`: Maps each Intent to a list of indices corresponding to sentences aligned with both the intent's theme and sub-themes.
         #   - `bottom_all`: Maps each Intent to a list of indices corresponding to sentences aligned only with the theme.
-        # - Example output:  
+        # - Example output:
         #   ```json
         #   {{
         #     "top_all": {{
@@ -287,15 +266,13 @@ class Prompts:
         #     }}
         #   }}
         #   ```
-
-        # ### Notes  
+        # ### Notes
         #     - Relevance Over Quantity: Do not include indices simply for the sake of completeness. Each index must correspond to a sentence that fully meets the alignment criteria.
         #     - Indexing Rules: Ensure all indices are within [0, N-1] and represent meaningful matches.
         #     - Theme vs. Sub-Themes: Clearly differentiate between sentences that align with the overall theme and those that align with sub-themes.
         #     - Exhaustive Intent Coverage: Include all intents from IntentsDict, even if no sentences are aligned with them.
         #     - No Placeholder Indices: Avoid adding indices arbitrarily; only include indices for sentences with a verifiable match.
         #     - Avoid Duplication: Ensure that indices do not appear more than once in the same or different lists.
-
         # ## User:
         #     Scenario: {scenario}
         #     IntentsDict: {intentsDict}
@@ -303,8 +280,7 @@ class Prompts:
         # """
     )
 
-    GRANULARITY = (
-        """
+    GRANULARITY = """
         You are a reasoning assistant tasked with estimating a user's familiarity with a topic and the desired specificity of a response, based on their goal and their comments during an information-gathering process.
 
         Given:
@@ -324,10 +300,8 @@ class Prompts:
         COMMENTS:
         {comments}
         """
-    )
 
-    EXTRACT_INTENT = (
-        """
+    EXTRACT_INTENT = """
         You are a reasoning assistant tasked with extracting and describing the user's intents for each group of the records based on the user's desire, the highlighted text, and the user's comments.
         According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone wants to achieve when foraging information, and intents are different intermediate steps to approach the desire.
 
@@ -355,4 +329,40 @@ class Prompts:
         Desire: {scenario}
         Json file: {groupsOfNodes}
         """
-    )
+
+    RECOMMEND_INTENT = """
+        You will receive a JSON object containing a scenario and an intent tree (item).  
+Your task is to analyze the given scenario and the existing intents, then propose new recommended intents to fill important gaps.  
+Follow these rules:
+
+1. New intents must be comprehensive, relevant to the scenario, and avoid duplication with existing intents.  
+2. The total number of new intents must not exceed 5, prioritizing the most important ones that cover missing knowledge or capabilities.  
+3. Each new intent must be placed at the correct level:  
+   - Level 1 (top-level) if it represents a key dimension for understanding the scenario.  
+   - Level 2 if it is a subtopic or detail under an existing Level 1 intent.  
+4. Each new intent must include the following fields:  
+   - id (unique integer)  
+   - intent (name of the intent)  
+   - description (short description)  
+   - priority (1–5)  
+   - child_num (initially 0)  
+   - group (empty array or containing leaf node info)  
+   - level (hierarchy level)  
+   - parent (parent id, null for Level 1)  
+   - immutable (boolean)  
+   - child (array, initially empty)  
+
+Input example:
+{{
+    "scenario": "...",
+    "item": {{
+        ...
+    }}
+}}
+
+Output: Return the **updated full intent tree JSON** including the newly added intents in the correct positions and respond ONLY in the following JSON format:
+{format_instructions}
+
+Input:
+{user_input}
+        """

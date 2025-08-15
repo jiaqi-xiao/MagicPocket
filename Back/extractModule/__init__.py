@@ -163,7 +163,7 @@ class Chain4Grouping:
         self.parser = JsonOutputParser(pydantic_object=NodeGroupsIndex)
         # self.parser = PydanticOutputParser(pydantic_object=RecordGroups)
         self.prompt_template = PromptTemplate(
-            input_variables=["highlight", "scenario","familiarity", "specificity"],
+            input_variables=["highlight", "scenario", "familiarity", "specificity"],
             template=self.instruction,
             partial_variables={
                 "format_instructions": self.parser.get_format_instructions()
@@ -173,7 +173,14 @@ class Chain4Grouping:
         self.chain = self.prompt_template | self.model | self.parser
 
     async def invoke(self, content, scenario, familiarity, specificity):
-        return self.chain.invoke({"highlight": content, "scenario": scenario,"familiarity": familiarity,"specificity": specificity})
+        return self.chain.invoke(
+            {
+                "highlight": content,
+                "scenario": scenario,
+                "familiarity": familiarity,
+                "specificity": specificity,
+            }
+        )
 
 
 class Chain4Construct:
@@ -199,6 +206,7 @@ class Chain4Construct:
             {"scenario": scenario, "groups": groups, "intentsList": intentsList}
         )
 
+
 class Chain4InferringGranularity:
     def __init__(self, model):
         self.instruction = Prompts.GRANULARITY
@@ -215,9 +223,8 @@ class Chain4InferringGranularity:
         self.chain = self.prompt_template | self.model | self.parser
 
     async def invoke(self, scenario, comments):
-        return self.chain.invoke(
-            {"scenario": scenario, "comments": comments}
-        )
+        return self.chain.invoke({"scenario": scenario, "comments": comments})
+
 
 class Chain4ExtractIntent:
     def __init__(self, model):
@@ -227,18 +234,33 @@ class Chain4ExtractIntent:
         self.parser = PydanticOutputParser(pydantic_object=ExtractResult)
         # self.parser = JsonOutputParser()
         self.prompt_template = PromptTemplate(
-            input_variables=["familiarity", "specificity", "scenario","groupsOfNodes", "confirmedIntents"],
-            template=self.instruction)
+            input_variables=[
+                "familiarity",
+                "specificity",
+                "scenario",
+                "groupsOfNodes",
+                "confirmedIntents",
+            ],
+            template=self.instruction,
+        )
         self.chain = self.prompt_template | self.model | self.parser
 
-    async def invoke(self, familiarity, specificity, scenario, groupsOfNodes, confirmedIntents=None):
+    async def invoke(
+        self, familiarity, specificity, scenario, groupsOfNodes, confirmedIntents=None
+    ):
         try:
             # 如果没有confirmedIntents，设置为空列表
             if confirmedIntents is None:
                 confirmedIntents = []
-                
+
             result = self.chain.invoke(
-                {"familiarity": familiarity, "specificity": specificity, "scenario": scenario, "groupsOfNodes": groupsOfNodes, "confirmedIntents": confirmedIntents}
+                {
+                    "familiarity": familiarity,
+                    "specificity": specificity,
+                    "scenario": scenario,
+                    "groupsOfNodes": groupsOfNodes,
+                    "confirmedIntents": confirmedIntents,
+                }
             )
             return result
         except Exception as e:
@@ -248,31 +270,61 @@ class Chain4ExtractIntent:
                 # Extract the JSON-like content from the error message
                 import re
                 import json
-                
+
                 # Try to find JSON content in the error message
-                json_match = re.search(r'```json\s*\n(.*?)\n```', error_msg, re.DOTALL)
+                json_match = re.search(r"```json\s*\n(.*?)\n```", error_msg, re.DOTALL)
                 if json_match:
                     json_content = json_match.group(1)
                     try:
                         # Try to parse as Python dict and convert to proper JSON
                         import ast
+
                         python_dict = ast.literal_eval(json_content)
                         # Convert to proper JSON format
-                        return [python_dict] if isinstance(python_dict, dict) else python_dict
+                        return (
+                            [python_dict]
+                            if isinstance(python_dict, dict)
+                            else python_dict
+                        )
                     except:
                         pass
-                
+
                 # Try to find array-like content
-                array_match = re.search(r'\[(.*?)\]', error_msg, re.DOTALL)
+                array_match = re.search(r"\[(.*?)\]", error_msg, re.DOTALL)
                 if array_match:
                     array_content = array_match.group(0)
                     try:
                         # Try to parse as Python list and convert to proper JSON
                         import ast
+
                         python_list = ast.literal_eval(array_content)
                         return python_list
                     except:
                         pass
-            
+
             # If all else fails, re-raise the original error
             raise e
+
+
+class Chain4RecommendIntent:
+    def __init__(self, model):
+        self.instruction = Prompts.RECOMMEND_INTENT
+
+        self.model = model
+        self.parser = PydanticOutputParser(pydantic_object=UpdatedIntentTree)
+        self.prompt_template = PromptTemplate(
+            input_variables=["user_input"],
+            template=self.instruction,
+            partial_variables={
+                "format_instructions": self.parser.get_format_instructions()
+            },
+        )
+        self.chain = self.prompt_template | self.model | self.parser
+
+    async def invoke(self, user_input):
+        try:
+            result = self.chain.invoke({"user_input": user_input})
+            return result
+        except Exception as e:
+            print(f"Error processing recommend intent: {str(e)}")
+            return intentTree
