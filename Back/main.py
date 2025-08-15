@@ -71,7 +71,8 @@ else:
     os.environ["OPENAI_API_KEY"] = ""
 
 modelName = "gpt-4o"
-model = ChatOpenAI(model=modelName)
+temperature = 0.2
+model = ChatOpenAI(model=modelName, temperature=temperature)
 
 # Add CORS middleware
 app.add_middleware(

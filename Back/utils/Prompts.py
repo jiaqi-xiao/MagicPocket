@@ -304,6 +304,7 @@ class Prompts:
     EXTRACT_INTENT = """
         You are a reasoning assistant tasked with extracting and describing the user's intents for each group of the records based on the user's desire, the highlighted text, and the user's comments.
         According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone wants to achieve when foraging information, and intents are different intermediate steps to approach the desire.
+        In other words, the user's behavior moves toward achieving the desire (i.e. the goal of information foraging task) by intending to commit to specific plans or actions, which can be considered as intents.
 
         # Instructions
         - A structure of the intent tree is provided in the JSON file below. For each group of records, fill in the missing intent name and intent description in the placeholders: ____.
