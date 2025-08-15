@@ -699,11 +699,11 @@ function initializeRecordsArea() {
             } else {
                 // Update records hash after successful analysis
                 await updateAnalysisRecordsHash();
-                // Normal mode: show network visualization
+                // Normal mode: show network visualization immediately with extract results
                 showNetworkContainer();
                 window.Logger.log(window.LogCategory.UI, 'side_panel_network_visualization_shown', {});
                 
-                // 初始化或更新网络可视化
+                // 初始化或更新网络可视化 (Phase 1: Extract results)
                 if (!networkManager) {
                     networkManager = await window.showNetworkVisualization(
                         intentTree, 
@@ -713,6 +713,43 @@ function initializeRecordsArea() {
                     );
                 } else {
                     networkManager.updateData(intentTree);
+                }
+
+                // Clear original text to prevent loading state from overriding our manual button states
+                delete analyzeBtn.dataset.originalText;
+                
+                // Phase 2: Call recommend API in background
+                try {
+                    // Change button text to indicate recommendation is in progress
+                    analyzeBtn.textContent = "Recommending...";
+                    analyzeBtn.disabled = false; // Keep button enabled but show progress
+                    
+                    // Store the initial tree for recommendation call
+                    const recommendedTree = await callRecommendAPI(host, taskDescription, intentTree);
+                    
+                    if (recommendedTree && recommendedTree.item) {
+                        // Add scenario information to recommended tree
+                        recommendedTree.scenario = taskDescription;
+                        
+                        // Merge confirmation states if needed
+                        if (lastIntentTree && lastIntentTree.child) {
+                            console.log('Merging confirmation states into recommended tree');
+                            mergeConfirmationStates(recommendedTree, lastIntentTree);
+                        }
+                        
+                        // Update network visualization with recommended tree
+                        networkManager.updateData(recommendedTree);
+                        
+                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_updated', {
+                            raw_response: JSON.stringify(recommendedTree)
+                        });
+                    }
+                } catch (recommendError) {
+                    console.error('Recommend API failed, continuing with extract results:', recommendError);
+                    window.Logger.log(window.LogCategory.UI, 'side_panel_recommend_failed', {
+                        error: recommendError.message
+                    });
+                    // Continue with the extract results even if recommend fails
                 }
 
                 // 更新按钮文本
@@ -770,6 +807,37 @@ function initializeRecordsArea() {
             }
         }
     });
+}
+
+// New function to call recommend API
+async function callRecommendAPI(host, scenario, intentTreeData) {
+    try {
+        console.log('Calling recommend API with:', { scenario, intentTree: intentTreeData });
+        
+        const response = await fetch(`${host}recommend/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                scenario: scenario,
+                item: intentTreeData.item
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Recommend API error: ${JSON.stringify(errorData.detail)}`);
+        }
+
+        const recommendedTree = await response.json();
+        console.log('Recommend API response:', recommendedTree);
+        
+        return recommendedTree;
+    } catch (error) {
+        console.error('Error calling recommend API:', error);
+        throw error;
+    }
 }
 
 async function updateRecordsList() {
