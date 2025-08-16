@@ -1587,7 +1587,7 @@ class NetworkManager {
         const processIntentNode = (intentData, intentName, idCounter) => {
             const description = intentData?.description || intentName;
             const intentObj = {
-                id: idCounter,
+                id: intentData?.id || idCounter, // 优先使用原始数据的 id 字段
                 intent: intentName,
                 description: description,
                 isLeafNode: false,
@@ -1606,7 +1606,7 @@ class NetworkManager {
                     // 递归处理子意图节点
                     intentData.child.forEach(childNode => {
                         if (childNode.intent) {
-                            const childIntent = processIntentNode(childNode, childNode.intent, idCounter + 1);
+                            const childIntent = processIntentNode(childNode, childNode.intent, childNode.id || (idCounter + 1));
                             intentObj.child.push(childIntent);
                             intentObj.child_num++;
                         }
@@ -1638,7 +1638,7 @@ class NetworkManager {
                     return;
                 }
 
-                const intentObj = processIntentNode(intentData, intentName, idCounter++);
+                const intentObj = processIntentNode(intentData, intentName, intentData.id || idCounter++);
                 newIntentTree.child.push(intentObj);
             });
         }
