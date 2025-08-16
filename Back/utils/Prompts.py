@@ -302,33 +302,35 @@ class Prompts:
         """
 
     EXTRACT_INTENT = """
-        You are a reasoning assistant tasked with extracting and describing the user's intents for each group of the records based on the user's desire, the highlighted text, and the user's comments.
-        According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone wants to achieve when foraging information, and intents are different intermediate steps to approach the desire.
-        In other words, the user's behavior moves toward achieving the desire (i.e. the goal of information foraging task) by intending to commit to specific plans or actions, which can be considered as intents.
+You are a reasoning assistant tasked with extracting and describing the user's intents for each group of the records based on the user's desire, the highlighted text, and the user's comments.
+According to the Belief, Desire, Intention (BDI) model, the desire is the goal or objective someone wants to achieve when foraging information, and intents are different intermediate steps to approach the desire.
+In other words, the user's behavior moves toward achieving the desire (i.e. the goal of information foraging task) by intending to commit to specific plans or actions, which can be considered as intents.
 
-        # Instructions
-        - A structure of the intent tree is provided in the JSON file below. For each group of records, fill in the missing intent name and intent description in the placeholders: ____.
-        - When filling in the placeholders, you should FIRST consider the previously confirmed intents provided below. For each placeholder, if there is a suitable intent_name and intent_description in confirmedIntents that matches the group (based on content, parent, or semantic similarity), use that confirmed intent to fill the placeholder. 
-        - IMPORTANT: When selecting a confirmed intent from confirmedIntents, you must ensure that the intent's level matches the group's level. For example, a level 1 intent can only be filled using a level 1 confirmed intent; do not use a confirmed intent of a different level.
-        - Only create a new intent if no suitable confirmed intent with the correct level exists.
-        - Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
-        - Do NOT change the structure of the JSON file, and only return the JSON file except the 'records' attribute.
-        - The intent names should be phrases starting with a verb's -ing form. The specificity and granularity should be consistent with the information provided below.
-        - IMPORTANT: You must return ONLY valid JSON format. Do not use Python dictionary syntax (single quotes, no quotes for keys). Use proper JSON syntax with double quotes for all strings and keys.
+# Instructions
+- A structure of the intent tree is provided in the JSON file below. For each group of records, fill in the missing intent name and intent description in the placeholders: ____.
+- IMPORTANT: All confirmed intents must be preserved in the final intent tree. This should be ensured in the following priority order:
+  1. **First**, if a placeholder can be filled with a suitable confirmed intent (based on semantic match and level consistency), directly use that confirmed intent.
+  2. **Second**, if any confirmed intent is not used in step 1, create a new node in the tree for it under the most suitable parent.
+  3. **Third**, if placeholders remain after using all confirmed intents, create new intents to fill them.
+- When selecting a confirmed intent from confirmedIntents, you must ensure that the intent's level matches the group's level. For example, a level 1 intent can only be filled using a level 1 confirmed intent; do not use a confirmed intent of a different level.
+- Ensure that each intent is clearly described, non-repetitive, and consistent in granularity.
+- Do NOT change the structure of the JSON file, and only return the JSON file except the 'records' attribute.
+- The intent names should be phrases starting with a verb's -ing form. The specificity and granularity should be consistent with the information provided below.
 
-        # Please also take the following into account:
-        1. The user's familiarity level: users who are unfamiliar with the scenario will have more general/coarse intents, while users familiar with the scenario will have more specific/fine intents.
-        User's familiarity level with the scenario: {familiarity}
-        Recommended specificity of the intent: {specificity}
+# Please also take the following into account:
+1. The user's familiarity level: users who are unfamiliar with the scenario will have more general/coarse intents, while users familiar with the scenario will have more specific/fine intents.
+   User's familiarity level with the scenario: {familiarity}
+   Recommended specificity of the intent: {specificity}
 
-        2. The structure of the intent tree: intents with parent should be at the same level of granularity, and should be more specific than the parent intent.
+2. The structure of the intent tree: intents with parent should be at the same level of granularity, and should be more specific than the parent intent.
 
-        3. Previously confirmed intents: The user has already confirmed some intents that should be preserved and not changed. These confirmed intents are provided in the following format:
-        {confirmedIntents}
-        When filling in the intent_name and intent_description, always prioritize using the most appropriate confirmed intent from this list for each group, and ensure that the confirmed intent's level matches the group's level.
+3. Previously confirmed intents: The user has already confirmed some intents that should all be preserved and not changed. These confirmed intents are provided in the following format:
+   {confirmedIntents}
+   - Rule: If a confirmed intent is not used to fill a placeholder, you must still include it by creating a new node for it in the final intent tree.
 
-        Desire: {scenario}
-        Json file: {groupsOfNodes}
+Desire: {scenario}
+Json file: {groupsOfNodes}
+
         """
 
     RECOMMEND_INTENT = """
