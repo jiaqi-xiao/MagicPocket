@@ -23,6 +23,7 @@ class NetworkManager {
         this.container = null;
         this.visContainer = null;
         this.nodeMergeManager = null; // 节点合并管理器
+        this.customTooltipManager = null; // 自定义tooltip管理器
 
         // 从初始意图树中收集 immutable 意图 - 支持多级意图结构
         this.collectImmutableIntents(intentTree);
@@ -248,7 +249,13 @@ class NetworkManager {
                 color: this.getNodeColor(nodeType),
                 size: this.getNodeSize(nodeType),
                 level: this.layout === 'hierarchical' ? level : undefined,
-                opacity: isImmutable ? 1 : 0.3
+                opacity: isImmutable ? 1 : 0.3,
+                // Store tooltip data for custom tooltip system
+                tooltipData: {
+                    intentName: nodeName,
+                    nodeType: nodeType,
+                    nodeData: nodeData
+                }
             });
             
             // 设置节点状态
@@ -304,11 +311,12 @@ class NetworkManager {
                     size: this.getNodeSize(NetworkManager.NodeTypes.RECORD),
                     level: this.layout === 'hierarchical' ? level : undefined,
                     opacity: isImmutable ? 1 : 0.3,
-                    title: this.formatRecordTooltip({
+                    // Store tooltip data for custom tooltip system
+                    tooltipData: {
                         content: record.content || record.text || record.description || 'No content',
                         context: record.context || '',
                         comment: record.comment || ''
-                    })
+                    }
                 };
                 nodes.push(recordNode);
                 this.nodeStates.set(recordId, isImmutable);
@@ -477,128 +485,8 @@ class NetworkManager {
         return truncated;
     }
 
-    // 辅助方法：格式化记录的悬停提示
-    formatRecordTooltip(record) {
-        const tooltipContainer = document.createElement('div');
-        
-        // 获取network容器的大小
-        const networkContainer = this.container;
-        const containerRect = networkContainer.getBoundingClientRect();
-        const maxHeight = Math.min(300, containerRect.height * 0.8); // 最大高度为容器高度的80%
-        const maxWidth = Math.min(400, containerRect.width * 0.8);  // 最大宽度为容器宽度的80%
 
-        Object.assign(tooltipContainer.style, {
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            padding: '12px',
-            maxWidth: maxWidth + 'px',
-            maxHeight: maxHeight + 'px',
-            fontSize: '14px',
-            lineHeight: '1.5',
-            color: '#333',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid rgba(0, 0, 0, 0.1)',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            position: 'relative'
-        });
 
-        // 添加滚动事件处理
-        let isScrolling = false;
-        tooltipContainer.addEventListener('wheel', (e) => {
-            const canScroll = tooltipContainer.scrollHeight > tooltipContainer.clientHeight;
-            if (canScroll) {
-                e.stopPropagation();
-                e.preventDefault();
-                tooltipContainer.scrollTop += e.deltaY;
-                
-                // 标记正在滚动
-                isScrolling = true;
-                clearTimeout(this._scrollTimeout);
-                this._scrollTimeout = setTimeout(() => {
-                    isScrolling = false;
-                }, 150);
-
-                // 当正在滚动时临时禁用network的缩放
-                if (this.network) {
-                    this.network.setOptions({
-                        interaction: {
-                            zoomView: !isScrolling
-                        }
-                    });
-                }
-            }
-        }, { passive: false });
-
-        // 创建并添加内容部分
-        if (record.content) {
-            const contentSection = this.createTooltipSection('Content', record.content, '#2196F3');
-            tooltipContainer.appendChild(contentSection);
-        }
-
-        // 创建并添加评论部分
-        if (record.comment) {
-            const commentSection = this.createTooltipSection('Comment', record.comment, '#FF9800');
-            tooltipContainer.appendChild(commentSection);
-        }
-
-        return tooltipContainer;
-    }
-
-    // 辅助方法：格式化记录的悬停提示部分
-    createTooltipSection(title, content, color) {
-        const section = document.createElement('div');
-        Object.assign(section.style, {
-            marginBottom: title === 'Comment' ? '0' : '16px'
-        });
-
-        // 创建标题
-        const titleElement = document.createElement('div');
-        Object.assign(titleElement.style, {
-            fontWeight: '600',
-            color: color,
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            position: 'sticky',
-            top: '0',
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            paddingBottom: '4px',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
-        });
-
-        // 添加图标
-        const icon = document.createElement('span');
-        icon.textContent = title === 'Content' ? '📝' : '💭';
-        icon.style.fontSize = '14px';
-        titleElement.appendChild(icon);
-
-        // 添加标题文本
-        const titleText = document.createElement('span');
-        titleText.textContent = title;
-        titleElement.appendChild(titleText);
-
-        // 创建内容
-        const contentElement = document.createElement('div');
-        Object.assign(contentElement.style, {
-            color: '#666',
-            fontSize: '13px',
-            lineHeight: '1.6',
-            padding: '8px 12px',
-            backgroundColor: 'rgba(0, 0, 0, 0.02)',
-            borderRadius: '6px',
-            whiteSpace: 'pre-wrap',  // 保留换行和空格
-            wordBreak: 'break-word'  // 长单词换行
-        });
-        contentElement.textContent = content;
-
-        section.appendChild(titleElement);
-        section.appendChild(contentElement);
-
-        return section;
-    }
 
     // 获取节点颜色
     getNodeColor(type) {
@@ -1210,9 +1098,10 @@ class NetworkManager {
             // 添加网络事件监听
             this.setupNetworkEvents();
             
-            // 延迟初始化节点合并管理器，确保网络完全准备就绪
+            // 延迟初始化节点合并管理器和自定义tooltip管理器，确保网络完全准备就绪
             setTimeout(() => {
                 this.initializeNodeMergeManager();
+                this.initializeCustomTooltipManager();
             }, 100);
             
             // 等待布局稳定后进行初始缩放适配和自动排版
@@ -1367,9 +1256,6 @@ class NetworkManager {
 
     // 设置网络事件
     setupNetworkEvents() {
-        let isTooltipVisible = false;
-        let tooltipNode = null;
-
         // 左键点击节点 - 仅记录日志，不显示菜单
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
@@ -1386,6 +1272,10 @@ class NetworkManager {
             } else {
                 // 点击空白区域时重置所有节点的状态显示
                 this.resetAllNodeStates();
+                // 隐藏自定义tooltip
+                if (this.customTooltipManager) {
+                    this.customTooltipManager.hideTooltip();
+                }
             }
         });
 
@@ -1402,55 +1292,49 @@ class NetworkManager {
             }
         });
 
-        // 监听悬停事件
+        // 监听悬停事件 - 使用自定义tooltip系统
         this.network.on('hoverNode', (params) => {
-            tooltipNode = params.node;
-            isTooltipVisible = true;
-            // 禁用缩放
-            this.network.setOptions({
-                interaction: {
-                    zoomView: false
+            if (this.customTooltipManager) {
+                const nodeId = params.node;
+                const node = this.nodes.get(nodeId);
+                
+                if (node && (node.type === NetworkManager.NodeTypes.RECORD || 
+                           node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+                           node.type === NetworkManager.NodeTypes.LOW_INTENT || 
+                           node.type === 'record' || node.type === 'intent')) {
+                    
+                    // 获取节点在屏幕上的位置
+                    const nodePosition = this.network.getPositions([nodeId])[nodeId];
+                    const domPosition = this.network.canvasToDOM(nodePosition);
+                    
+                    // 计算相对于视窗的位置和容器边界信息
+                    const containerRect = this.container.getBoundingClientRect();
+                    const screenPosition = {
+                        x: domPosition.x + containerRect.left,
+                        y: domPosition.y + containerRect.top
+                    };
+                    
+                    // 传递容器边界信息用于智能定位
+                    const containerBounds = {
+                        left: containerRect.left,
+                        right: containerRect.right,
+                        top: containerRect.top,
+                        bottom: containerRect.bottom,
+                        width: containerRect.width,
+                        height: containerRect.height
+                    };
+                    
+                    this.customTooltipManager.showTooltip(nodeId, node, screenPosition, containerBounds);
                 }
-            });
+            }
         });
 
         // 监听悬停结束事件
         this.network.on('blurNode', (params) => {
-            if (params.node === tooltipNode) {
-                tooltipNode = null;
-                isTooltipVisible = false;
-                // 恢复缩放
-                this.network.setOptions({
-                    interaction: {
-                        zoomView: true
-                    }
-                });
+            if (this.customTooltipManager) {
+                this.customTooltipManager.hideTooltip();
             }
         });
-
-        // 监听滚轮事件
-        this.visContainer.addEventListener('wheel', (event) => {
-            if (isTooltipVisible) {
-                // 如果提示框可见，检查事件目标
-                let target = event.target;
-                let isInsideTooltip = false;
-
-                // 检查事件是否发生在提示框内
-                while (target && target !== this.visContainer) {
-                    if (target.classList.contains('vis-tooltip')) {
-                        isInsideTooltip = true;
-                        break;
-                    }
-                    target = target.parentElement;
-                }
-
-                // 如果不在提示框内，阻止事件
-                if (!isInsideTooltip) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-            }
-        }, { passive: false });
 
         // 拖动事件现在由NodeMergeManager统一处理
         // 移除重复的事件监听器以避免冲突
@@ -1492,6 +1376,23 @@ class NetworkManager {
             console.log('NodeMergeManager initialized successfully');
         } catch (error) {
             console.error('Error initializing NodeMergeManager:', error);
+        }
+    }
+
+    // 初始化自定义tooltip管理器
+    initializeCustomTooltipManager() {
+        console.log('Attempting to initialize CustomTooltipManager...');
+        
+        if (!this.network) {
+            console.error('Cannot initialize CustomTooltipManager: network is null');
+            return;
+        }
+        
+        try {
+            this.customTooltipManager = new CustomTooltipManager(this);
+            console.log('CustomTooltipManager initialized successfully');
+        } catch (error) {
+            console.error('Error initializing CustomTooltipManager:', error);
         }
     }
 
@@ -1708,6 +1609,12 @@ class NetworkManager {
 
     // Add cleanup method to handle container removal properly
     cleanup() {
+        // 销毁自定义tooltip管理器
+        if (this.customTooltipManager) {
+            this.customTooltipManager.destroy();
+            this.customTooltipManager = null;
+        }
+        
         if (this.container) {
             this.container.remove();
             if (this.containerArea) {
@@ -3072,6 +2979,11 @@ class NodeMergeManager {
                 this.dragStartPosition = this.network.getPositions([this.draggedNode])[this.draggedNode];
                 console.log('Dragging node:', this.draggedNode, 'start position:', this.dragStartPosition);
                 
+                // 清除 tooltip 显示定时器，防止拖动时显示 tooltip
+                if (this.networkManager.customTooltipManager) {
+                    this.networkManager.customTooltipManager.clearShowTimeout();
+                }
+                
                 // 更新光标样式
                 if (this.networkManager.container) {
                     this.networkManager.container.style.cursor = 'grabbing';
@@ -3521,5 +3433,434 @@ class NodeMergeManager {
                 borderColor: node.originalBorderColor || '#cccccc'
             });
         }
+    }
+}
+
+// 自定义 Tooltip 管理器类
+class CustomTooltipManager {
+    // 样式常量
+    static STYLES = {
+        container: {
+            position: 'fixed',
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            padding: '12px',
+            fontSize: '14px',
+            lineHeight: '1.5',
+            color: '#333',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(0, 0, 0, 0.1)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            zIndex: '10003',
+            cursor: 'default',
+            opacity: '0',
+            visibility: 'hidden',
+            transition: 'opacity 0.2s ease, visibility 0.2s ease',
+            pointerEvents: 'auto',
+            maxWidth: '400px',
+            maxHeight: '300px'
+        },
+        titleElement: {
+            fontWeight: '600',
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            position: 'sticky',
+            top: '-12px',
+            backgroundColor: '#ffffff',
+            margin: '0 -12px',
+            padding: '12px 12px 4px 12px',
+            zIndex: '1',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
+        },
+        contentElement: {
+            color: '#666',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(0, 0, 0, 0.02)',
+            borderRadius: '6px',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+        }
+    };
+
+    static COLORS = {
+        content: '#2196F3',
+        comment: '#FF9800',
+        highIntent: '#ff7675',
+        lowIntent: '#74b9ff',
+        details: '#95a5a6'
+    };
+
+    static ICONS = {
+        content: '📝',
+        comment: '💭',
+        intent: '🎯',
+        details: 'ℹ️'
+    };
+
+    static TIMINGS = {
+        mouseLeaveDelay: 200,
+        nodeBlurDelay: 300,
+        scrollZoomRestore: 200,
+        hoverDelay: 1000
+    };
+
+    constructor(networkManager) {
+        this.networkManager = networkManager;
+        this.tooltip = null;
+        this.currentNodeId = null;
+        this.isTooltipVisible = false;
+        this.mouseOverTooltip = false;
+        this.mouseOverNode = false;
+        this.hideTimeout = null;
+        this.showTimeout = null;
+        this.pendingShowParams = null;
+        
+        this.createTooltipElement();
+        this.setupEventListeners();
+    }
+
+    createTooltipElement() {
+        this.tooltip = document.createElement('div');
+        this.tooltip.className = 'mp-custom-persistent-tooltip';
+        
+        Object.assign(this.tooltip.style, CustomTooltipManager.STYLES.container);
+
+        // 自定义滚动条样式
+        this.tooltip.style.scrollbarWidth = 'thin';
+        this.tooltip.style.scrollbarColor = '#ccc #f5f5f5';
+
+        // 添加自定义滚动条样式
+        if (!document.getElementById('mp-custom-tooltip-scrollbar-style')) {
+            const style = document.createElement('style');
+            style.id = 'mp-custom-tooltip-scrollbar-style';
+            style.textContent = `
+                .mp-custom-persistent-tooltip::-webkit-scrollbar {
+                    width: 8px;
+                }
+                .mp-custom-persistent-tooltip::-webkit-scrollbar-track {
+                    background: #f5f5f5;
+                    border-radius: 4px;
+                }
+                .mp-custom-persistent-tooltip::-webkit-scrollbar-thumb {
+                    background: #ccc;
+                    border-radius: 4px;
+                }
+                .mp-custom-persistent-tooltip::-webkit-scrollbar-thumb:hover {
+                    background: #999;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(this.tooltip);
+    }
+
+    setupEventListeners() {
+        // Tooltip 鼠标事件
+        this.tooltip.addEventListener('mouseenter', () => {
+            this.mouseOverTooltip = true;
+            this.clearHideTimeout();
+        });
+
+        this.tooltip.addEventListener('mouseleave', () => {
+            this.mouseOverTooltip = false;
+            this.scheduleHide(CustomTooltipManager.TIMINGS.mouseLeaveDelay);
+        });
+
+        // Tooltip 滚动事件
+        this.tooltip.addEventListener('wheel', (e) => {
+            const canScroll = this.tooltip.scrollHeight > this.tooltip.clientHeight;
+            if (canScroll) {
+                e.stopPropagation();
+                e.preventDefault();
+                this.tooltip.scrollTop += e.deltaY;
+
+                // 临时禁用network缩放
+                if (this.networkManager.network) {
+                    this.networkManager.network.setOptions({
+                        interaction: { zoomView: false }
+                    });
+                    
+                    // 200ms后恢复缩放
+                    setTimeout(() => {
+                        if (this.networkManager.network) {
+                            this.networkManager.network.setOptions({
+                                interaction: { zoomView: true }
+                            });
+                        }
+                    }, CustomTooltipManager.TIMINGS.scrollZoomRestore);
+                }
+            }
+        }, { passive: false });
+    }
+
+    showTooltip(nodeId, nodeData, position, containerBounds) {
+        this.scheduleShow(nodeId, nodeData, position, containerBounds);
+    }
+
+    showTooltipImmediately(nodeId, nodeData, position, containerBounds) {
+        this.currentNodeId = nodeId;
+        this.mouseOverNode = true;
+        this.clearHideTimeout();
+
+        // 生成tooltip内容
+        let tooltipContent;
+        if (nodeData.type === this.networkManager.constructor.NodeTypes.RECORD || nodeData.type === 'record') {
+            tooltipContent = this.createRecordTooltipContent(nodeData.tooltipData || nodeData);
+        } else {
+            tooltipContent = this.createIntentTooltipContent(nodeData.tooltipData || nodeData);
+        }
+
+        this.tooltip.innerHTML = '';
+        this.tooltip.appendChild(tooltipContent);
+
+        // 定位tooltip（传递容器边界信息）
+        this.positionTooltip(position, containerBounds);
+
+        // 显示tooltip
+        this.tooltip.style.opacity = '1';
+        this.tooltip.style.visibility = 'visible';
+        this.isTooltipVisible = true;
+    }
+
+    hideTooltip() {
+        this.mouseOverNode = false;
+        this.clearShowTimeout(); // 清除待显示的tooltip
+        this.scheduleHide(CustomTooltipManager.TIMINGS.nodeBlurDelay);
+    }
+
+    scheduleHide(delay) {
+        this.clearHideTimeout();
+        this.hideTimeout = setTimeout(() => {
+            if (!this.mouseOverTooltip && !this.mouseOverNode) {
+                this.tooltip.style.opacity = '0';
+                this.tooltip.style.visibility = 'hidden';
+                this.isTooltipVisible = false;
+                this.currentNodeId = null;
+            }
+        }, delay);
+    }
+
+    clearHideTimeout() {
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+        }
+    }
+
+    scheduleShow(nodeId, nodeData, position, containerBounds) {
+        this.clearShowTimeout();
+        this.pendingShowParams = { nodeId, nodeData, position, containerBounds };
+        
+        this.showTimeout = setTimeout(() => {
+            this.mouseOverNode = true;
+            this.showTooltipImmediately(nodeId, nodeData, position, containerBounds);
+            this.showTimeout = null;
+            this.pendingShowParams = null;
+        }, CustomTooltipManager.TIMINGS.hoverDelay);
+    }
+
+    clearShowTimeout() {
+        if (this.showTimeout) {
+            clearTimeout(this.showTimeout);
+            this.showTimeout = null;
+            this.pendingShowParams = null;
+        }
+    }
+
+    positionTooltip(nodePosition, containerBounds) {
+        // 首先确保tooltip已渲染以获取正确的尺寸
+        this.tooltip.style.visibility = 'hidden';
+        this.tooltip.style.opacity = '1';
+        
+        const tooltipRect = this.tooltip.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // 计算可用空间
+        const nodeOffset = 20; // 节点与tooltip之间的间距
+        const margin = 10; // 与边界的最小距离
+        
+        // 检查容器边界（如果提供的话）
+        let leftBound = margin;
+        let rightBound = viewportWidth - margin;
+        let topBound = margin;
+        let bottomBound = viewportHeight - margin;
+        
+        if (containerBounds) {
+            leftBound = Math.max(leftBound, containerBounds.left + margin);
+            rightBound = Math.min(rightBound, containerBounds.right - margin);
+            topBound = Math.max(topBound, containerBounds.top + margin);
+            bottomBound = Math.min(bottomBound, containerBounds.bottom - margin);
+        }
+        
+        // 计算可用的容器宽度
+        const availableWidth = rightBound - leftBound;
+        
+        // 动态调整tooltip宽度如果空间受限
+        if (tooltipRect.width > availableWidth * 0.9) {
+            const adjustedWidth = Math.max(280, availableWidth * 0.9);
+            this.tooltip.style.maxWidth = adjustedWidth + 'px';
+            // 重新获取调整后的尺寸
+            const newTooltipRect = this.tooltip.getBoundingClientRect();
+            Object.assign(tooltipRect, newTooltipRect);
+        }
+        
+        // 初始位置：尝试在节点右侧显示
+        let x = nodePosition.x + nodeOffset;
+        let y = nodePosition.y - tooltipRect.height / 2; // 垂直居中
+        
+        // 水平位置检查
+        if (x + tooltipRect.width > rightBound) {
+            // 右侧空间不足，尝试左侧
+            const leftSideX = nodePosition.x - tooltipRect.width - nodeOffset;
+            
+            if (leftSideX >= leftBound) {
+                // 左侧有足够空间
+                x = leftSideX;
+            } else {
+                // 两侧都空间不足，选择更好的一侧
+                const rightOverflow = (x + tooltipRect.width) - rightBound;
+                const leftOverflow = leftBound - leftSideX;
+                
+                if (rightOverflow <= leftOverflow) {
+                    // 右侧溢出较少，贴着右边界显示
+                    x = rightBound - tooltipRect.width;
+                } else {
+                    // 左侧溢出较少，贴着左边界显示
+                    x = leftBound;
+                }
+            }
+        }
+        
+        // 垂直位置检查
+        if (y < topBound) {
+            y = topBound;
+        } else if (y + tooltipRect.height > bottomBound) {
+            y = bottomBound - tooltipRect.height;
+        }
+        
+        // 最终边界安全检查
+        x = Math.max(leftBound, Math.min(x, rightBound - tooltipRect.width));
+        y = Math.max(topBound, Math.min(y, bottomBound - tooltipRect.height));
+        
+        // 应用位置
+        this.tooltip.style.left = x + 'px';
+        this.tooltip.style.top = y + 'px';
+        this.tooltip.style.visibility = 'visible';
+    }
+
+    createRecordTooltipContent(recordData) {
+        const container = document.createElement('div');
+        
+        // Content section
+        if (recordData.content) {
+            const contentSection = this.createTooltipSection('Content', recordData.content, CustomTooltipManager.COLORS.content);
+            container.appendChild(contentSection);
+        }
+
+        // Comment section
+        if (recordData.comment) {
+            const commentSection = this.createTooltipSection('Comment', recordData.comment, CustomTooltipManager.COLORS.comment);
+            container.appendChild(commentSection);
+        }
+
+        return container;
+    }
+
+    createIntentTooltipContent(intentData) {
+        const container = document.createElement('div');
+        
+        const typeLabel = intentData.nodeType === this.networkManager.constructor.NodeTypes.HIGH_INTENT ? 
+            'High-Level Intent' : 'Low-Level Intent';
+        const typeColor = intentData.nodeType === this.networkManager.constructor.NodeTypes.HIGH_INTENT ? 
+            CustomTooltipManager.COLORS.highIntent : CustomTooltipManager.COLORS.lowIntent;
+        
+        // Intent type section
+        const typeSection = this.createTooltipSection(typeLabel, intentData.intentName, typeColor);
+        container.appendChild(typeSection);
+
+        // Additional info
+        if (intentData.nodeData) {
+            let additionalInfo = '';
+            if (intentData.nodeData.child && Array.isArray(intentData.nodeData.child)) {
+                const childIntents = intentData.nodeData.child.filter(child => child.intent);
+                const childRecords = intentData.nodeData.child.filter(child => !child.intent);
+                
+                if (childIntents.length > 0) {
+                    additionalInfo += `Contains ${childIntents.length} child intent(s)`;
+                }
+                if (childRecords.length > 0) {
+                    additionalInfo += (additionalInfo ? ' and ' : '') + `${childRecords.length} record(s)`;
+                }
+            } else if (intentData.nodeData.group && Array.isArray(intentData.nodeData.group)) {
+                additionalInfo = `Contains ${intentData.nodeData.group.length} record(s)`;
+            }
+
+            if (additionalInfo) {
+                const infoSection = this.createTooltipSection('Details', additionalInfo, CustomTooltipManager.COLORS.details);
+                container.appendChild(infoSection);
+            }
+        }
+
+        return container;
+    }
+
+    createTooltipSection(title, content, color) {
+        const section = document.createElement('div');
+        Object.assign(section.style, {
+            marginBottom: title === 'Comment' ? '0' : '16px'
+        });
+
+        // 创建标题
+        const titleElement = document.createElement('div');
+        Object.assign(titleElement.style, {
+            ...CustomTooltipManager.STYLES.titleElement,
+            color: color
+        });
+
+        // 添加图标
+        const icon = document.createElement('span');
+        if (title === 'Content') {
+            icon.textContent = CustomTooltipManager.ICONS.content;
+        } else if (title.includes('Intent')) {
+            icon.textContent = CustomTooltipManager.ICONS.intent;
+        } else if (title === 'Comment') {
+            icon.textContent = CustomTooltipManager.ICONS.comment;
+        } else {
+            icon.textContent = CustomTooltipManager.ICONS.details;
+        }
+        icon.style.fontSize = '14px';
+        titleElement.appendChild(icon);
+
+        // 添加标题文本
+        const titleText = document.createElement('span');
+        titleText.textContent = title;
+        titleElement.appendChild(titleText);
+
+        // 创建内容
+        const contentElement = document.createElement('div');
+        Object.assign(contentElement.style, CustomTooltipManager.STYLES.contentElement);
+        contentElement.textContent = content;
+
+        section.appendChild(titleElement);
+        section.appendChild(contentElement);
+
+        return section;
+    }
+
+    destroy() {
+        if (this.tooltip) {
+            this.tooltip.remove();
+            this.tooltip = null;
+        }
+        this.clearHideTimeout();
+        this.clearShowTimeout();
     }
 }
