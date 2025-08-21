@@ -69,13 +69,15 @@ const Logger = {
     _queue: [],
     // 是否正在处理队列
     _isProcessing: false,
+    // 是否正在清理日志
+    _isClearingLogs: false,
 
     /**
      * 处理日志队列
      * @private
      */
     async _processQueue() {
-        if (this._isProcessing || this._queue.length === 0) {
+        if (this._isProcessing || this._queue.length === 0 || this._isClearingLogs) {
             return;
         }
 
@@ -83,7 +85,7 @@ const Logger = {
         console.log(`[Logger] Processing queue, ${this._queue.length} items remaining`);
 
         try {
-            while (this._queue.length > 0) {
+            while (this._queue.length > 0 && !this._isClearingLogs) {
                 const logEntry = this._queue[0];
                 await this._saveLog(logEntry);
                 this._queue.shift(); // 移除已处理的日志
@@ -126,6 +128,12 @@ const Logger = {
      * @returns {Promise<void>}
      */
     log: async function(category, action, data = {}) {
+        // 如果正在清理日志，忽略新的日志请求
+        if (this._isClearingLogs) {
+            console.log(`[Logger] Ignoring log during clearing: ${category}.${action}`);
+            return;
+        }
+
         const now = new Date();
         const logEntry = {
             localTime: getFormattedLocalTime(),
@@ -206,12 +214,28 @@ const Logger = {
      * @returns {Promise<void>}
      */
     clearLogs: async function() {
-        // 清空队列
+        console.log('[Logger] Starting log clearing process');
+        
+        // 设置清理标志，阻止新日志添加和队列处理
+        this._isClearingLogs = true;
+        
+        // 等待当前队列处理完成
+        while (this._isProcessing) {
+            console.log('[Logger] Waiting for queue processing to complete');
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // 清空队列和状态
         this._queue = [];
         this._isProcessing = false;
 
+        // 清除存储
         await chrome.storage.local.remove(STORAGE_KEY);
-        console.log('[Logger] All logs cleared');
+        
+        // 重置清理标志，允许新日志
+        this._isClearingLogs = false;
+        
+        console.log('[Logger] All logs cleared successfully');
     }
 };
 

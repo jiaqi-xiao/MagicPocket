@@ -54,19 +54,32 @@ function deleteRecord(index) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    console.log('[Popup] DOM loaded, initializing event listeners');
+    
     // Initialize mode toggle
     initializeModeToggle();
     
-    document.getElementById("mp-popup-new-task-btn").addEventListener("click", () => {
-        window.Logger.log(window.LogCategory.UI, 'popup_new_task_btn_clicked', {});
-        if (confirm("Are you sure you want to start a new task? This will clear all current records.")) {
-            window.Logger.log(window.LogCategory.UI, 'popup_new_task_confirmed', {});
-            chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
-            window.close();
+    // New Task button
+    try {
+        const newTaskBtn = document.getElementById("mp-popup-new-task-btn");
+        if (newTaskBtn) {
+            console.log('[Popup] Binding New Task button event');
+            newTaskBtn.addEventListener("click", () => {
+                window.Logger.log(window.LogCategory.UI, 'popup_new_task_btn_clicked', {});
+                if (confirm("Are you sure you want to start a new task? This will clear all current records.")) {
+                    window.Logger.log(window.LogCategory.UI, 'popup_new_task_confirmed', {});
+                    chrome.tabs.create({ url: chrome.runtime.getURL('src/pages/new_task/new_task.html') });
+                    window.close();
+                } else {
+                    window.Logger.log(window.LogCategory.UI, 'popup_new_task_cancelled', {});
+                }
+            });
         } else {
-            window.Logger.log(window.LogCategory.UI, 'popup_new_task_cancelled', {});
+            console.error('[Popup] New Task button not found');
         }
-    });
+    } catch (error) {
+        console.error('[Popup] Error binding New Task button:', error);
+    }
 
     document.getElementById("mp-popup-side-panel-btn").addEventListener("click", () => {
         window.Logger.log(window.LogCategory.UI, 'popup_side_panel_btn_clicked', {});
@@ -106,37 +119,60 @@ document.addEventListener("DOMContentLoaded", () => {
     // });
 
     // 日志导出功能
-    document.getElementById('mp-popup-export-logs-btn').addEventListener('click', async () => {
-        window.Logger.log(window.LogCategory.UI, 'popup_export_logs_btn_clicked', {});
-        try {
-            await Logger.exportLogs();
-            window.Logger.log(window.LogCategory.UI, 'popup_logs_exported', {});
-        } catch (error) {
-            window.Logger.log(window.LogCategory.UI, 'popup_logs_export_failed', {
-                error: error.message
+    try {
+        const exportLogsBtn = document.getElementById('mp-popup-export-logs-btn');
+        if (exportLogsBtn) {
+            console.log('[Popup] Binding Export Logs button event');
+            exportLogsBtn.addEventListener('click', async () => {
+                window.Logger.log(window.LogCategory.UI, 'popup_export_logs_btn_clicked', {});
+                try {
+                    await window.Logger.exportLogs();
+                    window.Logger.log(window.LogCategory.UI, 'popup_logs_exported', {});
+                } catch (error) {
+                    window.Logger.log(window.LogCategory.UI, 'popup_logs_export_failed', {
+                        error: error.message
+                    });
+                }
+                window.close();
             });
+        } else {
+            console.error('[Popup] Export Logs button not found');
         }
-        window.close();
-    });
+    } catch (error) {
+        console.error('[Popup] Error binding Export Logs button:', error);
+    }
 
     // 日志清空功能
-    document.getElementById('mp-popup-clear-logs-btn').addEventListener('click', async () => {
-        window.Logger.log(window.LogCategory.UI, 'popup_clear_logs_btn_clicked', {});
-        if (confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
-            try {
-                await Logger.clearLogs();
-                window.Logger.log(window.LogCategory.UI, 'popup_logs_cleared', {});
-                alert('Logs cleared successfully');
-            } catch (error) {
-                window.Logger.log(window.LogCategory.UI, 'popup_logs_clear_failed', {
-                    error: error.message
-                });
-            }
-            window.close();
+    try {
+        const clearLogsBtn = document.getElementById('mp-popup-clear-logs-btn');
+        if (clearLogsBtn) {
+            console.log('[Popup] Binding Clear Logs button event');
+            clearLogsBtn.addEventListener('click', async () => {
+                console.log('[Popup] Clear Logs button clicked');
+                if (confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
+                    // Log the action before clearing (this will be the last log before clear)
+                    window.Logger.log(window.LogCategory.UI, 'popup_clear_logs_confirmed', {});
+                    
+                    try {
+                        console.log('[Popup] Clearing logs...');
+                        await window.Logger.clearLogs();
+                        alert('Logs cleared successfully');
+                        console.log('[Popup] Logs cleared successfully');
+                    } catch (error) {
+                        console.error('[Popup] Error clearing logs:', error);
+                        alert('Failed to clear logs: ' + error.message);
+                    }
+                    window.close();
+                } else {
+                    window.Logger.log(window.LogCategory.UI, 'popup_clear_logs_cancelled', {});
+                }
+            });
         } else {
-            window.Logger.log(window.LogCategory.UI, 'popup_clear_logs_cancelled', {});
+            console.error('[Popup] Clear Logs button not found');
         }
-    });
+    } catch (error) {
+        console.error('[Popup] Error binding Clear Logs button:', error);
+    }
 });
 
 // Listen for updates from the background script
@@ -170,10 +206,6 @@ function initializeModeToggle() {
         } else {
             ablationRadio.checked = true;
         }
-        
-        window.Logger.log(window.LogCategory.UI, 'popup_mode_toggle_initialized', {
-            current_mode: currentMode
-        });
     });
     
     // Add event listeners for both radio buttons
