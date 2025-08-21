@@ -384,17 +384,18 @@ function showTaskEditDialog(currentDescription) {
 function initializeRecordsArea() {
     const scrollArea = document.getElementById("recordsScrollArea");
     const buttonArea = document.querySelector(".button-area");
-    const buttonArea2 = document.querySelector(".button-area-2");
 
     // 创建按钮
     const clearAllBtn = createButton("Clear All", "clearAllBtn");
     const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
     const analyzeBtn = createButton("Analyze", "analyzeBtn");
+    const refreshNetworkBtn = createButton("Refresh", "refreshNetworkBtn");
 
     // 添加按钮到按钮区域
     buttonArea.appendChild(clearAllBtn);
     buttonArea.appendChild(highlightBtn);
     buttonArea.appendChild(analyzeBtn);
+    buttonArea.appendChild(refreshNetworkBtn);
 
     // 设置按钮事件监听器
     clearAllBtn.addEventListener('click', () => {
@@ -716,6 +717,9 @@ function initializeRecordsArea() {
                 } else {
                     networkManager.updateData(intentTree);
                 }
+                
+                // Save the intent tree for refresh functionality
+                lastIntentTree = intentTree;
 
                 // Clear original text to prevent loading state from overriding our manual button states
                 delete analyzeBtn.dataset.originalText;
@@ -741,6 +745,9 @@ function initializeRecordsArea() {
                         
                         // Update network visualization with recommended tree
                         networkManager.updateData(recommendedTree);
+                        
+                        // Save the recommended tree for refresh functionality
+                        lastIntentTree = recommendedTree;
                         
                         window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_generated', {
                             raw_response: JSON.stringify(recommendedTree)
@@ -768,6 +775,36 @@ function initializeRecordsArea() {
             });
         } finally {
             hideAnalyzeLoadingState(analyzeBtn);
+        }
+    });
+
+    refreshNetworkBtn.addEventListener('click', () => {
+        window.Logger.log(window.LogCategory.UI, 'side_panel_refresh_network_btn_clicked', {});
+        
+        if (!networkManager) {
+            console.warn('Cannot refresh network: No network manager available. Please run analysis first.');
+            window.Logger.log(window.LogCategory.UI, 'side_panel_network_refresh_no_data', {
+                reason: 'No network manager available'
+            });
+            return;
+        }
+        
+        if (lastIntentTree) {
+            try {
+                // Simply refresh the data display using the saved intent tree
+                networkManager.updateData(lastIntentTree);
+                window.Logger.log(window.LogCategory.UI, 'side_panel_network_refreshed', {});
+            } catch (error) {
+                console.error('Error refreshing network:', error);
+                window.Logger.log(window.LogCategory.UI, 'side_panel_network_refresh_failed', {
+                    error: error.message
+                });
+            }
+        } else {
+            console.warn('Cannot refresh network: No intent tree data available. Please run analysis first.');
+            window.Logger.log(window.LogCategory.UI, 'side_panel_network_refresh_no_data', {
+                reason: 'No intent tree data available'
+            });
         }
     });
 
@@ -1599,7 +1636,8 @@ function getButtonColor(id) {
         startGenerateBtn: "#E6FFFA",
         showIntentBtn: "#EBF4FF",
         showNetworkBtn: "#F0FFF4",
-        highlightTextBtn: "#FFF5F7"
+        highlightTextBtn: "#FFF5F7",
+        refreshNetworkBtn: "#F0F9FF"
     };
     return colors[id] || "#EDF2F7";
 }
@@ -1610,7 +1648,8 @@ function getButtonTextColor(id) {
         startGenerateBtn: "#319795",
         showIntentBtn: "#3182CE",
         showNetworkBtn: "#38A169",
-        highlightTextBtn: "#D53F8C"
+        highlightTextBtn: "#D53F8C",
+        refreshNetworkBtn: "#0369A1"
     };
     return colors[id] || "#4A5568";
 }
