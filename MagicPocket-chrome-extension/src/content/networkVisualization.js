@@ -221,7 +221,15 @@ class NetworkManager {
 
         // 递归处理意图节点的函数 - 支持两级意图层级
         const processIntentNode = (parentId, nodeData, nodeName, level, nodeType = NetworkManager.NodeTypes.HIGH_INTENT, presetNodeId = null) => {
-            const currentNodeId = presetNodeId || `${nodeType}_${nodeId++}`;
+            // 优先使用 intentData 中的 ID（手动创建的节点），否则使用预设ID或生成新ID
+            let currentNodeId;
+            if (nodeData && typeof nodeData.id === 'number' && nodeData.isManuallyCreated) {
+                // 手动创建的节点使用数字ID
+                currentNodeId = nodeData.id;
+            } else {
+                // 自动生成的节点使用字符串ID
+                currentNodeId = presetNodeId || `${nodeType}_${nodeId++}`;
+            }
             // 修复节点状态判断逻辑 - 优先检查nodeStates，其次检查immutableIntents
             let isImmutable = false;
             
@@ -284,7 +292,12 @@ class NetworkManager {
                     // 递归处理子意图节点
                     nodeData.child.forEach(childNode => {
                         if (childNode.intent) {
-                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType, null);
+                            // 为手动创建的子节点使用其ID
+                            let childNodeId = null;
+                            if (typeof childNode.id === 'number' && childNode.isManuallyCreated) {
+                                childNodeId = childNode.id;
+                            }
+                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType, childNodeId);
                         }
                     });
                 } else {
@@ -342,7 +355,13 @@ class NetworkManager {
 
             const level = intentData.level || "1";
             if (level === "1") {
-                const currentNodeId = `${NetworkManager.NodeTypes.HIGH_INTENT}_${nodeId++}`;
+                // 优先使用 intentData 中的 ID（手动创建的节点）
+                let currentNodeId;
+                if (typeof intentData.id === 'number' && intentData.isManuallyCreated) {
+                    currentNodeId = intentData.id;
+                } else {
+                    currentNodeId = `${NetworkManager.NodeTypes.HIGH_INTENT}_${nodeId++}`;
+                }
                 nodeIdMap.set(intentData.id || intentName, currentNodeId);
                 processIntentNode(null, intentData, intentName, 0, NetworkManager.NodeTypes.HIGH_INTENT, currentNodeId);
             }
@@ -374,7 +393,13 @@ class NetworkManager {
                     }
                 }
                 
-                const currentNodeId = `${NetworkManager.NodeTypes.LOW_INTENT}_${nodeId++}`;
+                // 优先使用 intentData 中的 ID（手动创建的节点）
+                let currentNodeId;
+                if (typeof intentData.id === 'number' && intentData.isManuallyCreated) {
+                    currentNodeId = intentData.id;
+                } else {
+                    currentNodeId = `${NetworkManager.NodeTypes.LOW_INTENT}_${nodeId++}`;
+                }
                 nodeIdMap.set(intentData.id || intentName, currentNodeId);
                 processIntentNode(parentId, intentData, intentName, 1, NetworkManager.NodeTypes.LOW_INTENT, currentNodeId);
             }
@@ -1987,14 +2012,14 @@ class NetworkManager {
             this.hideIntentCreationPanel();
         });
 
-        panel.querySelector('#confirm-creation').addEventListener('click', () => {
-            this.handleIntentCreation();
+        panel.querySelector('#confirm-creation').addEventListener('click', async () => {
+            await this.handleIntentCreation();
         });
 
         // 回车键提交
-        input.addEventListener('keypress', (e) => {
+        input.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
-                this.handleIntentCreation();
+                await this.handleIntentCreation();
             }
         });
 
@@ -2019,7 +2044,7 @@ class NetworkManager {
     }
 
     // 处理意图创建
-    handleIntentCreation() {
+    async handleIntentCreation() {
         const panel = document.getElementById('intent-creation-panel');
         if (!panel) return;
 
@@ -2036,59 +2061,91 @@ class NetworkManager {
         }
 
         // 创建新的意图节点
-        this.createManualIntentNode(description, selectedLevel);
+        await this.createManualIntentNode(description, selectedLevel);
         
         // 关闭面板
         this.hideIntentCreationPanel();
     }
 
+    // 生成手动节点的唯一数字ID
+    generateManualNodeId() {
+        // 从999开始递增，确保不与现有节点ID冲突
+        let baseId = 999;
+        let candidateId;
+        
+        do {
+            candidateId = ++baseId;
+        } while (this.nodes.get(candidateId) || 
+                 this.nodes.get(candidateId.toString()) ||  // 也检查字符串形式的ID
+                 this.isIdUsedInIntentTree(candidateId));
+        
+        return candidateId;
+    }
+    
+    // 检查ID是否在意图树中被使用
+    isIdUsedInIntentTree(id) {
+        if (!this.intentTree || !this.intentTree.item) return false;
+        
+        for (const intentData of Object.values(this.intentTree.item)) {
+            if (intentData.id === id) return true;
+            if (intentData.child && Array.isArray(intentData.child)) {
+                for (const child of intentData.child) {
+                    if (child.id === id) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     // 创建手动意图节点
-    createManualIntentNode(description, level) {
+    async createManualIntentNode(description, level) {
         const nodeType = level === 'high' ? NetworkManager.NodeTypes.HIGH_INTENT : NetworkManager.NodeTypes.LOW_INTENT;
         
-        // 生成唯一ID
-        const nodeId = `manual-${nodeType}-${Date.now()}`;
+        // 生成唯一数字ID
+        const nodeId = this.generateManualNodeId();
         
-        // 获取合适的位置
-        const position = this.getOptimalNodePosition();
-        
-        // 创建节点数据
-        const maxLength = nodeType === NetworkManager.NodeTypes.HIGH_INTENT ? 20 : 15;
+        // 创建节点数据（用于意图树更新）
         const nodeData = {
             id: nodeId,
-            label: this.wrapLabel(description, maxLength, nodeType),
-            color: this.getNodeColor(nodeType),
-            size: this.getNodeSize(nodeType),
-            x: position.x,
-            y: position.y,
-            physics: false, // 固定位置，但可拖动
             type: nodeType,
             intent: description,
-            confirmed: true, // 手动创建的节点默认确认状态
-            isManuallyCreated: true
+            confirmed: true,
+            isManuallyCreated: true,
+            immutable: true
         };
 
-        // 添加到网络中
-        this.nodes.add(nodeData);
-        
-        // 更新节点状态管理
-        this.nodeStates.set(nodeId, {
-            confirmed: true,
-            type: nodeType,
-            intent: description
-        });
+        // 添加到immutable intents集合
+        NetworkManager.immutableIntents.add(description);
 
-        // 同步存储
-        this.syncManualNodeToStorage(nodeData);
+        try {
+            // 同步更新意图树
+            const updatedIntentTree = this.syncManualNodeToIntentTree(nodeData);
+            
+            // 异步保存到存储和后端
+            this.saveIntentTreeToStorage(updatedIntentTree).catch(error => {
+                console.error('Error saving intent tree:', error);
+            });
+            
+            // 使用 updateData 方法刷新整个网络
+            this.updateData(updatedIntentTree);
+            
+            // 记录日志
+            window.Logger.log(window.LogCategory.UI, 'manual_intent_created', {
+                node_id: nodeId,
+                intent: description,
+                level: level,
+            });
 
-        // 记录日志
-        window.Logger.log(window.LogCategory.UI, 'manual_intent_created', {
-            node_id: nodeId,
-            intent: description,
-            level: level,
-        });
-
-        console.log(`Manual intent node created: ${description} (${level}-level)`);
+            console.log(`Manual intent node created: ${description} (${level}-level) with ID: ${nodeId}`);
+            console.log('Intent tree updated and network refreshed');
+            console.log('Current immutable intents:', Array.from(NetworkManager.immutableIntents));
+            
+        } catch (error) {
+            console.error('Error creating manual intent node:', error);
+            // 从 immutable intents 集合中移除（回滚）
+            NetworkManager.immutableIntents.delete(description);
+            alert('Failed to create intent node. Please try again.');
+        }
     }
 
     // 获取最优节点位置
@@ -2123,59 +2180,62 @@ class NetworkManager {
         }
     }
 
-    // 同步手动节点到存储
-    syncManualNodeToStorage(nodeData) {
-        chrome.storage.local.get(['intentTree'], (result) => {
-            let intentTree = result.intentTree || { item: {} };
-            
-            if (nodeData.type === NetworkManager.NodeTypes.HIGH_INTENT) {
-                // 高级意图节点作为新的意图分类
-                intentTree.item[nodeData.intent] = {
-                    intent: nodeData.intent,
-                    priority: 1,
-                    child_num: 0,
-                    child: [],
-                    confirmed: true,
-                    isManuallyCreated: true
-                };
-            } else {
-                // 低级意图节点需要找到合适的父节点或创建新的分类
-                const parentIntentKey = Object.keys(intentTree.item)[0]; // 简化：选择第一个高级意图
-                if (parentIntentKey) {
-                    const parentIntent = intentTree.item[parentIntentKey];
-                    parentIntent.child.push({
-                        intent: nodeData.intent,
-                        priority: 1,
-                        child_num: 0,
-                        child: [],
-                        confirmed: true,
-                        isManuallyCreated: true
-                    });
-                    parentIntent.child_num = parentIntent.child.length;
+    // 同步手动节点到意图树（同步版本）
+    syncManualNodeToIntentTree(nodeData) {
+        // 使用当前的意图树或创建新的
+        let intentTree = JSON.parse(JSON.stringify(this.intentTree)) || { item: {} };
+        
+        if (nodeData.type === NetworkManager.NodeTypes.HIGH_INTENT) {
+            // 高级意图节点作为新的意图分类
+            intentTree.item[nodeData.intent] = {
+                id: nodeData.id, // 使用数字ID
+                intent: nodeData.intent,
+                priority: 1,
+                child_num: 0,
+                child: [],
+                confirmed: true,
+                immutable: true, // 手动创建的节点为immutable
+                isManuallyCreated: true,
+                level: "1" // 高级意图为level 1
+            };
+        } else {
+            // 低级意图节点作为独立的顶级节点，不自动分配父节点
+            console.log(`Creating independent low-level intent: ${nodeData.intent} with ID: ${nodeData.id}`);
+            intentTree.item[nodeData.intent] = {
+                id: nodeData.id, // 使用数字ID
+                intent: nodeData.intent,
+                priority: 1,
+                child_num: 0,
+                child: [],
+                confirmed: true,
+                immutable: true, // 手动创建的节点为immutable
+                isManuallyCreated: true,
+                level: "2" // 低级意图为level 2，但没有parent属性
+            };
+        }
+        
+        return intentTree;
+    }
+
+    // 异步保存意图树到存储和后端
+    async saveIntentTreeToStorage(intentTree) {
+        return new Promise((resolve, reject) => {
+            chrome.storage.local.set({ intentTree }, async () => {
+                console.log('Intent tree saved to local storage');
+                
+                // 使用saveIntentTree函数保存到后端（如果可用）
+                if (typeof saveIntentTree === 'function') {
+                    try {
+                        await saveIntentTree(intentTree);
+                        console.log('Intent tree also saved to backend');
+                        resolve();
+                    } catch (error) {
+                        console.error('Error saving intent tree to backend:', error);
+                        resolve(); // 即使后端保存失败，也继续执行
+                    }
                 } else {
-                    // 如果没有高级意图，创建一个默认的
-                    const defaultHighIntent = 'General Tasks';
-                    intentTree.item[defaultHighIntent] = {
-                        intent: defaultHighIntent,
-                        priority: 1,
-                        child_num: 1,
-                        child: [{
-                            intent: nodeData.intent,
-                            priority: 1,
-                            child_num: 0,
-                            child: [],
-                            confirmed: true,
-                            isManuallyCreated: true
-                        }],
-                        confirmed: true,
-                        isManuallyCreated: true
-                    };
+                    resolve();
                 }
-            }
-            
-            // 保存更updated的意图树
-            chrome.storage.local.set({ intentTree }, () => {
-                console.log('Manual intent node synced to storage');
             });
         });
     }
