@@ -3,6 +3,7 @@ class NetworkManager {
     static activeNodeMenu = false;  // 跟踪节点菜单状态
     static immutableIntents = new Set();  // 存储所有 immutable 的意图名称
     static hierarchicalDirection = 'LR';  // 存储层级布局方向配置
+    static lastManualNodeId = 999;  // 手动节点ID计数器，确保每次生成唯一ID
     
     // 节点类型常量
     static NodeTypes = {
@@ -27,6 +28,9 @@ class NetworkManager {
 
         // 从初始意图树中收集 immutable 意图 - 支持多级意图结构
         this.collectImmutableIntents(intentTree);
+        
+        // 初始化时更新静态ID计数器，避免与现有手动节点冲突
+        this.updateManualNodeIdCounter();
     }
 
     // 收集已确认的意图状态 - 支持两种数据结构
@@ -85,6 +89,42 @@ class NetworkManager {
                 }
             }
         });
+    }
+
+    // 更新手动节点ID计数器，避免与现有节点ID冲突
+    updateManualNodeIdCounter() {
+        if (!this.intentTree || !this.intentTree.item) return;
+        
+        let maxManualId = NetworkManager.lastManualNodeId;
+        
+        // 递归查找最大的数字ID
+        const findMaxId = (node) => {
+            if (typeof node.id === 'number' && node.id > maxManualId) {
+                maxManualId = node.id;
+            }
+            
+            if (node.child && Array.isArray(node.child)) {
+                for (const child of node.child) {
+                    findMaxId(child);
+                }
+            }
+            
+            if (node.group && Array.isArray(node.group)) {
+                for (const record of node.group) {
+                    if (typeof record.id === 'number' && record.id > maxManualId) {
+                        maxManualId = record.id;
+                    }
+                }
+            }
+        };
+        
+        // 检查所有意图节点
+        for (const intentData of Object.values(this.intentTree.item)) {
+            findMaxId(intentData);
+        }
+        
+        NetworkManager.lastManualNodeId = maxManualId;
+        console.log(`Updated manual node ID counter to: ${NetworkManager.lastManualNodeId}`);
     }
 
     // 初始化网络容器
@@ -307,6 +347,9 @@ class NetworkManager {
             } else if (nodeData.group && Array.isArray(nodeData.group)) {
                 // 没有子节点但有group，显示group中的记录
                 this.processRecordNodes(nodeData.group, currentNodeId, level + 1, isImmutable);
+            } else if (nodeData.child && Array.isArray(nodeData.child) && nodeData.child.length === 0) {
+                // 手动创建的空节点，这是正常情况，不需要警告
+                console.log(`Empty intent node (manually created): "${nodeName}"`);
             } else {
                 console.warn(`No valid child or group data found for intent "${nodeName}"`, nodeData);
             }
@@ -2069,31 +2112,47 @@ class NetworkManager {
 
     // 生成手动节点的唯一数字ID
     generateManualNodeId() {
-        // 从999开始递增，确保不与现有节点ID冲突
-        let baseId = 999;
         let candidateId;
         
         do {
-            candidateId = ++baseId;
+            candidateId = ++NetworkManager.lastManualNodeId;
         } while (this.nodes.get(candidateId) || 
                  this.nodes.get(candidateId.toString()) ||  // 也检查字符串形式的ID
                  this.isIdUsedInIntentTree(candidateId));
         
+        console.log(`Generated manual node ID: ${candidateId}`);
         return candidateId;
     }
     
-    // 检查ID是否在意图树中被使用
+    // 检查ID是否在意图树中被使用（递归检查所有层级）
     isIdUsedInIntentTree(id) {
         if (!this.intentTree || !this.intentTree.item) return false;
         
-        for (const intentData of Object.values(this.intentTree.item)) {
-            if (intentData.id === id) return true;
-            if (intentData.child && Array.isArray(intentData.child)) {
-                for (const child of intentData.child) {
-                    if (child.id === id) return true;
+        // 递归检查节点及其子节点
+        const checkNodeAndChildren = (node) => {
+            if (node.id === id) return true;
+            
+            if (node.child && Array.isArray(node.child)) {
+                for (const child of node.child) {
+                    if (checkNodeAndChildren(child)) return true;
                 }
             }
+            
+            // 也检查group数组（如果存在）
+            if (node.group && Array.isArray(node.group)) {
+                for (const record of node.group) {
+                    if (record.id === id) return true;
+                }
+            }
+            
+            return false;
+        };
+        
+        // 检查所有顶级意图节点
+        for (const intentData of Object.values(this.intentTree.item)) {
+            if (checkNodeAndChildren(intentData)) return true;
         }
+        
         return false;
     }
 
@@ -3298,10 +3357,20 @@ class NodeMergeManager {
 
     // 同级合并
     performSameLevelMerge(sourceNode, targetNode) {
+        console.log(`Performing same-level merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
         // 获取源节点的所有子节点
         const sourceChildren = this.getNodeChildren(sourceNode.id);
         
-        // 将源节点的子节点连接到目标节点
+        // 1. 首先更新intentTree - 转移子节点
+        const sourceNodeName = sourceNode.originalLabel || sourceNode.label;
+        const targetNodeName = targetNode.originalLabel || targetNode.label;
+        this.transferChildrenInIntentTree(sourceNodeName, targetNodeName, sourceNode.id, targetNode.id);
+        
+        // 2. 然后从intentTree中删除源节点
+        this.removeNodeFromIntentTree(sourceNode.id, sourceNodeName);
+        
+        // 3. 更新网络可视化 - 将源节点的子节点连接到目标节点
         sourceChildren.forEach(childId => {
             this.edges.add({
                 id: `${targetNode.id}-${childId}`,
@@ -3310,18 +3379,20 @@ class NodeMergeManager {
             });
         });
 
-        // 删除源节点的边
+        // 4. 删除源节点的边
         this.removeNodeEdges(sourceNode.id);
         
-        // 删除源节点
+        // 5. 删除源节点
         this.nodes.remove(sourceNode.id);
         
-        // 更新存储
+        // 6. 更新存储
         this.updateStorageAfterMerge();
     }
 
     // 高级意图到低级意图合并
     performHighToLowMerge(sourceNode, targetNode) {
+        console.log(`Performing high-to-low merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
         // 获取源节点的记录子节点
         const sourceRecords = this.getNodeChildren(sourceNode.id)
             .filter(childId => {
@@ -3329,7 +3400,15 @@ class NodeMergeManager {
                 return child && child.type === this.networkManager.constructor.NodeTypes.RECORD;
             });
         
-        // 将记录节点移动到目标低级意图节点下
+        // 1. 首先更新intentTree - 将记录从高级意图转移到低级意图
+        const sourceNodeName = sourceNode.originalLabel || sourceNode.label;
+        const targetNodeName = targetNode.originalLabel || targetNode.label;
+        this.transferChildrenInIntentTree(sourceNodeName, targetNodeName, sourceNode.id, targetNode.id);
+        
+        // 2. 从intentTree中删除源高级意图节点
+        this.removeNodeFromIntentTree(sourceNode.id, sourceNodeName);
+        
+        // 3. 更新网络可视化 - 将记录节点移动到目标低级意图节点下
         sourceRecords.forEach(recordId => {
             this.edges.add({
                 id: `${targetNode.id}-${recordId}`,
@@ -3338,23 +3417,31 @@ class NodeMergeManager {
             });
         });
 
-        // 删除源节点及其连接
+        // 4. 删除源节点及其连接
         this.removeNodeEdges(sourceNode.id);
         this.nodes.remove(sourceNode.id);
         
+        // 5. 更新存储
         this.updateStorageAfterMerge();
     }
 
     // 低级意图到高级意图合并
     performLowToHighMerge(sourceNode, targetNode) {
-        // 将源低级意图节点及其所有子节点连接到目标高级意图节点
+        console.log(`Performing low-to-high merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
+        // 1. 首先更新intentTree - 建立新的父子关系
+        const sourceNodeName = sourceNode.originalLabel || sourceNode.label;
+        const targetNodeName = targetNode.originalLabel || targetNode.label;
+        this.updateIntentTreeRelationships(sourceNodeName, targetNodeName, sourceNode.id, targetNode.id);
+        
+        // 2. 更新网络可视化 - 将源低级意图节点及其所有子节点连接到目标高级意图节点
         this.edges.add({
             id: `${targetNode.id}-${sourceNode.id}`,
             from: targetNode.id,
             to: sourceNode.id
         });
 
-        // 移除源节点的父级连接
+        // 3. 移除源节点的旧父级连接
         const sourceParentEdges = this.edges.get().filter(edge => edge.to === sourceNode.id);
         sourceParentEdges.forEach(edge => {
             if (edge.from !== targetNode.id) {
@@ -3362,19 +3449,26 @@ class NodeMergeManager {
             }
         });
         
+        // 4. 更新存储
         this.updateStorageAfterMerge();
     }
 
     // 记录到意图节点合并
     performRecordToIntentMerge(sourceNode, targetNode) {
-        // 将记录节点连接到意图节点
+        console.log(`Performing record-to-intent merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
+        // 注意：记录节点的合并主要是改变归属关系，不删除节点，只是更新父子关系
+        // 记录节点在intentTree中的结构比较复杂，这里主要处理网络可视化层面的合并
+        // intentTree中的记录通常存储在意图节点的child数组中，具体更新可能需要更详细的记录ID映射
+        
+        // 1. 更新网络可视化 - 将记录节点连接到意图节点
         this.edges.add({
             id: `${targetNode.id}-${sourceNode.id}`,
             from: targetNode.id,
             to: sourceNode.id
         });
 
-        // 移除记录节点的原始父级连接
+        // 2. 移除记录节点的原始父级连接
         const sourceParentEdges = this.edges.get().filter(edge => edge.to === sourceNode.id);
         sourceParentEdges.forEach(edge => {
             if (edge.from !== targetNode.id) {
@@ -3382,6 +3476,7 @@ class NodeMergeManager {
             }
         });
         
+        // 3. 更新存储（记录节点的intentTree更新可能需要基于具体的记录数据结构）
         this.updateStorageAfterMerge();
     }
 
@@ -3491,6 +3586,162 @@ class NodeMergeManager {
                 borderWidth: 1,
                 borderColor: node.originalBorderColor || '#cccccc'
             });
+        }
+    }
+
+    // 从intentTree中删除节点
+    removeNodeFromIntentTree(nodeId, nodeName) {
+        if (!this.networkManager.intentTree || !this.networkManager.intentTree.item) {
+            console.warn('No intentTree available to update');
+            return;
+        }
+
+        console.log(`Removing node from intentTree: ${nodeName} (ID: ${nodeId})`);
+        
+        // 查找并删除高级意图节点
+        if (this.networkManager.intentTree.item[nodeName]) {
+            delete this.networkManager.intentTree.item[nodeName];
+            console.log(`Removed high-level intent: ${nodeName}`);
+            return;
+        }
+
+        // 查找并删除低级意图节点（在其他高级意图的child中）
+        for (const [parentIntentName, parentIntentData] of Object.entries(this.networkManager.intentTree.item)) {
+            if (parentIntentData.child && Array.isArray(parentIntentData.child)) {
+                const childIndex = parentIntentData.child.findIndex(child => 
+                    child.intent === nodeName || child.id === nodeId
+                );
+                
+                if (childIndex !== -1) {
+                    parentIntentData.child.splice(childIndex, 1);
+                    parentIntentData.child_num = parentIntentData.child.length;
+                    console.log(`Removed low-level intent: ${nodeName} from parent: ${parentIntentName}`);
+                    return;
+                }
+            }
+        }
+
+        console.warn(`Node not found in intentTree: ${nodeName} (ID: ${nodeId})`);
+    }
+
+    // 将子节点从源节点转移到目标节点
+    transferChildrenInIntentTree(sourceNodeName, targetNodeName, sourceNodeId, targetNodeId) {
+        if (!this.networkManager.intentTree || !this.networkManager.intentTree.item) {
+            console.warn('No intentTree available to update');
+            return;
+        }
+
+        console.log(`Transferring children from ${sourceNodeName} to ${targetNodeName}`);
+
+        // 查找源节点和目标节点在intentTree中的引用
+        let sourceIntent = null;
+        let targetIntent = null;
+
+        // 在顶级中查找
+        if (this.networkManager.intentTree.item[sourceNodeName]) {
+            sourceIntent = this.networkManager.intentTree.item[sourceNodeName];
+        }
+        if (this.networkManager.intentTree.item[targetNodeName]) {
+            targetIntent = this.networkManager.intentTree.item[targetNodeName];
+        }
+
+        // 在子节点中查找
+        if (!sourceIntent || !targetIntent) {
+            for (const parentIntentData of Object.values(this.networkManager.intentTree.item)) {
+                if (parentIntentData.child && Array.isArray(parentIntentData.child)) {
+                    parentIntentData.child.forEach(child => {
+                        if (child.intent === sourceNodeName || child.id === sourceNodeId) {
+                            sourceIntent = child;
+                        }
+                        if (child.intent === targetNodeName || child.id === targetNodeId) {
+                            targetIntent = child;
+                        }
+                    });
+                }
+            }
+        }
+
+        // 转移子节点
+        if (sourceIntent && targetIntent && sourceIntent.child && Array.isArray(sourceIntent.child)) {
+            if (!targetIntent.child) {
+                targetIntent.child = [];
+            }
+            
+            // 转移所有子节点
+            targetIntent.child.push(...sourceIntent.child);
+            targetIntent.child_num = targetIntent.child.length;
+            
+            console.log(`Transferred ${sourceIntent.child.length} children from ${sourceNodeName} to ${targetNodeName}`);
+        }
+    }
+
+    // 更新intentTree中的父子关系
+    updateIntentTreeRelationships(childNodeName, newParentNodeName, childNodeId, newParentNodeId) {
+        if (!this.networkManager.intentTree || !this.networkManager.intentTree.item) {
+            console.warn('No intentTree available to update');
+            return;
+        }
+
+        console.log(`Updating parent-child relationship: ${childNodeName} -> ${newParentNodeName}`);
+
+        // 查找子节点并更新其parent引用
+        let childIntent = null;
+
+        // 在顶级中查找子节点
+        if (this.networkManager.intentTree.item[childNodeName]) {
+            childIntent = this.networkManager.intentTree.item[childNodeName];
+        } else {
+            // 在现有的父节点中查找并移除
+            for (const [, parentData] of Object.entries(this.networkManager.intentTree.item)) {
+                if (parentData.child && Array.isArray(parentData.child)) {
+                    const childIndex = parentData.child.findIndex(child => 
+                        child.intent === childNodeName || child.id === childNodeId
+                    );
+                    
+                    if (childIndex !== -1) {
+                        childIntent = parentData.child.splice(childIndex, 1)[0];
+                        parentData.child_num = parentData.child.length;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 将子节点添加到新父节点
+        if (childIntent) {
+            // 更新子节点的parent引用
+            childIntent.parent = newParentNodeId || newParentNodeName;
+
+            // 查找新父节点并添加子节点
+            let newParentIntent = this.networkManager.intentTree.item[newParentNodeName];
+            
+            if (!newParentIntent) {
+                // 在子节点中查找新父节点
+                for (const parentData of Object.values(this.networkManager.intentTree.item)) {
+                    if (parentData.child && Array.isArray(parentData.child)) {
+                        const foundParent = parentData.child.find(child => 
+                            child.intent === newParentNodeName || child.id === newParentNodeId
+                        );
+                        if (foundParent) {
+                            newParentIntent = foundParent;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (newParentIntent) {
+                if (!newParentIntent.child) {
+                    newParentIntent.child = [];
+                }
+                newParentIntent.child.push(childIntent);
+                newParentIntent.child_num = newParentIntent.child.length;
+                console.log(`Added ${childNodeName} as child of ${newParentNodeName}`);
+            } else {
+                console.warn(`New parent node not found: ${newParentNodeName}`);
+            }
+        } else {
+            console.warn(`Child node not found: ${childNodeName}`);
         }
     }
 }
