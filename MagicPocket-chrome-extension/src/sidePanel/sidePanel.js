@@ -634,6 +634,7 @@ function initializeRecordsArea() {
                     currentIntentTree = lastIntentTree;
                 }
 
+                const extractStartTime = performance.now();
                 constructResponse = await fetch(`${host}extract/`, {
                     method: 'POST',
                     headers: {
@@ -647,13 +648,14 @@ function initializeRecordsArea() {
                         intentTree: currentIntentTree
                     })
                 });
+                
+                const extractApiTime = performance.now() - extractStartTime;
+                window.Logger.log(window.LogCategory.NETWORK, 'side_panel_extract_api_called', {
+                    duration_ms: Math.round(extractApiTime),
+                    groups_count: groupsOfNodes.groupsOfNodes.length
+                });
             }
             
-            const constructApiTime = performance.now() - constructStartTime;
-            window.Logger.log(window.LogCategory.NETWORK, 'side_panel_construct_api_called', {
-                duration_ms: Math.round(constructApiTime),
-                groups_count: groupsOfNodes.groupsOfNodes.length
-            });
             
             if (!constructResponse.ok) {
                 const errorData = await constructResponse.json();
@@ -740,7 +742,7 @@ function initializeRecordsArea() {
                         // Update network visualization with recommended tree
                         networkManager.updateData(recommendedTree);
                         
-                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_updated', {
+                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_generated', {
                             raw_response: JSON.stringify(recommendedTree)
                         });
                     }
@@ -814,6 +816,7 @@ async function callRecommendAPI(host, scenario, intentTreeData) {
     try {
         console.log('Calling recommend API with:', { scenario, intentTree: intentTreeData });
         
+        const recommendStartTime = performance.now();
         const response = await fetch(`${host}recommend/`, {
             method: 'POST',
             headers: {
@@ -823,6 +826,12 @@ async function callRecommendAPI(host, scenario, intentTreeData) {
                 scenario: scenario,
                 item: intentTreeData.item
             })
+        });
+        
+        const recommendApiTime = performance.now() - recommendStartTime;
+        window.Logger.log(window.LogCategory.NETWORK, 'side_panel_recommend_api_called', {
+            duration_ms: Math.round(recommendApiTime),
+            scenario: scenario
         });
 
         if (!response.ok) {

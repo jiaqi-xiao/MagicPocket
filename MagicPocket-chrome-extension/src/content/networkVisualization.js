@@ -2082,11 +2082,10 @@ class NetworkManager {
         this.syncManualNodeToStorage(nodeData);
 
         // 记录日志
-        window.Logger?.log(window.LogCategory.USER_ACTION, 'manual_intent_created', {
+        window.Logger.log(window.LogCategory.UI, 'manual_intent_created', {
             node_id: nodeId,
             intent: description,
             level: level,
-            position: position
         });
 
         console.log(`Manual intent node created: ${description} (${level}-level)`);
