@@ -685,11 +685,57 @@ function initializeRecordsArea() {
             });
 
             if (isAblationMode) {
-                // Ablation mode: don't show network, set button to Analysis Done
-                console.log('Ablation mode: Analysis completed, network hidden');
+                // Ablation mode: don't show network, but call both extract and recommend APIs
+                console.log('Ablation mode: Analysis completed, calling recommend API');
                 
-                // Update records hash after successful analysis
+                // Phase 1: Save extract results and update records hash
                 await updateAnalysisRecordsHash();
+                
+                // Phase 2: Call recommend API to align with Normal Mode behavior
+                let finalIntentTree = intentTree;
+                try {
+                    // Change button text to indicate recommendation is in progress
+                    analyzeBtn.textContent = "Recommending...";
+                    
+                    const recommendedTree = await callRecommendAPI(host, taskDescription, intentTree);
+                    
+                    if (recommendedTree && recommendedTree.item) {
+                        // Add scenario information to recommended tree
+                        recommendedTree.scenario = taskDescription;
+                        
+                        // Merge confirmation states if needed
+                        if (lastIntentTree && lastIntentTree.child) {
+                            console.log('Merging confirmation states into recommended tree');
+                            mergeConfirmationStates(recommendedTree, lastIntentTree);
+                        }
+                        
+                        finalIntentTree = recommendedTree;
+                        
+                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_generated_ablation', {
+                            raw_response: JSON.stringify(recommendedTree)
+                        });
+                    }
+                } catch (recommendError) {
+                    console.error('Recommend API failed in Ablation Mode, continuing with extract results:', recommendError);
+                    window.Logger.log(window.LogCategory.UI, 'side_panel_recommend_failed_ablation', {
+                        error: recommendError.message
+                    });
+                    // Continue with the extract results even if recommend fails
+                }
+                
+                // Save the final intent tree to persistent storage
+                try {
+                    await chrome.runtime.sendMessage({
+                        action: 'saveIntentTree',
+                        intentTree: finalIntentTree
+                    });
+                    console.log('Final intent tree saved to persistent storage in Ablation Mode');
+                } catch (error) {
+                    console.error('Error saving intent tree in Ablation Mode:', error);
+                }
+                
+                // Also save to lastIntentTree for consistency
+                lastIntentTree = finalIntentTree;
                 
                 // In ablation mode, analysis is complete - set to "Analysis Done" and disable
                 analyzeBtn.textContent = "Analysis Done";

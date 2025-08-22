@@ -1623,6 +1623,12 @@ class NetworkManager {
             // Update the internal intent tree reference
             this.intentTree = newIntentTree;
             
+            // Save to persistent storage
+            // 异步保存到存储和后端
+            this.saveIntentTreeToStorage(newIntentTree).catch(error => {
+                console.error('Error saving intent tree:', error);
+            });
+            
             // Re-collect immutable intents from the updated tree
             this.collectImmutableIntents(newIntentTree);
             

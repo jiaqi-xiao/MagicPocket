@@ -17,6 +17,7 @@ document.getElementById('createTaskBtn').addEventListener('click', () => {
     // 清除现有记录并保存新任务
     chrome.storage.local.set({
         records: [],
+        intentTree: null,
         currentTask: {
             description: taskDescription,
             createdAt: new Date().toISOString()
