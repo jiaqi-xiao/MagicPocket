@@ -311,7 +311,7 @@ class Chain4RecommendIntent:
         self.instruction = Prompts.RECOMMEND_INTENT
 
         self.model = model
-        self.parser = PydanticOutputParser(pydantic_object=UpdatedIntentTree)
+        self.parser = PydanticOutputParser(pydantic_object=ExtractResult)
         self.prompt_template = PromptTemplate(
             input_variables=["user_input"],
             template=self.instruction,
