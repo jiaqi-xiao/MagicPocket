@@ -23,6 +23,11 @@ document.getElementById('createTaskBtn').addEventListener('click', () => {
             createdAt: new Date().toISOString()
         }
     }, () => {
+        // 关闭侧边栏
+        chrome.runtime.sendMessage({
+            action: "closeSidePanel"
+        });
+        
         // 关闭当前窗口
         window.close();
     });

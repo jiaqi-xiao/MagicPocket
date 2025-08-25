@@ -86,6 +86,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true;
     }
+
+    if (request.action === "closeSidePanel") {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.sidePanel.setOptions({
+                tabId: tabs[0].id,
+                enabled: false
+            }).then(() => {
+                chrome.sidePanel.setOptions({
+                    tabId: tabs[0].id,
+                    enabled: true
+                });
+            }).catch(error => {
+                console.error('Error closing side panel:', error);
+            });
+        });
+        return true;
+    }
     
     // Handle content analysis request
     if (request.action === "analyzeContent") {
