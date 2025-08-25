@@ -384,17 +384,18 @@ function showTaskEditDialog(currentDescription) {
 function initializeRecordsArea() {
     const scrollArea = document.getElementById("recordsScrollArea");
     const buttonArea = document.querySelector(".button-area");
-    const buttonArea2 = document.querySelector(".button-area-2");
 
     // 创建按钮
     const clearAllBtn = createButton("Clear All", "clearAllBtn");
     const highlightBtn = createButton("Highlight Text", "highlightTextBtn");
     const analyzeBtn = createButton("Analyze", "analyzeBtn");
+    const refreshNetworkBtn = createButton("Refresh", "refreshNetworkBtn");
 
     // 添加按钮到按钮区域
     buttonArea.appendChild(clearAllBtn);
     buttonArea.appendChild(highlightBtn);
     buttonArea.appendChild(analyzeBtn);
+    buttonArea.appendChild(refreshNetworkBtn);
 
     // 设置按钮事件监听器
     clearAllBtn.addEventListener('click', () => {
@@ -634,6 +635,7 @@ function initializeRecordsArea() {
                     currentIntentTree = lastIntentTree;
                 }
 
+                const extractStartTime = performance.now();
                 constructResponse = await fetch(`${host}extract/`, {
                     method: 'POST',
                     headers: {
@@ -647,13 +649,14 @@ function initializeRecordsArea() {
                         intentTree: currentIntentTree
                     })
                 });
+                
+                const extractApiTime = performance.now() - extractStartTime;
+                window.Logger.log(window.LogCategory.NETWORK, 'side_panel_extract_api_called', {
+                    duration_ms: Math.round(extractApiTime),
+                    groups_count: groupsOfNodes.groupsOfNodes.length
+                });
             }
             
-            const constructApiTime = performance.now() - constructStartTime;
-            window.Logger.log(window.LogCategory.NETWORK, 'side_panel_construct_api_called', {
-                duration_ms: Math.round(constructApiTime),
-                groups_count: groupsOfNodes.groupsOfNodes.length
-            });
             
             if (!constructResponse.ok) {
                 const errorData = await constructResponse.json();
@@ -682,11 +685,57 @@ function initializeRecordsArea() {
             });
 
             if (isAblationMode) {
-                // Ablation mode: don't show network, set button to Analysis Done
-                console.log('Ablation mode: Analysis completed, network hidden');
+                // Ablation mode: don't show network, but call both extract and recommend APIs
+                console.log('Ablation mode: Analysis completed, calling recommend API');
                 
-                // Update records hash after successful analysis
+                // Phase 1: Save extract results and update records hash
                 await updateAnalysisRecordsHash();
+                
+                // Phase 2: Call recommend API to align with Normal Mode behavior
+                let finalIntentTree = intentTree;
+                try {
+                    // Change button text to indicate recommendation is in progress
+                    analyzeBtn.textContent = "Recommending...";
+                    
+                    const recommendedTree = await callRecommendAPI(host, taskDescription, intentTree);
+                    
+                    if (recommendedTree && recommendedTree.item) {
+                        // Add scenario information to recommended tree
+                        recommendedTree.scenario = taskDescription;
+                        
+                        // Merge confirmation states if needed
+                        if (lastIntentTree && lastIntentTree.child) {
+                            console.log('Merging confirmation states into recommended tree');
+                            mergeConfirmationStates(recommendedTree, lastIntentTree);
+                        }
+                        
+                        finalIntentTree = recommendedTree;
+                        
+                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_generated_ablation', {
+                            raw_response: JSON.stringify(recommendedTree)
+                        });
+                    }
+                } catch (recommendError) {
+                    console.error('Recommend API failed in Ablation Mode, continuing with extract results:', recommendError);
+                    window.Logger.log(window.LogCategory.UI, 'side_panel_recommend_failed_ablation', {
+                        error: recommendError.message
+                    });
+                    // Continue with the extract results even if recommend fails
+                }
+                
+                // Save the final intent tree to persistent storage
+                try {
+                    await chrome.runtime.sendMessage({
+                        action: 'saveIntentTree',
+                        intentTree: finalIntentTree
+                    });
+                    console.log('Final intent tree saved to persistent storage in Ablation Mode');
+                } catch (error) {
+                    console.error('Error saving intent tree in Ablation Mode:', error);
+                }
+                
+                // Also save to lastIntentTree for consistency
+                lastIntentTree = finalIntentTree;
                 
                 // In ablation mode, analysis is complete - set to "Analysis Done" and disable
                 analyzeBtn.textContent = "Analysis Done";
@@ -714,6 +763,9 @@ function initializeRecordsArea() {
                 } else {
                     networkManager.updateData(intentTree);
                 }
+                
+                // Save the intent tree for refresh functionality
+                lastIntentTree = intentTree;
 
                 // Clear original text to prevent loading state from overriding our manual button states
                 delete analyzeBtn.dataset.originalText;
@@ -740,7 +792,10 @@ function initializeRecordsArea() {
                         // Update network visualization with recommended tree
                         networkManager.updateData(recommendedTree);
                         
-                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_updated', {
+                        // Save the recommended tree for refresh functionality
+                        lastIntentTree = recommendedTree;
+                        
+                        window.Logger.log(window.LogCategory.SYSTEM, 'side_panel_recommend_tree_generated', {
                             raw_response: JSON.stringify(recommendedTree)
                         });
                     }
@@ -766,6 +821,36 @@ function initializeRecordsArea() {
             });
         } finally {
             hideAnalyzeLoadingState(analyzeBtn);
+        }
+    });
+
+    refreshNetworkBtn.addEventListener('click', () => {
+        window.Logger.log(window.LogCategory.UI, 'side_panel_refresh_network_btn_clicked', {});
+        
+        if (!networkManager) {
+            console.warn('Cannot refresh network: No network manager available. Please run analysis first.');
+            window.Logger.log(window.LogCategory.UI, 'side_panel_network_refresh_no_data', {
+                reason: 'No network manager available'
+            });
+            return;
+        }
+        
+        if (lastIntentTree) {
+            try {
+                // Simply refresh the data display using the saved intent tree
+                networkManager.updateData(lastIntentTree);
+                window.Logger.log(window.LogCategory.UI, 'side_panel_network_refreshed', {});
+            } catch (error) {
+                console.error('Error refreshing network:', error);
+                window.Logger.log(window.LogCategory.UI, 'side_panel_network_refresh_failed', {
+                    error: error.message
+                });
+            }
+        } else {
+            console.warn('Cannot refresh network: No intent tree data available. Please run analysis first.');
+            window.Logger.log(window.LogCategory.UI, 'side_panel_network_refresh_no_data', {
+                reason: 'No intent tree data available'
+            });
         }
     });
 
@@ -814,6 +899,7 @@ async function callRecommendAPI(host, scenario, intentTreeData) {
     try {
         console.log('Calling recommend API with:', { scenario, intentTree: intentTreeData });
         
+        const recommendStartTime = performance.now();
         const response = await fetch(`${host}recommend/`, {
             method: 'POST',
             headers: {
@@ -823,6 +909,12 @@ async function callRecommendAPI(host, scenario, intentTreeData) {
                 scenario: scenario,
                 item: intentTreeData.item
             })
+        });
+        
+        const recommendApiTime = performance.now() - recommendStartTime;
+        window.Logger.log(window.LogCategory.NETWORK, 'side_panel_recommend_api_called', {
+            duration_ms: Math.round(recommendApiTime),
+            scenario: scenario
         });
 
         if (!response.ok) {
@@ -1590,7 +1682,8 @@ function getButtonColor(id) {
         startGenerateBtn: "#E6FFFA",
         showIntentBtn: "#EBF4FF",
         showNetworkBtn: "#F0FFF4",
-        highlightTextBtn: "#FFF5F7"
+        highlightTextBtn: "#FFF5F7",
+        refreshNetworkBtn: "#F0F9FF"
     };
     return colors[id] || "#EDF2F7";
 }
@@ -1601,7 +1694,8 @@ function getButtonTextColor(id) {
         startGenerateBtn: "#319795",
         showIntentBtn: "#3182CE",
         showNetworkBtn: "#38A169",
-        highlightTextBtn: "#D53F8C"
+        highlightTextBtn: "#D53F8C",
+        refreshNetworkBtn: "#0369A1"
     };
     return colors[id] || "#4A5568";
 }

@@ -3,6 +3,7 @@ class NetworkManager {
     static activeNodeMenu = false;  // 跟踪节点菜单状态
     static immutableIntents = new Set();  // 存储所有 immutable 的意图名称
     static hierarchicalDirection = 'LR';  // 存储层级布局方向配置
+    static lastManualNodeId = 999;  // 手动节点ID计数器，确保每次生成唯一ID
     
     // 节点类型常量
     static NodeTypes = {
@@ -23,9 +24,13 @@ class NetworkManager {
         this.container = null;
         this.visContainer = null;
         this.nodeMergeManager = null; // 节点合并管理器
+        this.customTooltipManager = null; // 自定义tooltip管理器
 
         // 从初始意图树中收集 immutable 意图 - 支持多级意图结构
         this.collectImmutableIntents(intentTree);
+        
+        // 初始化时更新静态ID计数器，避免与现有手动节点冲突
+        this.updateManualNodeIdCounter();
     }
 
     // 收集已确认的意图状态 - 支持两种数据结构
@@ -84,6 +89,42 @@ class NetworkManager {
                 }
             }
         });
+    }
+
+    // 更新手动节点ID计数器，避免与现有节点ID冲突
+    updateManualNodeIdCounter() {
+        if (!this.intentTree || !this.intentTree.item) return;
+        
+        let maxManualId = NetworkManager.lastManualNodeId;
+        
+        // 递归查找最大的数字ID
+        const findMaxId = (node) => {
+            if (typeof node.id === 'number' && node.id > maxManualId) {
+                maxManualId = node.id;
+            }
+            
+            if (node.child && Array.isArray(node.child)) {
+                for (const child of node.child) {
+                    findMaxId(child);
+                }
+            }
+            
+            if (node.group && Array.isArray(node.group)) {
+                for (const record of node.group) {
+                    if (typeof record.id === 'number' && record.id > maxManualId) {
+                        maxManualId = record.id;
+                    }
+                }
+            }
+        };
+        
+        // 检查所有意图节点
+        for (const intentData of Object.values(this.intentTree.item)) {
+            findMaxId(intentData);
+        }
+        
+        NetworkManager.lastManualNodeId = maxManualId;
+        console.log(`Updated manual node ID counter to: ${NetworkManager.lastManualNodeId}`);
     }
 
     // 初始化网络容器
@@ -220,7 +261,15 @@ class NetworkManager {
 
         // 递归处理意图节点的函数 - 支持两级意图层级
         const processIntentNode = (parentId, nodeData, nodeName, level, nodeType = NetworkManager.NodeTypes.HIGH_INTENT, presetNodeId = null) => {
-            const currentNodeId = presetNodeId || `${nodeType}_${nodeId++}`;
+            // 优先使用 intentData 中的 ID（手动创建的节点），否则使用预设ID或生成新ID
+            let currentNodeId;
+            if (nodeData && typeof nodeData.id === 'number' && nodeData.isManuallyCreated) {
+                // 手动创建的节点使用数字ID
+                currentNodeId = nodeData.id;
+            } else {
+                // 自动生成的节点使用字符串ID
+                currentNodeId = presetNodeId || `${nodeType}_${nodeId++}`;
+            }
             // 修复节点状态判断逻辑 - 优先检查nodeStates，其次检查immutableIntents
             let isImmutable = false;
             
@@ -248,7 +297,13 @@ class NetworkManager {
                 color: this.getNodeColor(nodeType),
                 size: this.getNodeSize(nodeType),
                 level: this.layout === 'hierarchical' ? level : undefined,
-                opacity: isImmutable ? 1 : 0.3
+                opacity: isImmutable ? 1 : 0.3,
+                // Store tooltip data for custom tooltip system
+                tooltipData: {
+                    intentName: nodeName,
+                    nodeType: nodeType,
+                    nodeData: nodeData
+                }
             });
             
             // 设置节点状态
@@ -277,7 +332,12 @@ class NetworkManager {
                     // 递归处理子意图节点
                     nodeData.child.forEach(childNode => {
                         if (childNode.intent) {
-                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType, null);
+                            // 为手动创建的子节点使用其ID
+                            let childNodeId = null;
+                            if (typeof childNode.id === 'number' && childNode.isManuallyCreated) {
+                                childNodeId = childNode.id;
+                            }
+                            processIntentNode(currentNodeId, childNode, childNode.intent, level + 1, childNodeType, childNodeId);
                         }
                     });
                 } else {
@@ -287,6 +347,9 @@ class NetworkManager {
             } else if (nodeData.group && Array.isArray(nodeData.group)) {
                 // 没有子节点但有group，显示group中的记录
                 this.processRecordNodes(nodeData.group, currentNodeId, level + 1, isImmutable);
+            } else if (nodeData.child && Array.isArray(nodeData.child) && nodeData.child.length === 0) {
+                // 手动创建的空节点，这是正常情况，不需要警告
+                console.log(`Empty intent node (manually created): "${nodeName}"`);
             } else {
                 console.warn(`No valid child or group data found for intent "${nodeName}"`, nodeData);
             }
@@ -304,11 +367,12 @@ class NetworkManager {
                     size: this.getNodeSize(NetworkManager.NodeTypes.RECORD),
                     level: this.layout === 'hierarchical' ? level : undefined,
                     opacity: isImmutable ? 1 : 0.3,
-                    title: this.formatRecordTooltip({
+                    // Store tooltip data for custom tooltip system
+                    tooltipData: {
                         content: record.content || record.text || record.description || 'No content',
                         context: record.context || '',
                         comment: record.comment || ''
-                    })
+                    }
                 };
                 nodes.push(recordNode);
                 this.nodeStates.set(recordId, isImmutable);
@@ -334,7 +398,13 @@ class NetworkManager {
 
             const level = intentData.level || "1";
             if (level === "1") {
-                const currentNodeId = `${NetworkManager.NodeTypes.HIGH_INTENT}_${nodeId++}`;
+                // 优先使用 intentData 中的 ID（手动创建的节点）
+                let currentNodeId;
+                if (typeof intentData.id === 'number' && intentData.isManuallyCreated) {
+                    currentNodeId = intentData.id;
+                } else {
+                    currentNodeId = `${NetworkManager.NodeTypes.HIGH_INTENT}_${nodeId++}`;
+                }
                 nodeIdMap.set(intentData.id || intentName, currentNodeId);
                 processIntentNode(null, intentData, intentName, 0, NetworkManager.NodeTypes.HIGH_INTENT, currentNodeId);
             }
@@ -366,7 +436,13 @@ class NetworkManager {
                     }
                 }
                 
-                const currentNodeId = `${NetworkManager.NodeTypes.LOW_INTENT}_${nodeId++}`;
+                // 优先使用 intentData 中的 ID（手动创建的节点）
+                let currentNodeId;
+                if (typeof intentData.id === 'number' && intentData.isManuallyCreated) {
+                    currentNodeId = intentData.id;
+                } else {
+                    currentNodeId = `${NetworkManager.NodeTypes.LOW_INTENT}_${nodeId++}`;
+                }
                 nodeIdMap.set(intentData.id || intentName, currentNodeId);
                 processIntentNode(parentId, intentData, intentName, 1, NetworkManager.NodeTypes.LOW_INTENT, currentNodeId);
             }
@@ -477,128 +553,8 @@ class NetworkManager {
         return truncated;
     }
 
-    // 辅助方法：格式化记录的悬停提示
-    formatRecordTooltip(record) {
-        const tooltipContainer = document.createElement('div');
-        
-        // 获取network容器的大小
-        const networkContainer = this.container;
-        const containerRect = networkContainer.getBoundingClientRect();
-        const maxHeight = Math.min(300, containerRect.height * 0.8); // 最大高度为容器高度的80%
-        const maxWidth = Math.min(400, containerRect.width * 0.8);  // 最大宽度为容器宽度的80%
 
-        Object.assign(tooltipContainer.style, {
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            padding: '12px',
-            maxWidth: maxWidth + 'px',
-            maxHeight: maxHeight + 'px',
-            fontSize: '14px',
-            lineHeight: '1.5',
-            color: '#333',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid rgba(0, 0, 0, 0.1)',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            position: 'relative'
-        });
 
-        // 添加滚动事件处理
-        let isScrolling = false;
-        tooltipContainer.addEventListener('wheel', (e) => {
-            const canScroll = tooltipContainer.scrollHeight > tooltipContainer.clientHeight;
-            if (canScroll) {
-                e.stopPropagation();
-                e.preventDefault();
-                tooltipContainer.scrollTop += e.deltaY;
-                
-                // 标记正在滚动
-                isScrolling = true;
-                clearTimeout(this._scrollTimeout);
-                this._scrollTimeout = setTimeout(() => {
-                    isScrolling = false;
-                }, 150);
-
-                // 当正在滚动时临时禁用network的缩放
-                if (this.network) {
-                    this.network.setOptions({
-                        interaction: {
-                            zoomView: !isScrolling
-                        }
-                    });
-                }
-            }
-        }, { passive: false });
-
-        // 创建并添加内容部分
-        if (record.content) {
-            const contentSection = this.createTooltipSection('Content', record.content, '#2196F3');
-            tooltipContainer.appendChild(contentSection);
-        }
-
-        // 创建并添加评论部分
-        if (record.comment) {
-            const commentSection = this.createTooltipSection('Comment', record.comment, '#FF9800');
-            tooltipContainer.appendChild(commentSection);
-        }
-
-        return tooltipContainer;
-    }
-
-    // 辅助方法：格式化记录的悬停提示部分
-    createTooltipSection(title, content, color) {
-        const section = document.createElement('div');
-        Object.assign(section.style, {
-            marginBottom: title === 'Comment' ? '0' : '16px'
-        });
-
-        // 创建标题
-        const titleElement = document.createElement('div');
-        Object.assign(titleElement.style, {
-            fontWeight: '600',
-            color: color,
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            position: 'sticky',
-            top: '0',
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            paddingBottom: '4px',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
-        });
-
-        // 添加图标
-        const icon = document.createElement('span');
-        icon.textContent = title === 'Content' ? '📝' : '💭';
-        icon.style.fontSize = '14px';
-        titleElement.appendChild(icon);
-
-        // 添加标题文本
-        const titleText = document.createElement('span');
-        titleText.textContent = title;
-        titleElement.appendChild(titleText);
-
-        // 创建内容
-        const contentElement = document.createElement('div');
-        Object.assign(contentElement.style, {
-            color: '#666',
-            fontSize: '13px',
-            lineHeight: '1.6',
-            padding: '8px 12px',
-            backgroundColor: 'rgba(0, 0, 0, 0.02)',
-            borderRadius: '6px',
-            whiteSpace: 'pre-wrap',  // 保留换行和空格
-            wordBreak: 'break-word'  // 长单词换行
-        });
-        contentElement.textContent = content;
-
-        section.appendChild(titleElement);
-        section.appendChild(contentElement);
-
-        return section;
-    }
 
     // 获取节点颜色
     getNodeColor(type) {
@@ -1210,9 +1166,10 @@ class NetworkManager {
             // 添加网络事件监听
             this.setupNetworkEvents();
             
-            // 延迟初始化节点合并管理器，确保网络完全准备就绪
+            // 延迟初始化节点合并管理器和自定义tooltip管理器，确保网络完全准备就绪
             setTimeout(() => {
                 this.initializeNodeMergeManager();
+                this.initializeCustomTooltipManager();
             }, 100);
             
             // 等待布局稳定后进行初始缩放适配和自动排版
@@ -1367,9 +1324,6 @@ class NetworkManager {
 
     // 设置网络事件
     setupNetworkEvents() {
-        let isTooltipVisible = false;
-        let tooltipNode = null;
-
         // 左键点击节点 - 仅记录日志，不显示菜单
         this.network.on('click', (params) => {
             if (params.nodes.length > 0) {
@@ -1386,6 +1340,10 @@ class NetworkManager {
             } else {
                 // 点击空白区域时重置所有节点的状态显示
                 this.resetAllNodeStates();
+                // 隐藏自定义tooltip
+                if (this.customTooltipManager) {
+                    this.customTooltipManager.hideTooltip();
+                }
             }
         });
 
@@ -1402,55 +1360,49 @@ class NetworkManager {
             }
         });
 
-        // 监听悬停事件
+        // 监听悬停事件 - 使用自定义tooltip系统
         this.network.on('hoverNode', (params) => {
-            tooltipNode = params.node;
-            isTooltipVisible = true;
-            // 禁用缩放
-            this.network.setOptions({
-                interaction: {
-                    zoomView: false
+            if (this.customTooltipManager) {
+                const nodeId = params.node;
+                const node = this.nodes.get(nodeId);
+                
+                if (node && (node.type === NetworkManager.NodeTypes.RECORD || 
+                           node.type === NetworkManager.NodeTypes.HIGH_INTENT || 
+                           node.type === NetworkManager.NodeTypes.LOW_INTENT || 
+                           node.type === 'record' || node.type === 'intent')) {
+                    
+                    // 获取节点在屏幕上的位置
+                    const nodePosition = this.network.getPositions([nodeId])[nodeId];
+                    const domPosition = this.network.canvasToDOM(nodePosition);
+                    
+                    // 计算相对于视窗的位置和容器边界信息
+                    const containerRect = this.container.getBoundingClientRect();
+                    const screenPosition = {
+                        x: domPosition.x + containerRect.left,
+                        y: domPosition.y + containerRect.top
+                    };
+                    
+                    // 传递容器边界信息用于智能定位
+                    const containerBounds = {
+                        left: containerRect.left,
+                        right: containerRect.right,
+                        top: containerRect.top,
+                        bottom: containerRect.bottom,
+                        width: containerRect.width,
+                        height: containerRect.height
+                    };
+                    
+                    this.customTooltipManager.showTooltip(nodeId, node, screenPosition, containerBounds);
                 }
-            });
+            }
         });
 
         // 监听悬停结束事件
         this.network.on('blurNode', (params) => {
-            if (params.node === tooltipNode) {
-                tooltipNode = null;
-                isTooltipVisible = false;
-                // 恢复缩放
-                this.network.setOptions({
-                    interaction: {
-                        zoomView: true
-                    }
-                });
+            if (this.customTooltipManager) {
+                this.customTooltipManager.hideTooltip();
             }
         });
-
-        // 监听滚轮事件
-        this.visContainer.addEventListener('wheel', (event) => {
-            if (isTooltipVisible) {
-                // 如果提示框可见，检查事件目标
-                let target = event.target;
-                let isInsideTooltip = false;
-
-                // 检查事件是否发生在提示框内
-                while (target && target !== this.visContainer) {
-                    if (target.classList.contains('vis-tooltip')) {
-                        isInsideTooltip = true;
-                        break;
-                    }
-                    target = target.parentElement;
-                }
-
-                // 如果不在提示框内，阻止事件
-                if (!isInsideTooltip) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-            }
-        }, { passive: false });
 
         // 拖动事件现在由NodeMergeManager统一处理
         // 移除重复的事件监听器以避免冲突
@@ -1492,6 +1444,23 @@ class NetworkManager {
             console.log('NodeMergeManager initialized successfully');
         } catch (error) {
             console.error('Error initializing NodeMergeManager:', error);
+        }
+    }
+
+    // 初始化自定义tooltip管理器
+    initializeCustomTooltipManager() {
+        console.log('Attempting to initialize CustomTooltipManager...');
+        
+        if (!this.network) {
+            console.error('Cannot initialize CustomTooltipManager: network is null');
+            return;
+        }
+        
+        try {
+            this.customTooltipManager = new CustomTooltipManager(this);
+            console.log('CustomTooltipManager initialized successfully');
+        } catch (error) {
+            console.error('Error initializing CustomTooltipManager:', error);
         }
     }
 
@@ -1654,6 +1623,12 @@ class NetworkManager {
             // Update the internal intent tree reference
             this.intentTree = newIntentTree;
             
+            // Save to persistent storage
+            // 异步保存到存储和后端
+            this.saveIntentTreeToStorage(newIntentTree).catch(error => {
+                console.error('Error saving intent tree:', error);
+            });
+            
             // Re-collect immutable intents from the updated tree
             this.collectImmutableIntents(newIntentTree);
             
@@ -1708,6 +1683,12 @@ class NetworkManager {
 
     // Add cleanup method to handle container removal properly
     cleanup() {
+        // 销毁自定义tooltip管理器
+        if (this.customTooltipManager) {
+            this.customTooltipManager.destroy();
+            this.customTooltipManager = null;
+        }
+        
         if (this.container) {
             this.container.remove();
             if (this.containerArea) {
@@ -2080,14 +2061,14 @@ class NetworkManager {
             this.hideIntentCreationPanel();
         });
 
-        panel.querySelector('#confirm-creation').addEventListener('click', () => {
-            this.handleIntentCreation();
+        panel.querySelector('#confirm-creation').addEventListener('click', async () => {
+            await this.handleIntentCreation();
         });
 
         // 回车键提交
-        input.addEventListener('keypress', (e) => {
+        input.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
-                this.handleIntentCreation();
+                await this.handleIntentCreation();
             }
         });
 
@@ -2112,7 +2093,7 @@ class NetworkManager {
     }
 
     // 处理意图创建
-    handleIntentCreation() {
+    async handleIntentCreation() {
         const panel = document.getElementById('intent-creation-panel');
         if (!panel) return;
 
@@ -2129,60 +2110,107 @@ class NetworkManager {
         }
 
         // 创建新的意图节点
-        this.createManualIntentNode(description, selectedLevel);
+        await this.createManualIntentNode(description, selectedLevel);
         
         // 关闭面板
         this.hideIntentCreationPanel();
     }
 
+    // 生成手动节点的唯一数字ID
+    generateManualNodeId() {
+        let candidateId;
+        
+        do {
+            candidateId = ++NetworkManager.lastManualNodeId;
+        } while (this.nodes.get(candidateId) || 
+                 this.nodes.get(candidateId.toString()) ||  // 也检查字符串形式的ID
+                 this.isIdUsedInIntentTree(candidateId));
+        
+        console.log(`Generated manual node ID: ${candidateId}`);
+        return candidateId;
+    }
+    
+    // 检查ID是否在意图树中被使用（递归检查所有层级）
+    isIdUsedInIntentTree(id) {
+        if (!this.intentTree || !this.intentTree.item) return false;
+        
+        // 递归检查节点及其子节点
+        const checkNodeAndChildren = (node) => {
+            if (node.id === id) return true;
+            
+            if (node.child && Array.isArray(node.child)) {
+                for (const child of node.child) {
+                    if (checkNodeAndChildren(child)) return true;
+                }
+            }
+            
+            // 也检查group数组（如果存在）
+            if (node.group && Array.isArray(node.group)) {
+                for (const record of node.group) {
+                    if (record.id === id) return true;
+                }
+            }
+            
+            return false;
+        };
+        
+        // 检查所有顶级意图节点
+        for (const intentData of Object.values(this.intentTree.item)) {
+            if (checkNodeAndChildren(intentData)) return true;
+        }
+        
+        return false;
+    }
+
     // 创建手动意图节点
-    createManualIntentNode(description, level) {
+    async createManualIntentNode(description, level) {
         const nodeType = level === 'high' ? NetworkManager.NodeTypes.HIGH_INTENT : NetworkManager.NodeTypes.LOW_INTENT;
         
-        // 生成唯一ID
-        const nodeId = `manual-${nodeType}-${Date.now()}`;
+        // 生成唯一数字ID
+        const nodeId = this.generateManualNodeId();
         
-        // 获取合适的位置
-        const position = this.getOptimalNodePosition();
-        
-        // 创建节点数据
-        const maxLength = nodeType === NetworkManager.NodeTypes.HIGH_INTENT ? 20 : 15;
+        // 创建节点数据（用于意图树更新）
         const nodeData = {
             id: nodeId,
-            label: this.wrapLabel(description, maxLength, nodeType),
-            color: this.getNodeColor(nodeType),
-            size: this.getNodeSize(nodeType),
-            x: position.x,
-            y: position.y,
-            physics: false, // 固定位置，但可拖动
             type: nodeType,
             intent: description,
-            confirmed: true, // 手动创建的节点默认确认状态
-            isManuallyCreated: true
+            confirmed: true,
+            isManuallyCreated: true,
+            immutable: true
         };
 
-        // 添加到网络中
-        this.nodes.add(nodeData);
-        
-        // 更新节点状态管理
-        this.nodeStates.set(nodeId, {
-            confirmed: true,
-            type: nodeType,
-            intent: description
-        });
+        // 添加到immutable intents集合
+        NetworkManager.immutableIntents.add(description);
 
-        // 同步存储
-        this.syncManualNodeToStorage(nodeData);
+        try {
+            // 同步更新意图树
+            const updatedIntentTree = this.syncManualNodeToIntentTree(nodeData);
+            
+            // 异步保存到存储和后端
+            this.saveIntentTreeToStorage(updatedIntentTree).catch(error => {
+                console.error('Error saving intent tree:', error);
+            });
+            
+            // 使用 updateData 方法刷新整个网络
+            this.updateData(updatedIntentTree);
+            
+            // 记录日志
+            window.Logger.log(window.LogCategory.UI, 'manual_intent_created', {
+                node_id: nodeId,
+                intent: description,
+                level: level,
+            });
 
-        // 记录日志
-        window.Logger?.log(window.LogCategory.USER_ACTION, 'manual_intent_created', {
-            node_id: nodeId,
-            intent: description,
-            level: level,
-            position: position
-        });
-
-        console.log(`Manual intent node created: ${description} (${level}-level)`);
+            console.log(`Manual intent node created: ${description} (${level}-level) with ID: ${nodeId}`);
+            console.log('Intent tree updated and network refreshed');
+            console.log('Current immutable intents:', Array.from(NetworkManager.immutableIntents));
+            
+        } catch (error) {
+            console.error('Error creating manual intent node:', error);
+            // 从 immutable intents 集合中移除（回滚）
+            NetworkManager.immutableIntents.delete(description);
+            alert('Failed to create intent node. Please try again.');
+        }
     }
 
     // 获取最优节点位置
@@ -2217,59 +2245,62 @@ class NetworkManager {
         }
     }
 
-    // 同步手动节点到存储
-    syncManualNodeToStorage(nodeData) {
-        chrome.storage.local.get(['intentTree'], (result) => {
-            let intentTree = result.intentTree || { item: {} };
-            
-            if (nodeData.type === NetworkManager.NodeTypes.HIGH_INTENT) {
-                // 高级意图节点作为新的意图分类
-                intentTree.item[nodeData.intent] = {
-                    intent: nodeData.intent,
-                    priority: 1,
-                    child_num: 0,
-                    child: [],
-                    confirmed: true,
-                    isManuallyCreated: true
-                };
-            } else {
-                // 低级意图节点需要找到合适的父节点或创建新的分类
-                const parentIntentKey = Object.keys(intentTree.item)[0]; // 简化：选择第一个高级意图
-                if (parentIntentKey) {
-                    const parentIntent = intentTree.item[parentIntentKey];
-                    parentIntent.child.push({
-                        intent: nodeData.intent,
-                        priority: 1,
-                        child_num: 0,
-                        child: [],
-                        confirmed: true,
-                        isManuallyCreated: true
-                    });
-                    parentIntent.child_num = parentIntent.child.length;
+    // 同步手动节点到意图树（同步版本）
+    syncManualNodeToIntentTree(nodeData) {
+        // 使用当前的意图树或创建新的
+        let intentTree = JSON.parse(JSON.stringify(this.intentTree)) || { item: {} };
+        
+        if (nodeData.type === NetworkManager.NodeTypes.HIGH_INTENT) {
+            // 高级意图节点作为新的意图分类
+            intentTree.item[nodeData.intent] = {
+                id: nodeData.id, // 使用数字ID
+                intent: nodeData.intent,
+                priority: 1,
+                child_num: 0,
+                child: [],
+                confirmed: true,
+                immutable: true, // 手动创建的节点为immutable
+                isManuallyCreated: true,
+                level: "1" // 高级意图为level 1
+            };
+        } else {
+            // 低级意图节点作为独立的顶级节点，不自动分配父节点
+            console.log(`Creating independent low-level intent: ${nodeData.intent} with ID: ${nodeData.id}`);
+            intentTree.item[nodeData.intent] = {
+                id: nodeData.id, // 使用数字ID
+                intent: nodeData.intent,
+                priority: 1,
+                child_num: 0,
+                child: [],
+                confirmed: true,
+                immutable: true, // 手动创建的节点为immutable
+                isManuallyCreated: true,
+                level: "2" // 低级意图为level 2，但没有parent属性
+            };
+        }
+        
+        return intentTree;
+    }
+
+    // 异步保存意图树到存储和后端
+    async saveIntentTreeToStorage(intentTree) {
+        return new Promise((resolve, reject) => {
+            chrome.storage.local.set({ intentTree }, async () => {
+                console.log('Intent tree saved to local storage');
+                
+                // 使用saveIntentTree函数保存到后端（如果可用）
+                if (typeof saveIntentTree === 'function') {
+                    try {
+                        await saveIntentTree(intentTree);
+                        console.log('Intent tree also saved to backend');
+                        resolve();
+                    } catch (error) {
+                        console.error('Error saving intent tree to backend:', error);
+                        resolve(); // 即使后端保存失败，也继续执行
+                    }
                 } else {
-                    // 如果没有高级意图，创建一个默认的
-                    const defaultHighIntent = 'General Tasks';
-                    intentTree.item[defaultHighIntent] = {
-                        intent: defaultHighIntent,
-                        priority: 1,
-                        child_num: 1,
-                        child: [{
-                            intent: nodeData.intent,
-                            priority: 1,
-                            child_num: 0,
-                            child: [],
-                            confirmed: true,
-                            isManuallyCreated: true
-                        }],
-                        confirmed: true,
-                        isManuallyCreated: true
-                    };
+                    resolve();
                 }
-            }
-            
-            // 保存更updated的意图树
-            chrome.storage.local.set({ intentTree }, () => {
-                console.log('Manual intent node synced to storage');
             });
         });
     }
@@ -3072,6 +3103,11 @@ class NodeMergeManager {
                 this.dragStartPosition = this.network.getPositions([this.draggedNode])[this.draggedNode];
                 console.log('Dragging node:', this.draggedNode, 'start position:', this.dragStartPosition);
                 
+                // 清除 tooltip 显示定时器，防止拖动时显示 tooltip
+                if (this.networkManager.customTooltipManager) {
+                    this.networkManager.customTooltipManager.clearShowTimeout();
+                }
+                
                 // 更新光标样式
                 if (this.networkManager.container) {
                     this.networkManager.container.style.cursor = 'grabbing';
@@ -3327,10 +3363,20 @@ class NodeMergeManager {
 
     // 同级合并
     performSameLevelMerge(sourceNode, targetNode) {
+        console.log(`Performing same-level merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
         // 获取源节点的所有子节点
         const sourceChildren = this.getNodeChildren(sourceNode.id);
         
-        // 将源节点的子节点连接到目标节点
+        // 1. 首先更新intentTree - 转移子节点
+        const sourceNodeName = sourceNode.originalLabel || sourceNode.label;
+        const targetNodeName = targetNode.originalLabel || targetNode.label;
+        this.transferChildrenInIntentTree(sourceNodeName, targetNodeName, sourceNode.id, targetNode.id);
+        
+        // 2. 然后从intentTree中删除源节点
+        this.removeNodeFromIntentTree(sourceNode.id, sourceNodeName);
+        
+        // 3. 更新网络可视化 - 将源节点的子节点连接到目标节点
         sourceChildren.forEach(childId => {
             this.edges.add({
                 id: `${targetNode.id}-${childId}`,
@@ -3339,18 +3385,20 @@ class NodeMergeManager {
             });
         });
 
-        // 删除源节点的边
+        // 4. 删除源节点的边
         this.removeNodeEdges(sourceNode.id);
         
-        // 删除源节点
+        // 5. 删除源节点
         this.nodes.remove(sourceNode.id);
         
-        // 更新存储
+        // 6. 更新存储
         this.updateStorageAfterMerge();
     }
 
     // 高级意图到低级意图合并
     performHighToLowMerge(sourceNode, targetNode) {
+        console.log(`Performing high-to-low merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
         // 获取源节点的记录子节点
         const sourceRecords = this.getNodeChildren(sourceNode.id)
             .filter(childId => {
@@ -3358,7 +3406,15 @@ class NodeMergeManager {
                 return child && child.type === this.networkManager.constructor.NodeTypes.RECORD;
             });
         
-        // 将记录节点移动到目标低级意图节点下
+        // 1. 首先更新intentTree - 将记录从高级意图转移到低级意图
+        const sourceNodeName = sourceNode.originalLabel || sourceNode.label;
+        const targetNodeName = targetNode.originalLabel || targetNode.label;
+        this.transferChildrenInIntentTree(sourceNodeName, targetNodeName, sourceNode.id, targetNode.id);
+        
+        // 2. 从intentTree中删除源高级意图节点
+        this.removeNodeFromIntentTree(sourceNode.id, sourceNodeName);
+        
+        // 3. 更新网络可视化 - 将记录节点移动到目标低级意图节点下
         sourceRecords.forEach(recordId => {
             this.edges.add({
                 id: `${targetNode.id}-${recordId}`,
@@ -3367,23 +3423,31 @@ class NodeMergeManager {
             });
         });
 
-        // 删除源节点及其连接
+        // 4. 删除源节点及其连接
         this.removeNodeEdges(sourceNode.id);
         this.nodes.remove(sourceNode.id);
         
+        // 5. 更新存储
         this.updateStorageAfterMerge();
     }
 
     // 低级意图到高级意图合并
     performLowToHighMerge(sourceNode, targetNode) {
-        // 将源低级意图节点及其所有子节点连接到目标高级意图节点
+        console.log(`Performing low-to-high merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
+        // 1. 首先更新intentTree - 建立新的父子关系
+        const sourceNodeName = sourceNode.originalLabel || sourceNode.label;
+        const targetNodeName = targetNode.originalLabel || targetNode.label;
+        this.updateIntentTreeRelationships(sourceNodeName, targetNodeName, sourceNode.id, targetNode.id);
+        
+        // 2. 更新网络可视化 - 将源低级意图节点及其所有子节点连接到目标高级意图节点
         this.edges.add({
             id: `${targetNode.id}-${sourceNode.id}`,
             from: targetNode.id,
             to: sourceNode.id
         });
 
-        // 移除源节点的父级连接
+        // 3. 移除源节点的旧父级连接
         const sourceParentEdges = this.edges.get().filter(edge => edge.to === sourceNode.id);
         sourceParentEdges.forEach(edge => {
             if (edge.from !== targetNode.id) {
@@ -3391,19 +3455,26 @@ class NodeMergeManager {
             }
         });
         
+        // 4. 更新存储
         this.updateStorageAfterMerge();
     }
 
     // 记录到意图节点合并
     performRecordToIntentMerge(sourceNode, targetNode) {
-        // 将记录节点连接到意图节点
+        console.log(`Performing record-to-intent merge: ${sourceNode.originalLabel || sourceNode.label} -> ${targetNode.originalLabel || targetNode.label}`);
+        
+        // 注意：记录节点的合并主要是改变归属关系，不删除节点，只是更新父子关系
+        // 记录节点在intentTree中的结构比较复杂，这里主要处理网络可视化层面的合并
+        // intentTree中的记录通常存储在意图节点的child数组中，具体更新可能需要更详细的记录ID映射
+        
+        // 1. 更新网络可视化 - 将记录节点连接到意图节点
         this.edges.add({
             id: `${targetNode.id}-${sourceNode.id}`,
             from: targetNode.id,
             to: sourceNode.id
         });
 
-        // 移除记录节点的原始父级连接
+        // 2. 移除记录节点的原始父级连接
         const sourceParentEdges = this.edges.get().filter(edge => edge.to === sourceNode.id);
         sourceParentEdges.forEach(edge => {
             if (edge.from !== targetNode.id) {
@@ -3411,6 +3482,7 @@ class NodeMergeManager {
             }
         });
         
+        // 3. 更新存储（记录节点的intentTree更新可能需要基于具体的记录数据结构）
         this.updateStorageAfterMerge();
     }
 
@@ -3521,5 +3593,590 @@ class NodeMergeManager {
                 borderColor: node.originalBorderColor || '#cccccc'
             });
         }
+    }
+
+    // 从intentTree中删除节点
+    removeNodeFromIntentTree(nodeId, nodeName) {
+        if (!this.networkManager.intentTree || !this.networkManager.intentTree.item) {
+            console.warn('No intentTree available to update');
+            return;
+        }
+
+        console.log(`Removing node from intentTree: ${nodeName} (ID: ${nodeId})`);
+        
+        // 查找并删除高级意图节点
+        if (this.networkManager.intentTree.item[nodeName]) {
+            delete this.networkManager.intentTree.item[nodeName];
+            console.log(`Removed high-level intent: ${nodeName}`);
+            return;
+        }
+
+        // 查找并删除低级意图节点（在其他高级意图的child中）
+        for (const [parentIntentName, parentIntentData] of Object.entries(this.networkManager.intentTree.item)) {
+            if (parentIntentData.child && Array.isArray(parentIntentData.child)) {
+                const childIndex = parentIntentData.child.findIndex(child => 
+                    child.intent === nodeName || child.id === nodeId
+                );
+                
+                if (childIndex !== -1) {
+                    parentIntentData.child.splice(childIndex, 1);
+                    parentIntentData.child_num = parentIntentData.child.length;
+                    console.log(`Removed low-level intent: ${nodeName} from parent: ${parentIntentName}`);
+                    return;
+                }
+            }
+        }
+
+        console.warn(`Node not found in intentTree: ${nodeName} (ID: ${nodeId})`);
+    }
+
+    // 将子节点从源节点转移到目标节点
+    transferChildrenInIntentTree(sourceNodeName, targetNodeName, sourceNodeId, targetNodeId) {
+        if (!this.networkManager.intentTree || !this.networkManager.intentTree.item) {
+            console.warn('No intentTree available to update');
+            return;
+        }
+
+        console.log(`Transferring children from ${sourceNodeName} to ${targetNodeName}`);
+
+        // 查找源节点和目标节点在intentTree中的引用
+        let sourceIntent = null;
+        let targetIntent = null;
+
+        // 在顶级中查找
+        if (this.networkManager.intentTree.item[sourceNodeName]) {
+            sourceIntent = this.networkManager.intentTree.item[sourceNodeName];
+        }
+        if (this.networkManager.intentTree.item[targetNodeName]) {
+            targetIntent = this.networkManager.intentTree.item[targetNodeName];
+        }
+
+        // 在子节点中查找
+        if (!sourceIntent || !targetIntent) {
+            for (const parentIntentData of Object.values(this.networkManager.intentTree.item)) {
+                if (parentIntentData.child && Array.isArray(parentIntentData.child)) {
+                    parentIntentData.child.forEach(child => {
+                        if (child.intent === sourceNodeName || child.id === sourceNodeId) {
+                            sourceIntent = child;
+                        }
+                        if (child.intent === targetNodeName || child.id === targetNodeId) {
+                            targetIntent = child;
+                        }
+                    });
+                }
+            }
+        }
+
+        // 转移子节点
+        if (sourceIntent && targetIntent && sourceIntent.child && Array.isArray(sourceIntent.child)) {
+            if (!targetIntent.child) {
+                targetIntent.child = [];
+            }
+            
+            // 转移所有子节点
+            targetIntent.child.push(...sourceIntent.child);
+            targetIntent.child_num = targetIntent.child.length;
+            
+            console.log(`Transferred ${sourceIntent.child.length} children from ${sourceNodeName} to ${targetNodeName}`);
+        }
+    }
+
+    // 更新intentTree中的父子关系
+    updateIntentTreeRelationships(childNodeName, newParentNodeName, childNodeId, newParentNodeId) {
+        if (!this.networkManager.intentTree || !this.networkManager.intentTree.item) {
+            console.warn('No intentTree available to update');
+            return;
+        }
+
+        console.log(`Updating parent-child relationship: ${childNodeName} -> ${newParentNodeName}`);
+
+        // 查找子节点并更新其parent引用
+        let childIntent = null;
+
+        // 在顶级中查找子节点
+        if (this.networkManager.intentTree.item[childNodeName]) {
+            childIntent = this.networkManager.intentTree.item[childNodeName];
+        } else {
+            // 在现有的父节点中查找并移除
+            for (const [, parentData] of Object.entries(this.networkManager.intentTree.item)) {
+                if (parentData.child && Array.isArray(parentData.child)) {
+                    const childIndex = parentData.child.findIndex(child => 
+                        child.intent === childNodeName || child.id === childNodeId
+                    );
+                    
+                    if (childIndex !== -1) {
+                        childIntent = parentData.child.splice(childIndex, 1)[0];
+                        parentData.child_num = parentData.child.length;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 将子节点添加到新父节点
+        if (childIntent) {
+            // 更新子节点的parent引用
+            childIntent.parent = newParentNodeId || newParentNodeName;
+
+            // 查找新父节点并添加子节点
+            let newParentIntent = this.networkManager.intentTree.item[newParentNodeName];
+            
+            if (!newParentIntent) {
+                // 在子节点中查找新父节点
+                for (const parentData of Object.values(this.networkManager.intentTree.item)) {
+                    if (parentData.child && Array.isArray(parentData.child)) {
+                        const foundParent = parentData.child.find(child => 
+                            child.intent === newParentNodeName || child.id === newParentNodeId
+                        );
+                        if (foundParent) {
+                            newParentIntent = foundParent;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (newParentIntent) {
+                if (!newParentIntent.child) {
+                    newParentIntent.child = [];
+                }
+                newParentIntent.child.push(childIntent);
+                newParentIntent.child_num = newParentIntent.child.length;
+                console.log(`Added ${childNodeName} as child of ${newParentNodeName}`);
+            } else {
+                console.warn(`New parent node not found: ${newParentNodeName}`);
+            }
+        } else {
+            console.warn(`Child node not found: ${childNodeName}`);
+        }
+    }
+}
+
+// 自定义 Tooltip 管理器类
+class CustomTooltipManager {
+    // 样式常量
+    static STYLES = {
+        container: {
+            position: 'fixed',
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            padding: '12px',
+            fontSize: '14px',
+            lineHeight: '1.5',
+            color: '#333',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(0, 0, 0, 0.1)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            zIndex: '10003',
+            cursor: 'default',
+            opacity: '0',
+            visibility: 'hidden',
+            transition: 'opacity 0.2s ease, visibility 0.2s ease',
+            pointerEvents: 'auto',
+            maxWidth: '400px',
+            maxHeight: '300px'
+        },
+        titleElement: {
+            fontWeight: '600',
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            position: 'sticky',
+            top: '-12px',
+            backgroundColor: '#ffffff',
+            margin: '0 -12px',
+            padding: '12px 12px 4px 12px',
+            zIndex: '1',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
+        },
+        contentElement: {
+            color: '#666',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(0, 0, 0, 0.02)',
+            borderRadius: '6px',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+        }
+    };
+
+    static COLORS = {
+        content: '#2196F3',
+        comment: '#FF9800',
+        highIntent: '#ff7675',
+        lowIntent: '#74b9ff',
+        details: '#95a5a6'
+    };
+
+    static ICONS = {
+        content: '📝',
+        comment: '💭',
+        intent: '🎯',
+        details: 'ℹ️'
+    };
+
+    static TIMINGS = {
+        mouseLeaveDelay: 200,
+        nodeBlurDelay: 300,
+        scrollZoomRestore: 200,
+        hoverDelay: 1000
+    };
+
+    constructor(networkManager) {
+        this.networkManager = networkManager;
+        this.tooltip = null;
+        this.currentNodeId = null;
+        this.isTooltipVisible = false;
+        this.mouseOverTooltip = false;
+        this.mouseOverNode = false;
+        this.hideTimeout = null;
+        this.showTimeout = null;
+        this.pendingShowParams = null;
+        
+        this.createTooltipElement();
+        this.setupEventListeners();
+    }
+
+    createTooltipElement() {
+        this.tooltip = document.createElement('div');
+        this.tooltip.className = 'mp-custom-persistent-tooltip';
+        
+        Object.assign(this.tooltip.style, CustomTooltipManager.STYLES.container);
+
+        // 自定义滚动条样式
+        this.tooltip.style.scrollbarWidth = 'thin';
+        this.tooltip.style.scrollbarColor = '#ccc #f5f5f5';
+
+        // 添加自定义滚动条样式
+        if (!document.getElementById('mp-custom-tooltip-scrollbar-style')) {
+            const style = document.createElement('style');
+            style.id = 'mp-custom-tooltip-scrollbar-style';
+            style.textContent = `
+                .mp-custom-persistent-tooltip::-webkit-scrollbar {
+                    width: 8px;
+                }
+                .mp-custom-persistent-tooltip::-webkit-scrollbar-track {
+                    background: #f5f5f5;
+                    border-radius: 4px;
+                }
+                .mp-custom-persistent-tooltip::-webkit-scrollbar-thumb {
+                    background: #ccc;
+                    border-radius: 4px;
+                }
+                .mp-custom-persistent-tooltip::-webkit-scrollbar-thumb:hover {
+                    background: #999;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(this.tooltip);
+    }
+
+    setupEventListeners() {
+        // Tooltip 鼠标事件
+        this.tooltip.addEventListener('mouseenter', () => {
+            this.mouseOverTooltip = true;
+            this.clearHideTimeout();
+        });
+
+        this.tooltip.addEventListener('mouseleave', () => {
+            this.mouseOverTooltip = false;
+            this.scheduleHide(CustomTooltipManager.TIMINGS.mouseLeaveDelay);
+        });
+
+        // Tooltip 滚动事件
+        this.tooltip.addEventListener('wheel', (e) => {
+            const canScroll = this.tooltip.scrollHeight > this.tooltip.clientHeight;
+            if (canScroll) {
+                e.stopPropagation();
+                e.preventDefault();
+                this.tooltip.scrollTop += e.deltaY;
+
+                // 临时禁用network缩放
+                if (this.networkManager.network) {
+                    this.networkManager.network.setOptions({
+                        interaction: { zoomView: false }
+                    });
+                    
+                    // 200ms后恢复缩放
+                    setTimeout(() => {
+                        if (this.networkManager.network) {
+                            this.networkManager.network.setOptions({
+                                interaction: { zoomView: true }
+                            });
+                        }
+                    }, CustomTooltipManager.TIMINGS.scrollZoomRestore);
+                }
+            }
+        }, { passive: false });
+    }
+
+    showTooltip(nodeId, nodeData, position, containerBounds) {
+        this.scheduleShow(nodeId, nodeData, position, containerBounds);
+    }
+
+    showTooltipImmediately(nodeId, nodeData, position, containerBounds) {
+        this.currentNodeId = nodeId;
+        this.mouseOverNode = true;
+        this.clearHideTimeout();
+
+        // 生成tooltip内容
+        let tooltipContent;
+        if (nodeData.type === this.networkManager.constructor.NodeTypes.RECORD || nodeData.type === 'record') {
+            tooltipContent = this.createRecordTooltipContent(nodeData.tooltipData || nodeData);
+        } else {
+            tooltipContent = this.createIntentTooltipContent(nodeData.tooltipData || nodeData);
+        }
+
+        this.tooltip.innerHTML = '';
+        this.tooltip.appendChild(tooltipContent);
+
+        // 定位tooltip（传递容器边界信息）
+        this.positionTooltip(position, containerBounds);
+
+        // 显示tooltip
+        this.tooltip.style.opacity = '1';
+        this.tooltip.style.visibility = 'visible';
+        this.isTooltipVisible = true;
+    }
+
+    hideTooltip() {
+        this.mouseOverNode = false;
+        this.clearShowTimeout(); // 清除待显示的tooltip
+        this.scheduleHide(CustomTooltipManager.TIMINGS.nodeBlurDelay);
+    }
+
+    scheduleHide(delay) {
+        this.clearHideTimeout();
+        this.hideTimeout = setTimeout(() => {
+            if (!this.mouseOverTooltip && !this.mouseOverNode) {
+                this.tooltip.style.opacity = '0';
+                this.tooltip.style.visibility = 'hidden';
+                this.isTooltipVisible = false;
+                this.currentNodeId = null;
+            }
+        }, delay);
+    }
+
+    clearHideTimeout() {
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+        }
+    }
+
+    scheduleShow(nodeId, nodeData, position, containerBounds) {
+        this.clearShowTimeout();
+        this.pendingShowParams = { nodeId, nodeData, position, containerBounds };
+        
+        this.showTimeout = setTimeout(() => {
+            this.mouseOverNode = true;
+            this.showTooltipImmediately(nodeId, nodeData, position, containerBounds);
+            this.showTimeout = null;
+            this.pendingShowParams = null;
+        }, CustomTooltipManager.TIMINGS.hoverDelay);
+    }
+
+    clearShowTimeout() {
+        if (this.showTimeout) {
+            clearTimeout(this.showTimeout);
+            this.showTimeout = null;
+            this.pendingShowParams = null;
+        }
+    }
+
+    positionTooltip(nodePosition, containerBounds) {
+        // 首先确保tooltip已渲染以获取正确的尺寸
+        this.tooltip.style.visibility = 'hidden';
+        this.tooltip.style.opacity = '1';
+        
+        const tooltipRect = this.tooltip.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // 计算可用空间
+        const nodeOffset = 20; // 节点与tooltip之间的间距
+        const margin = 10; // 与边界的最小距离
+        
+        // 检查容器边界（如果提供的话）
+        let leftBound = margin;
+        let rightBound = viewportWidth - margin;
+        let topBound = margin;
+        let bottomBound = viewportHeight - margin;
+        
+        if (containerBounds) {
+            leftBound = Math.max(leftBound, containerBounds.left + margin);
+            rightBound = Math.min(rightBound, containerBounds.right - margin);
+            topBound = Math.max(topBound, containerBounds.top + margin);
+            bottomBound = Math.min(bottomBound, containerBounds.bottom - margin);
+        }
+        
+        // 计算可用的容器宽度
+        const availableWidth = rightBound - leftBound;
+        
+        // 动态调整tooltip宽度如果空间受限
+        if (tooltipRect.width > availableWidth * 0.9) {
+            const adjustedWidth = Math.max(280, availableWidth * 0.9);
+            this.tooltip.style.maxWidth = adjustedWidth + 'px';
+            // 重新获取调整后的尺寸
+            const newTooltipRect = this.tooltip.getBoundingClientRect();
+            Object.assign(tooltipRect, newTooltipRect);
+        }
+        
+        // 初始位置：尝试在节点右侧显示
+        let x = nodePosition.x + nodeOffset;
+        let y = nodePosition.y - tooltipRect.height / 2; // 垂直居中
+        
+        // 水平位置检查
+        if (x + tooltipRect.width > rightBound) {
+            // 右侧空间不足，尝试左侧
+            const leftSideX = nodePosition.x - tooltipRect.width - nodeOffset;
+            
+            if (leftSideX >= leftBound) {
+                // 左侧有足够空间
+                x = leftSideX;
+            } else {
+                // 两侧都空间不足，选择更好的一侧
+                const rightOverflow = (x + tooltipRect.width) - rightBound;
+                const leftOverflow = leftBound - leftSideX;
+                
+                if (rightOverflow <= leftOverflow) {
+                    // 右侧溢出较少，贴着右边界显示
+                    x = rightBound - tooltipRect.width;
+                } else {
+                    // 左侧溢出较少，贴着左边界显示
+                    x = leftBound;
+                }
+            }
+        }
+        
+        // 垂直位置检查
+        if (y < topBound) {
+            y = topBound;
+        } else if (y + tooltipRect.height > bottomBound) {
+            y = bottomBound - tooltipRect.height;
+        }
+        
+        // 最终边界安全检查
+        x = Math.max(leftBound, Math.min(x, rightBound - tooltipRect.width));
+        y = Math.max(topBound, Math.min(y, bottomBound - tooltipRect.height));
+        
+        // 应用位置
+        this.tooltip.style.left = x + 'px';
+        this.tooltip.style.top = y + 'px';
+        this.tooltip.style.visibility = 'visible';
+    }
+
+    createRecordTooltipContent(recordData) {
+        const container = document.createElement('div');
+        
+        // Content section
+        if (recordData.content) {
+            const contentSection = this.createTooltipSection('Content', recordData.content, CustomTooltipManager.COLORS.content);
+            container.appendChild(contentSection);
+        }
+
+        // Comment section
+        if (recordData.comment) {
+            const commentSection = this.createTooltipSection('Comment', recordData.comment, CustomTooltipManager.COLORS.comment);
+            container.appendChild(commentSection);
+        }
+
+        return container;
+    }
+
+    createIntentTooltipContent(intentData) {
+        const container = document.createElement('div');
+        
+        const typeLabel = intentData.nodeType === this.networkManager.constructor.NodeTypes.HIGH_INTENT ? 
+            'High-Level Intent' : 'Low-Level Intent';
+        const typeColor = intentData.nodeType === this.networkManager.constructor.NodeTypes.HIGH_INTENT ? 
+            CustomTooltipManager.COLORS.highIntent : CustomTooltipManager.COLORS.lowIntent;
+        
+        // Intent type section
+        const typeSection = this.createTooltipSection(typeLabel, intentData.intentName, typeColor);
+        container.appendChild(typeSection);
+
+        // Additional info
+        if (intentData.nodeData) {
+            let additionalInfo = '';
+            if (intentData.nodeData.child && Array.isArray(intentData.nodeData.child)) {
+                const childIntents = intentData.nodeData.child.filter(child => child.intent);
+                const childRecords = intentData.nodeData.child.filter(child => !child.intent);
+                
+                if (childIntents.length > 0) {
+                    additionalInfo += `Contains ${childIntents.length} child intent(s)`;
+                }
+                if (childRecords.length > 0) {
+                    additionalInfo += (additionalInfo ? ' and ' : '') + `${childRecords.length} record(s)`;
+                }
+            } else if (intentData.nodeData.group && Array.isArray(intentData.nodeData.group)) {
+                additionalInfo = `Contains ${intentData.nodeData.group.length} record(s)`;
+            }
+
+            if (additionalInfo) {
+                const infoSection = this.createTooltipSection('Details', additionalInfo, CustomTooltipManager.COLORS.details);
+                container.appendChild(infoSection);
+            }
+        }
+
+        return container;
+    }
+
+    createTooltipSection(title, content, color) {
+        const section = document.createElement('div');
+        Object.assign(section.style, {
+            marginBottom: title === 'Comment' ? '0' : '16px'
+        });
+
+        // 创建标题
+        const titleElement = document.createElement('div');
+        Object.assign(titleElement.style, {
+            ...CustomTooltipManager.STYLES.titleElement,
+            color: color
+        });
+
+        // 添加图标
+        const icon = document.createElement('span');
+        if (title === 'Content') {
+            icon.textContent = CustomTooltipManager.ICONS.content;
+        } else if (title.includes('Intent')) {
+            icon.textContent = CustomTooltipManager.ICONS.intent;
+        } else if (title === 'Comment') {
+            icon.textContent = CustomTooltipManager.ICONS.comment;
+        } else {
+            icon.textContent = CustomTooltipManager.ICONS.details;
+        }
+        icon.style.fontSize = '14px';
+        titleElement.appendChild(icon);
+
+        // 添加标题文本
+        const titleText = document.createElement('span');
+        titleText.textContent = title;
+        titleElement.appendChild(titleText);
+
+        // 创建内容
+        const contentElement = document.createElement('div');
+        Object.assign(contentElement.style, CustomTooltipManager.STYLES.contentElement);
+        contentElement.textContent = content;
+
+        section.appendChild(titleElement);
+        section.appendChild(contentElement);
+
+        return section;
+    }
+
+    destroy() {
+        if (this.tooltip) {
+            this.tooltip.remove();
+            this.tooltip = null;
+        }
+        this.clearHideTimeout();
+        this.clearShowTimeout();
     }
 }
