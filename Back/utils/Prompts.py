@@ -342,18 +342,7 @@ Follow these rules:
 2. The total number of new intents must not exceed 5, prioritizing the most important ones that cover missing knowledge or capabilities.  
 3. Each new intent must be placed at the correct level:  
    - Level 1 (top-level) if it represents a key dimension for understanding the scenario.  
-   - Level 2 if it is a subtopic or detail under an existing Level 1 intent.  
-4. Each new intent must include the following fields:  
-   - id (unique integer)  
-   - intent (name of the intent)  
-   - description (short description)  
-   - priority (1–5)  
-   - child_num (initially 0)  
-   - group (empty array or containing leaf node info)  
-   - level (hierarchy level)  
-   - parent (parent id, null for Level 1)  
-   - immutable (boolean, default is False)  
-   - child (array, initially empty)  
+   - Level 2 if it is a subtopic or detail under an existing Level 1 intent.
 
 Input example:
 {{
@@ -363,7 +352,7 @@ Input example:
     }}
 }}
 
-Output: Return the **updated full intent tree JSON** including the newly added intents in the correct positions and respond ONLY in the following JSON format:
+Output: Only return the newly recommended intents in the correct positions and respond ONLY in the following JSON format:
 {format_instructions}
 
 Input:

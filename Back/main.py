@@ -546,8 +546,98 @@ async def recommend_intent(request: dict):
     根据意图树和用户输入的Desire，推荐意图。
     '''
     try:
-        result = await chain4RecommendIntent.invoke(user_input=request)
-        return result
+        # 创建request的副本，过滤掉所有records节点以节省token
+        import copy
+        filtered_request = copy.deepcopy(request)
+        
+        # 递归函数：从intentTree中移除所有records节点
+        def remove_records_from_tree(tree_node):
+            if isinstance(tree_node, dict):
+                # 如果是叶子节点且有records字段，清空records
+                if "records" in tree_node:
+                    tree_node["records"] = []
+                
+                # 如果有child字段，递归处理子节点
+                if "child" in tree_node and isinstance(tree_node["child"], list):
+                    for child in tree_node["child"]:
+                        remove_records_from_tree(child)
+                
+                # 如果有group字段，清空group
+                if "group" in tree_node:
+                    tree_node["group"] = []
+        
+        # 处理intentTree中的records
+        if "item" in filtered_request:
+            intent_tree = filtered_request["item"]
+            for node_name, node_data in intent_tree.items():
+                remove_records_from_tree(node_data)
+        
+        # 处理groupsOfNodes中的records
+        if "groupsOfNodes" in filtered_request:
+            for group in filtered_request["groupsOfNodes"]:
+                if "records" in group:
+                    group["records"] = []
+
+        print("filtered_request", filtered_request)
+        print("request", request)
+        
+        # 调用chain4RecommendIntent，传入过滤后的request
+        result = await chain4RecommendIntent.invoke(user_input=filtered_request)
+        
+        # 将推荐结果合并到原始request中
+        if result and hasattr(result, 'root'):
+            recommended_intents = result.root
+        elif isinstance(result, (list, tuple)):
+            recommended_intents = list(result)
+        elif isinstance(result, dict) and "root" in result:
+            recommended_intents = result["root"]
+        else:
+            recommended_intents = result
+        
+        # 确保recommended_intents是列表格式
+        if not isinstance(recommended_intents, list):
+            recommended_intents = [recommended_intents] if recommended_intents else []
+
+        print("recommended_intents", recommended_intents)
+        
+        # 将推荐的意图节点添加到原始request的intentTree中
+        if recommended_intents and ("item" in request):
+            for intent_data in recommended_intents:
+                    if hasattr(intent_data, 'model_dump'):
+                        intent_dict = intent_data.model_dump()
+                    else:
+                        intent_dict = dict(intent_data) if not isinstance(intent_data, dict) else intent_data
+                    
+                    # 创建新的意图节点
+                    new_intent_node = {
+                        "id": intent_dict.get("intent_id", len(request["item"]) + 1),
+                        "intent": intent_dict.get("intent_name", ""),
+                        "description": intent_dict.get("intent_description", ""),
+                        "priority": intent_dict.get("priority", 5),
+                        "child_num": 0,
+                        "group": [],  # 新推荐的意图没有records
+                        "level": intent_dict.get("level", "1"),
+                        "parent": intent_dict.get("parent"),
+                        "immutable": False,  # 新推荐的意图默认是可变的
+                        "child": []
+                    }
+                    
+                    # 根据level和parent添加到正确的位置
+                    if intent_dict.get("level") == "1" or intent_dict.get("parent") is None:
+                        # 顶级意图，添加到item中
+                        intent_name = intent_dict.get("intent_name", f"Intent_{new_intent_node['id']}")
+                        request["item"][intent_name] = new_intent_node
+                    else:
+                        # 子级意图，需要找到父节点并添加到其child中
+                        parent_id = intent_dict.get("parent")
+                        for node_name, node_data in request["item"].items():
+                            if node_data.get("id") == parent_id:
+                                node_data["child"].append(new_intent_node)
+                                node_data["child_num"] += 1
+                                break
+        # 返回更新后的完整request
+        return request
+        
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error processing recommend intent: {str(e)}")
 
